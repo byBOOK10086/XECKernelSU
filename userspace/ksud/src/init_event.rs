@@ -103,6 +103,12 @@ pub fn on_post_fs_data() -> Result<()> {
 
     crate::feature::init_forced_features();
 
+    // SUSFS is a second, independent loadable module. Most devices flash a boot image that
+    // already carries kernelsu.ko, so nobody ever calls `late-load`: this is the only place
+    // that brings SUSFS up on the normal boot path. It returns immediately when SUSFS is
+    // already present (builtin kernel, or an earlier load) and never fails the boot.
+    crate::late_load::load_susfs_lkm_for_current_kmi();
+
     // load feature config
     if is_safe_mode() {
         warn!("safe mode, skip load feature config");
