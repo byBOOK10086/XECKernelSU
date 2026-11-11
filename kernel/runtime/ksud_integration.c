@@ -57,7 +57,7 @@ static const char KERNEL_SU_RC[] =
 static void stop_init_rc_hook();
 static void stop_execve_hook();
 
-static struct work_struct stop_input_hook_work;
+static struct work_struct stop_input_hook_work __maybe_unused; /* non-SUSFS builds only */
 
 #define MAX_ARG_STRINGS 0x7FFFFFFF
 // struct user_arg_ptr moved to runtime/ksud.h (the SUSFS handlers need it).

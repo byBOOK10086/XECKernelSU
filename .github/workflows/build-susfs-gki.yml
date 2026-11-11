@@ -276,7 +276,11 @@ jobs:
           # susfs_restore_creds). -Werror turns those into build failures on a vendor
           # patch we do not own, so unused-function warnings are the one warning class
           # switched off here; our own tree is warning-clean and still gated elsewhere.
-          make O="$ODIR" ARCH=arm64 LLVM=1 LLVM_IAS=1 KCFLAGS="-Wno-unused-function" \
+          # -Wunused-variable: a few objects in our kernel/ tree are only touched by the
+          # non-SUSFS branch (e.g. the input-hook workqueue), so they become unused here.
+          # Suppressing the warning is deliberate and scoped to this build, like the
+          # -Wno-unused-function allowance above.
+          make O="$ODIR" ARCH=arm64 LLVM=1 LLVM_IAS=1 KCFLAGS="-Wno-unused-function -Wno-unused-variable" \
             -j"$(nproc)" Image.gz >"$BUILD_LOG" 2>&1
           BUILD_RC=$?
           set -e
