@@ -274,9 +274,16 @@ jobs:
           make O="$ODIR" ARCH=arm64 LLVM=1 LLVM_IAS=1 -j"$(nproc)" Image.gz >"$BUILD_LOG" 2>&1
           BUILD_RC=$?
           set -e
+          # Errors first: GitHub truncates annotations, and a wall of "CC ..." lines hides
+          # the one line that says what broke.
+          grep -n -i -m 40 -E 'error:|fatal error:|undefined reference|No such file' "$BUILD_LOG" || true
           tail -n 30 "$BUILD_LOG"
           if [ $BUILD_RC -ne 0 ]; then
-            MSG=$(tail -n 200 "$BUILD_LOG" | sed -e 's/%/%25/g' -e 's/\r//g' | awk '{printf "%s%%0A", $0}')
+            MSG=$(grep -i -m 40 -E 'error:|fatal error:|undefined reference' "$BUILD_LOG" \
+                    | sed -e 's/%/%25/g' -e 's/\r//g' | awk '{printf "%s%%0A", $0}')
+            if [ -z "$MSG" ]; then
+              MSG=$(tail -n 40 "$BUILD_LOG" | sed -e 's/%/%25/g' -e 's/\r//g' | awk '{printf "%s%%0A", $0}')
+            fi
             echo "::error title=SUSFS GKI ${{ inputs.kmi }} compiler output::$MSG"
             exit $BUILD_RC
           fi
