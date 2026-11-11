@@ -57,3 +57,13 @@ jobs:
             echo "== $t"
             bash "$t"
           done
+
+      - name: debug on failure
+        # Temporary: prints why a POSIX script behaves differently here than
+        # under the local bash. Removed once the difference is fixed.
+        if: failure()
+        run: |
+          set -x
+          readlink -f /bin/sh || true
+          sh -x feature/tee/bootstate.sh --dry-run 2>&1 | tail -60 || true
+          BS_PROCFS=/tmp/proc BS_STAGE_DIR=/tmp/stage sh -x feature/tee/bootstate.sh --dry-run 2>&1 | tail -40 || true
