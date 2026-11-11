@@ -14,6 +14,7 @@ import me.weishu.kernelsu.ui.screen.modulerepo.ModuleRepoDetailScreen
 import me.weishu.kernelsu.ui.screen.modulerepo.ModuleRepoScreen
 import me.weishu.kernelsu.ui.screen.remote.RemoteAssistantScreen
 import me.weishu.kernelsu.ui.screen.scriptrun.ScriptRunScreen
+import me.weishu.kernelsu.ui.screen.stealth.StealthScreen
 import me.weishu.kernelsu.ui.screen.sulog.SulogScreen
 import me.weishu.kernelsu.ui.screen.template.AppProfileTemplateScreen
 import me.weishu.kernelsu.ui.screen.templateeditor.TemplateEditorScreen
@@ -106,6 +107,7 @@ fun KernelSuNavHost(
             entry<Route.Terminal>(swipeDismiss = swipeDismiss) { TerminalScreen() }
             entry<Route.ExternalModules>(swipeDismiss = swipeDismiss) { ExternalModulesScreen() }
             entry<Route.RemoteAssistant>(swipeDismiss = swipeDismiss) { RemoteAssistantScreen() }
+            entry<Route.Stealth>(swipeDismiss = swipeDismiss) { StealthScreen() }
             entry<Route.Home>(swipeDismiss = swipeDismiss) { mainScreenEntry() }
             entry<Route.SuperUser>(swipeDismiss = swipeDismiss) { mainScreenEntry() }
             entry<Route.Module>(swipeDismiss = swipeDismiss) { mainScreenEntry() }

@@ -87,3 +87,29 @@ colours - they do not read design tokens yet, and making them do so is its own b
 | "component transparency" row | the state, the repository and the `XcTheme(componentAlpha = ...)` plumbing are in place; only the switch row is missing |
 | Material styling for toolbox / external modules / remote assistant | those three screens are miuix-styled in both modes (they were written against the miuix-only revision). Functional in Material mode, visually inconsistent |
 
+## Batch 3 - hiding the launcher icon, rewritten
+
+The old feature could not be ported: it shelled out to `ksud stealth start --component …`, a
+daemon command from the userspace layer this tree dropped, and it needed `getKsuDaemonPath()`.
+Its replacement is pure `PackageManager`, so it works with no root, no ksud and no shell.
+
+The six defects that drove the rewrite, and what replaces each:
+
+| Defect (old) | Now |
+|---|---|
+| depended on `ksud stealth start` + `getKsuDaemonPath()` (both gone) | no shell at all: `setComponentEnabledSetting` on our own components |
+| disabled every MAIN/LAUNCHER component *including the one it told the user to start*, and a disabled component cannot even be started explicitly | `StealthLaunchActivity` is never touched; it has no launcher filter and extends `MainActivity`, so it *is* the manager |
+| truth was a boolean in SharedPreferences | truth is `queryIntentActivities(MAIN/LAUNCHER)`; the stored flag is an expectation that `repair()` corrects from reality on every manager start |
+| no restore path once hidden | restore lives on the same screen (still reachable while hidden) and via the always-on entry; the adb line is shown and copyable *before* hiding |
+| failures swallowed (`Shell.cmd`, un-checked component writes) | every write is read back; on any disagreement the whole operation rolls back and the error stays on screen |
+| entry trigger was "tap the build number ten times", which only worked because the dead daemon hooked it | quick-settings tile (`StealthTileService`) + `adb shell am start -n <pkg>/<entry>`, both documented in the confirm dialog |
+
+`android-37`'s `android.jar` has no `TileService.requestAddTileService`, so there is no way to
+add the tile for the user - the screen shows the instructions and hands over the adb command
+instead of pretending a button exists.
+
+Also in this batch: `MainScreen` (the four-tab pager, bottom bar / side rail and
+`LocalMainPagerState`) moved out of `MainActivity` into `ui/MainScreen.kt`; the Activity is now
+194 lines and its budget entry is gone from `scripts/quality-baseline.json` for good.
+
+

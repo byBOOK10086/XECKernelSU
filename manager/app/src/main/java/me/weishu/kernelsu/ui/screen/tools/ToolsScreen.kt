@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.Terminal
+import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -115,6 +116,13 @@ fun ToolsScreen() {
                             summary = stringResource(R.string.tools_external_modules_summary),
                             icon = Icons.Rounded.Extension,
                             onClick = { navigator.push(Route.ExternalModules) },
+                        )
+                        // 隐身：屏幕上先给出"回来"的办法，再给隐藏按钮。
+                        ToolRow(
+                            title = stringResource(R.string.stealth_title),
+                            summary = stringResource(R.string.stealth_summary),
+                            icon = Icons.Rounded.VisibilityOff,
+                            onClick = { navigator.push(Route.Stealth) },
                         )
                     }
                 }

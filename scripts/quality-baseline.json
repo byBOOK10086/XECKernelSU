@@ -170,10 +170,6 @@
       "lines": 537,
       "reason": "ported file: split candidate, no reason recorded yet"
     },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/MainActivity.kt": {
-      "lines": 469,
-      "reason": "the NavDisplay entry table moved to ui/navigation3/KernelSuNavHost.kt (526 -> 430); still over 400 until the pager block moves too"
-    },
     "manager/app/src/main/java/me/weishu/kernelsu/ui/viewmodel/ModuleViewModel.kt": {
       "lines": 520,
       "reason": "ported file: split candidate, no reason recorded yet"

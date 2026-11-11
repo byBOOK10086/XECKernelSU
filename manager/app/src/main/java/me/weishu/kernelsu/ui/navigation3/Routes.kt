@@ -129,4 +129,9 @@ sealed interface Route : NavKey, Parcelable {
     @Parcelize
     @Serializable
     data object RemoteAssistant : Route
+
+    /** Hiding the launcher icon, including the way back in (tile / adb). */
+    @Parcelize
+    @Serializable
+    data object Stealth : Route
 }

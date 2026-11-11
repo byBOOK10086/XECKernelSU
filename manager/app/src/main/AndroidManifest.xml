@@ -71,6 +71,51 @@
             </intent-filter>
         </activity>
 
+        <!--
+            The always-enabled entry for the hidden-icon mode. It has no launcher filter, so it
+            adds nothing to the app drawer, and StealthEntrance never disables it: while the icon
+            is hidden MainActivity is disabled and a disabled component cannot be started, which
+            is why the way back in has to be a separate component. It carries the same VIEW
+            filters as MainActivity so that opening a module zip keeps working in that state.
+        -->
+        <activity
+            android:name=".ui.StealthLaunchActivity"
+            android:exported="true"
+            android:theme="@style/Theme.KernelSU.Starting">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="content" />
+                <data android:mimeType="application/zip" />
+                <data android:mimeType="application/x-zip-compressed" />
+                <data android:mimeType="application/x-zip" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+
+                <data
+                    android:host="action"
+                    android:scheme="ksu" />
+            </intent-filter>
+        </activity>
+
+        <!-- Quick-settings tile: the entry that survives hiding the icon. -->
+        <service
+            android:name=".ui.StealthTileService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="@string/stealth_tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
         <activity
             android:name=".ui.webui.WebUIActivity"
             android:autoRemoveFromRecents="true"
