@@ -38,6 +38,7 @@ timeline
 | 项 | 为什么现在做 | 完成判据 |
 |---|---|---|
 | **GKI SUSFS 7 KMI 全绿** | SUSFS 只有编进内核才算"刷一次就有" | 7 个 `Image.gz` + AnyKernel3 包，arm64 magic / gzip 断言通过 |
+| **`ksud susfs` + 开机基线** | 内核具备 SUSFS 能力 ≠ 隐藏生效；没有用户态驱动，规则下不下去 | `ksud susfs status/version/variant/features` 可读；开机基线把关键路径/挂载/属性隐藏起来；真机 `/proc/susfs_*` 有值 |
 | **首版 APK** | 用户可见的第一个产物 | `build-manager` 绿 + 产物核对（引擎、keybox 代次、`libxeccli.so`、旧图标）|
 | **真机验收 T1/T2** | CI 证明不了设备行为 | [`feature/tee/test/`](../feature/tee/test) 在真机全绿；`/proc/susfs_*` 可读；bootstate 三键一致 |
 | **清 5 项技术债** | 会误导用户 / 泄露凭据 / 逻辑漂移 | D1 删旧仓下载路径；D2 凭据移出代码；D3 合并或删除并行实现；D4 uapi 守卫进 `guards`；D5 保持整洁 |

@@ -72,7 +72,9 @@ gantt
 |---|---|---|
 | GKI 内置（主）| 🟡 链接阶段 | 已过：补丁应用、`CONFIG_KSU_SUSFS=y`、编译、`-Werror`；已补 `susfs_linkage.c` 提供补丁引用的 3 个符号 |
 | LKM 兜底 | 🟢 | 8/8 KMI 编译 + 打包成功；`.ko` 3.1–7.8 MB/KMI，单 KMI 模块 zip 1.33 MB |
+| **用户态驱动** | 🔴 **缺失（首版阻塞）** | `ksud` 没有 `susfs` 子命令，内置脚本也不写 `/proc/susfs_*` → 内核具备能力但**规则下不下去** |
 | 已知缺口 | ⏳ | `android17-6.18` 上游无 GKI 分支 → 只能 LKM |
+
 
 </details>
 
@@ -118,12 +120,14 @@ gantt
 
 | # | 项 | 说明 |
 |:--:|---|---|
+| **0** | **`ksud susfs` 子命令 + 开机基线配置**（🔴 首版阻塞）| 把旧仓 `susfs.rs` 的命令面搬进来（`status/version/variant/features` + `set_uname`/`add_sus_path`/`add_sus_kstat`/`open_redirect`/`enable_log`），走 `reboot(2)` supercall 驱动 v2.3.0 命令集；并在 `init_event` 应用一份"隐藏 root 痕迹"的基线，让"刷完即生效"成立 |
 | 1 | GKI 内核 7 个 KMI 全绿 | 主路线当前验证到"链接"阶段 |
 | 2 | `android17-6.18` 的 SUSFS | 上游无分支；先 LKM |
 | 3 | 真机验证 | 无设备接入；T1/T2 与 `/proc/susfs_*` 未实测 |
 | 4 | 管理器 TEE / SUSFS 状态卡 | 目前只有脚本/CLI 层 |
 | 5 | 站点接入新仓 | 现有站点流水线只认旧仓 |
 | 6 | uapi 三副本守卫 | 旧仓 `check_uapi_mirror.py` 未搬 |
+
 
 <details>
 <summary><b>已登记技术债（本轮按指示先不动）</b></summary>
