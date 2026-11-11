@@ -300,12 +300,33 @@ jobs:
             echo "SIGN_KEYSTORE_PASSWORD=$PR_KEYSTORE_PASSWORD" >> $GITHUB_ENV
             echo "SIGN_KEY_PASSWORD=$PR_KEY_PASSWORD" >> $GITHUB_ENV
           else
-            test -n "$PROD_KEYSTORE"
-            echo "$PROD_KEYSTORE" | base64 -d > key.jks
-            echo "SIGN_KEYSTORE_FILE=key.jks" >> $GITHUB_ENV
-            echo "SIGN_KEY_ALIAS=$PROD_KEY_ALIAS" >> $GITHUB_ENV
-            echo "SIGN_KEYSTORE_PASSWORD=$PROD_KEYSTORE_PASSWORD" >> $GITHUB_ENV
-            echo "SIGN_KEY_PASSWORD=$PROD_KEY_PASSWORD" >> $GITHUB_ENV
+            if [ -z "$PROD_KEYSTORE" ]; then
+              # Fork without release secrets: sign with a temporary key so the repacked APK
+              # (with the ksud binaries injected) is actually installable. Announced loudly
+              # instead of failing the whole run or pretending this is a release signature.
+              echo "::warning title=APK signed with a temporary key::This repository has no KEYSTORE / KEY_ALIAS secrets. The manager APK below is repacked and signed with a key generated in this job: it installs and runs, but it is NOT a publishable release artifact."
+              KS_PASSWORD=$(openssl rand -hex 32)
+              KP_PASSWORD=$(openssl rand -hex 32)
+              keytool -genkeypair \
+                -alias ci-key \
+                -keyalg RSA -keysize 2048 \
+                -validity 365 \
+                -storepass "$KS_PASSWORD" \
+                -keypass "$KP_PASSWORD" \
+                -dname "CN=XECKernelSU CI Build" \
+                -storetype JKS \
+                -keystore ci-key.jks
+              echo "SIGN_KEYSTORE_FILE=ci-key.jks" >> $GITHUB_ENV
+              echo "SIGN_KEY_ALIAS=ci-key" >> $GITHUB_ENV
+              echo "SIGN_KEYSTORE_PASSWORD=$KS_PASSWORD" >> $GITHUB_ENV
+              echo "SIGN_KEY_PASSWORD=$KP_PASSWORD" >> $GITHUB_ENV
+            else
+              echo "$PROD_KEYSTORE" | base64 -d > key.jks
+              echo "SIGN_KEYSTORE_FILE=key.jks" >> $GITHUB_ENV
+              echo "SIGN_KEY_ALIAS=$PROD_KEY_ALIAS" >> $GITHUB_ENV
+              echo "SIGN_KEYSTORE_PASSWORD=$PROD_KEYSTORE_PASSWORD" >> $GITHUB_ENV
+              echo "SIGN_KEY_PASSWORD=$PROD_KEY_PASSWORD" >> $GITHUB_ENV
+            fi
           fi
 
       - name: Repack and resign
