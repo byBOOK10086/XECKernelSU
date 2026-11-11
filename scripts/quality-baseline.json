@@ -171,8 +171,8 @@
       "reason": "ported file: split candidate, no reason recorded yet"
     },
     "manager/app/src/main/java/me/weishu/kernelsu/ui/MainActivity.kt": {
-      "lines": 526,
-      "reason": "ported file: split candidate, no reason recorded yet"
+      "lines": 469,
+      "reason": "the NavDisplay entry table moved to ui/navigation3/KernelSuNavHost.kt (526 -> 430); still over 400 until the pager block moves too"
     },
     "manager/app/src/main/java/me/weishu/kernelsu/ui/viewmodel/ModuleViewModel.kt": {
       "lines": 520,
@@ -204,10 +204,6 @@
     },
     "repack_apk.py": {
       "lines": 490,
-      "reason": "ported file: split candidate, no reason recorded yet"
-    },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/settings/SettingsMiuix.kt": {
-      "lines": 486,
       "reason": "ported file: split candidate, no reason recorded yet"
     },
     "manager/app/src/main/java/me/weishu/kernelsu/ui/design/panel/Xc8Controls.kt": {

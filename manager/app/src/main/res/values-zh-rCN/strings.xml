@@ -222,6 +222,8 @@
     <string name="group_contains_apps">包含 %d 个应用</string>
     <string name="settings_theme">主题设置</string>
     <string name="settings_theme_summary">自定义更多主题选项</string>
+    <string name="settings_themes">主题</string>
+    <string name="settings_themes_summary">主题商城、自己编辑、发布分享</string>
     <string name="settings_theme_mode_system">跟随系统</string>
     <string name="settings_theme_mode_light">浅色</string>
     <string name="settings_theme_mode_dark">深色</string>
@@ -465,6 +467,7 @@ XEC 项目组
     <string name="remote_assistant_receive">接收模块</string>
     <string name="remote_assistant_share">分享模块</string>
     <string name="remote_assistant_title">远程模块助手</string>
+    <string name="remote_assistant_subtitle">模块直链的分享与接收</string>
     <string name="remote_hub_auth_title_login">登录 XEC 模块仓库</string>
     <string name="remote_hub_auth_title_register">注册 XEC 模块仓库账号</string>
     <string name="remote_hub_back">返回</string>
@@ -833,6 +836,7 @@ XEC 项目组
     <string name="tools_terminal_summary">带文件管理的命令行终端</string>
     <string name="tools_terminal_title">终端</string>
     <string name="tools_title">工具箱</string>
+    <string name="tools_summary">终端、文件管理与扩展模块</string>
 
     <string name="webui">WebUi</string>
 

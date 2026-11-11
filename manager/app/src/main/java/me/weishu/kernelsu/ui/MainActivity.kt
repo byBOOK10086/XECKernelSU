@@ -32,12 +32,10 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,27 +66,17 @@ import me.weishu.kernelsu.ui.component.bottombar.NavigationBadgeState
 import me.weishu.kernelsu.ui.component.bottombar.SideRail
 import me.weishu.kernelsu.ui.component.bottombar.rememberMainPagerState
 import me.weishu.kernelsu.ui.component.bottombar.useNavigationRail
+import me.weishu.kernelsu.ui.design.token.XcTheme
 import me.weishu.kernelsu.ui.navigation3.IntentDispatcher
+import me.weishu.kernelsu.ui.navigation3.KernelSuNavHost
 import me.weishu.kernelsu.ui.navigation3.LocalNavigator
 import me.weishu.kernelsu.ui.navigation3.Navigator
 import me.weishu.kernelsu.ui.navigation3.Route
 import me.weishu.kernelsu.ui.navigation3.rememberNavigator
-import me.weishu.kernelsu.ui.screen.about.AboutScreen
-import me.weishu.kernelsu.ui.screen.appprofile.AppProfileScreen
-import me.weishu.kernelsu.ui.screen.colorpalette.ColorPaletteScreen
-import me.weishu.kernelsu.ui.screen.executemoduleaction.ExecuteModuleActionScreen
-import me.weishu.kernelsu.ui.screen.flash.FlashScreen
 import me.weishu.kernelsu.ui.screen.home.HomePager
-import me.weishu.kernelsu.ui.screen.install.InstallScreen
 import me.weishu.kernelsu.ui.screen.module.ModulePager
-import me.weishu.kernelsu.ui.screen.modulerepo.ModuleRepoDetailScreen
-import me.weishu.kernelsu.ui.screen.modulerepo.ModuleRepoScreen
-import me.weishu.kernelsu.ui.screen.scriptrun.ScriptRunScreen
 import me.weishu.kernelsu.ui.screen.settings.SettingPager
-import me.weishu.kernelsu.ui.screen.sulog.SulogScreen
 import me.weishu.kernelsu.ui.screen.superuser.SuperUserPager
-import me.weishu.kernelsu.ui.screen.template.AppProfileTemplateScreen
-import me.weishu.kernelsu.ui.screen.templateeditor.TemplateEditorScreen
 import me.weishu.kernelsu.ui.theme.KernelSUTheme
 import me.weishu.kernelsu.ui.theme.LocalColorMode
 import me.weishu.kernelsu.ui.theme.LocalEnableBlur
@@ -107,15 +95,14 @@ import me.weishu.kernelsu.ui.viewmodel.SuperUserViewModel
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
-import top.yukonga.miuix.kmp.nav.core.NavDisplay
-import top.yukonga.miuix.kmp.nav.core.NavDisplayEffects
-import top.yukonga.miuix.kmp.nav.core.rememberNavSystemCornerRadius
 import top.yukonga.miuix.kmp.nav.transition.NavSwipeDirection
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PagerGestureNestedScrollConnection
 import top.yukonga.miuix.kmp.utils.PagerInterceptionMode
 import top.yukonga.miuix.kmp.utils.PagerNavigationSpringSpec
 import top.yukonga.miuix.kmp.utils.pagerGestureOverride
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 
 class MainActivity : ComponentActivity() {
 
@@ -190,96 +177,52 @@ class MainActivity : ComponentActivity() {
                 LocalModuleDescriptionMaxLines provides uiState.moduleDescriptionMaxLines,
                 LocalUiMode provides uiMode,
             ) {
-                KernelSUTheme(appSettings = appSettings, uiMode = uiMode) {
-                    IntentDispatcher(intentChannel = intentChannel)
-                    val swipeDismiss = if (uiState.enableSwipeDismiss) {
-                        if (LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl) {
-                            NavSwipeDirection.RightToLeft
+                // The XEC design tokens have to sit OUTSIDE the miuix theme: miuix
+                // re-provides LocalIndication internally, and our glass highlights only
+                // reach it when provided from the outside. With no theme applied these
+                // tokens equal the built-in defaults, so the look does not change.
+                XcTheme(
+                    isDark = darkMode,
+                    isAmoled = appSettings.colorMode.isAmoled,
+                    theme = uiState.theme,
+                    componentAlpha = if (uiState.componentTransparent) 0f else 1f,
+                ) {
+                    KernelSUTheme(appSettings = appSettings, uiMode = uiMode) {
+                        IntentDispatcher(intentChannel = intentChannel)
+                        val swipeDismiss = if (uiState.enableSwipeDismiss) {
+                            if (LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl) {
+                                NavSwipeDirection.RightToLeft
+                            } else {
+                                NavSwipeDirection.LeftToRight
+                            }
                         } else {
-                            NavSwipeDirection.LeftToRight
+                            NavSwipeDirection.None
                         }
-                    } else {
-                        NavSwipeDirection.None
-                    }
-                    val flashRoute = navigator.current() as? Route.Flash
-                    var flashBackEnabled by remember(flashRoute) { mutableStateOf(false) }
-                    val scriptRunRoute = navigator.current() as? Route.ScriptRun
-                    var scriptRunBackEnabled by remember(scriptRunRoute) { mutableStateOf(true) }
-                    // Read here, not inside the NavDisplay builder: NavDisplay only rebuilds its entries
-                    // (and their swipeDismiss) when the builder lambda changes, so it must capture the value.
-                    val scriptRunSwipeDismiss = if (scriptRunBackEnabled) swipeDismiss else NavSwipeDirection.None
-                    val mainScreenEntry = @Composable {
-                        MainScreen(
-                            initialPage = selectedMainPage,
-                            pagerInterceptionMode = uiState.pagerInterceptionMode,
-                            onPageChanged = viewModel::setSelectedMainPage,
-                        )
-                    }
-
-                    val navDisplay = @Composable {
-                        NavDisplay(
-                            backStack = navigator.backStack,
-                            effects = NavDisplayEffects(cornerClipRadius = rememberNavSystemCornerRadius()),
-                            onBack = {
-                                when (val top = navigator.current()) {
-                                    is Route.TemplateEditor -> {
-                                        if (!top.readOnly) {
-                                            navigator.setResult("template_edit", true)
-                                        } else {
-                                            navigator.pop()
-                                        }
-                                    }
-
-                                    else -> navigator.pop()
-                                }
-                            }) {
-                            entry<Route.Main>(swipeDismiss = swipeDismiss) { mainScreenEntry() }
-                            entry<Route.About>(swipeDismiss = swipeDismiss) { AboutScreen() }
-                            entry<Route.Sulog>(swipeDismiss = swipeDismiss) { SulogScreen() }
-                            entry<Route.ColorPalette>(swipeDismiss = swipeDismiss) { ColorPaletteScreen() }
-                            entry<Route.AppProfileTemplate>(swipeDismiss = swipeDismiss) { AppProfileTemplateScreen() }
-                            entry<Route.TemplateEditor>(swipeDismiss = swipeDismiss) { key -> TemplateEditorScreen(key.template, key.readOnly) }
-                            entry<Route.AppProfile>(swipeDismiss = swipeDismiss) { key -> AppProfileScreen(key.uid) }
-                            entry<Route.ModuleRepo>(swipeDismiss = swipeDismiss) { ModuleRepoScreen() }
-                            entry<Route.ModuleRepoDetail>(swipeDismiss = swipeDismiss) { key -> ModuleRepoDetailScreen(key.module) }
-                            entry<Route.Install>(swipeDismiss = swipeDismiss) { InstallScreen() }
-                            entry<Route.Flash>(swipeDismiss = if (flashBackEnabled) swipeDismiss else NavSwipeDirection.None) { key ->
-                                FlashScreen(
-                                    key.flashIt,
-                                    onBackEnabledChange = { enabled ->
-                                        if (navigator.current() == key) flashBackEnabled = enabled
-                                    },
-                                )
-                            }
-                            entry<Route.ExecuteModuleAction>(swipeDismiss = swipeDismiss) { key ->
-                                ExecuteModuleActionScreen(
-                                    key.moduleId,
-                                    key.fromShortcut
-                                )
-                            }
-                            entry<Route.ScriptRun>(swipeDismiss = scriptRunSwipeDismiss) { key ->
-                                ScriptRunScreen(
-                                    key.arg,
-                                    onBackEnabledChange = { enabled ->
-                                        if (navigator.current() == key) scriptRunBackEnabled = enabled
-                                    },
-                                )
-                            }
-                            entry<Route.Home>(swipeDismiss = swipeDismiss) { mainScreenEntry() }
-                            entry<Route.SuperUser>(swipeDismiss = swipeDismiss) { mainScreenEntry() }
-                            entry<Route.Module>(swipeDismiss = swipeDismiss) { mainScreenEntry() }
-                            entry<Route.Settings>(swipeDismiss = swipeDismiss) { mainScreenEntry() }
+                        val mainScreenEntry = @Composable {
+                            MainScreen(
+                                initialPage = selectedMainPage,
+                                pagerInterceptionMode = uiState.pagerInterceptionMode,
+                                onPageChanged = viewModel::setSelectedMainPage,
+                            )
                         }
-                    }
 
-                    when (uiMode) {
-                        UiMode.Material -> androidx.compose.material3.Scaffold(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainer
-                        ) { navDisplay() }
+                        val navDisplay = @Composable {
+                            KernelSuNavHost(
+                                navigator = navigator,
+                                swipeDismiss = swipeDismiss,
+                                mainScreenEntry = mainScreenEntry,
+                            )
+                        }
 
-                        UiMode.Miuix -> Scaffold { navDisplay() }
+                        when (uiMode) {
+                            UiMode.Material -> androidx.compose.material3.Scaffold(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainer
+                            ) { navDisplay() }
+
+                            UiMode.Miuix -> Scaffold { navDisplay() }
+                        }
+                        SideEffect { contentReady = true }
                     }
-                    SideEffect { contentReady = true }
                 }
             }
         }

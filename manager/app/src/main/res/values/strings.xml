@@ -246,6 +246,8 @@
     <string name="group_contains_apps">Contains %d apps</string>
     <string name="settings_theme">Theme</string>
     <string name="settings_theme_summary">Choose the app theme mode.</string>
+    <string name="settings_themes">Themes</string>
+    <string name="settings_themes_summary">Theme store, editor and publishing</string>
     <string name="settings_theme_mode_system">Follow system</string>
     <string name="settings_theme_mode_light">Light</string>
     <string name="settings_theme_mode_dark">Dark</string>
@@ -471,6 +473,7 @@ XEC Project Team
     <string name="remote_assistant_receive">Receive module</string>
     <string name="remote_assistant_share">Share module</string>
     <string name="remote_assistant_title">Remote Module Assistant</string>
+    <string name="remote_assistant_subtitle">Share and receive module direct links</string>
     <string name="remote_hub_auth_title_login">Sign in to XEC Module Repo</string>
     <string name="remote_hub_auth_title_register">Create an XEC Module Repo account</string>
     <string name="remote_hub_back">Back</string>
@@ -839,6 +842,7 @@ See the log below for details.</string>
     <string name="tools_terminal_summary">Command-line terminal with a file manager</string>
     <string name="tools_terminal_title">Terminal</string>
     <string name="tools_title">Toolbox</string>
+    <string name="tools_summary">Terminal, file manager and external modules</string>
 
     <string name="webui">WebUi</string>
 

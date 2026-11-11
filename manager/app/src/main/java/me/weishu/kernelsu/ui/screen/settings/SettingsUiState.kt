@@ -73,6 +73,11 @@ data class SettingsScreenActions(
     val onSetCheckUpdate: (Boolean) -> Unit,
     val onSetCheckModuleUpdate: (Boolean) -> Unit,
     val onOpenTheme: () -> Unit,
+    /** Theme store / my themes / editor: whole skins, not just the current palette. */
+    val onOpenThemes: () -> Unit,
+    val onOpenWallpaper: () -> Unit,
+    val onOpenTools: () -> Unit,
+    val onOpenRemoteAssistant: () -> Unit,
     val onSetUiModeIndex: (Int) -> Unit,
     val onOpenProfileTemplate: () -> Unit,
     val onSetSuCompatMode: (Int) -> Unit,

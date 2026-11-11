@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import me.weishu.kernelsu.data.repository.SettingsRepository
 import me.weishu.kernelsu.data.repository.SettingsRepositoryImpl
+import me.weishu.kernelsu.data.theme.ThemeResolver
 import me.weishu.kernelsu.ksuApp
 import me.weishu.kernelsu.ui.UiMode
 import me.weishu.kernelsu.ui.theme.ThemeController
@@ -54,6 +55,10 @@ class MainActivityViewModel(
             pagerInterceptionMode = settingRepo.pagerInterceptionMode,
             moduleDescriptionMaxLines = settingRepo.moduleDescriptionMaxLines,
             uiMode = UiMode.fromValue(settingRepo.uiMode),
+            componentTransparent = settingRepo.componentTransparent,
+            // Disk read only when the id changed: ThemeResolver caches by theme id, and this
+            // runs on every appearance preference change.
+            theme = ThemeResolver.active(ksuApp),
         )
     }
 
@@ -72,6 +77,10 @@ class MainActivityViewModel(
             "enable_swipe_dismiss",
             "pager_interception_mode",
             "ui_mode",
+            "component_transparent",
+            // Applying / restoring a theme writes this key; without it the whole app would
+            // keep drawing the previous skin until the next cold start.
+            "theme_id",
         )
     }
 }

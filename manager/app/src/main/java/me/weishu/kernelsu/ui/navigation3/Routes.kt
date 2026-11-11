@@ -89,4 +89,44 @@ sealed interface Route : NavKey, Parcelable {
     @Parcelize
     @Serializable
     data class ScriptRun(@Serializable(with = ScriptRunArgSerializer::class) val arg: ScriptRunArg) : Route
+
+    /**
+     * Themes: store / mine / editor in one screen.
+     *
+     * A plain object rather than a parameterised route: a theme package can carry background
+     * images, and navigation arguments are marshalled through `rememberSaveable` (Binder, ~1MB
+     * when the process dies). The screen reads what it needs from
+     * [me.weishu.kernelsu.data.theme.ThemeRepository] by id instead.
+     */
+    @Parcelize
+    @Serializable
+    data object Themes : Route
+
+    /** Custom background: one light and one dark image in the app's private directory. */
+    @Parcelize
+    @Serializable
+    data object Wallpaper : Route
+
+    /** Terminal plus the file-manager tab, reached from the toolbox. */
+    @Parcelize
+    @Serializable
+    data object Terminal : Route
+
+    /** Toolbox: terminal / external modules (and later the stealth entrance) in one place. */
+    @Parcelize
+    @Serializable
+    data object Tools : Route
+
+    /**
+     * Optional add-ons: the TEE engine and TA enhancement built by this project, plus a
+     * link-out to ReZygisk (third-party, AGPL-3.0-or-later, never bundled).
+     */
+    @Parcelize
+    @Serializable
+    data object ExternalModules : Route
+
+    /** Remote module assistant: generate, sign and fetch modules through our own server. */
+    @Parcelize
+    @Serializable
+    data object RemoteAssistant : Route
 }
