@@ -7,6 +7,13 @@
 # respected, atomic write).
 #
 # usage: bash feature/tee/test/run.sh
+# ShellCheck notes in this harness are the assertion idiom, not defects:
+#   `[ cond ] && ok "what" || ko "what"` - ok()/ko() only count and print, they never
+#   fail, so the `||` branch really is the else branch (SC2015);
+#   some generator calls intentionally pass no arguments to rebuild the default
+#   target.txt (SC2119/SC2120).
+# shellcheck disable=SC2015,SC2119,SC2120
+
 set -u
 
 HERE=$(cd "$(dirname "$0")" && pwd)

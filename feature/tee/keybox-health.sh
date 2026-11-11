@@ -40,6 +40,9 @@ for c in \
     "/data/adb/modules/TA_enhanced/bin/ta-enhanced keybox health"
 do
     [ -n "$c" ] || continue
+    # POSIX sh has no arrays: `ksud keybox health` prints `<ok> <days> <root>` and the
+    # three words are split on purpose, so quoting here would be wrong.
+    # shellcheck disable=SC2086
     set -- $c
     bin=$1
     shift

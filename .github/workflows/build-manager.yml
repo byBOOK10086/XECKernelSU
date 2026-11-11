@@ -233,26 +233,31 @@ jobs:
             echo "UPLOAD=false" >> $GITHUB_OUTPUT
           fi
 
+      # Pinned to the same major as the upload-artifact steps above on purpose.
+      # download-artifact@v8 validates an archive digest that upload-artifact@v7 does not
+      # record, so every run died here with `digest-mismatch: error` while printing the very
+      # same sha256 it expected (upload-artifact has no v8 yet). Measured on runs
+      # 43008983310 / 43010317645 / 43012148989: build-manager green, repack-manager red.
       - name: Download gradle manager artifact
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v7
         with:
           name: manager-gradle
           path: artifacts/manager-gradle
 
       - name: Download arm64 ksud
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v7
         with:
           name: ksud-aarch64-linux-android
           path: artifacts/ksud-aarch64-linux-android
 
       - name: Download x86_64 ksud
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v7
         with:
           name: ksud-x86_64-linux-android
           path: artifacts/ksud-x86_64-linux-android
 
       - name: Download RISC-V ksud
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v7
         with:
           name: ksud-riscv64-linux-android
           path: artifacts/ksud-riscv64-linux-android

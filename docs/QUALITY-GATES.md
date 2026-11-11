@@ -36,6 +36,18 @@
 5. **一次提交一件事**：每个批次一个提交，提交信息写清"搬了什么、剔除了什么、为什么"。
 6. **不做静默降级**：探测不到就显示"未知/未探测"，不要显示"不支持"或伪造成功。
 
+## 两条流水线事实（踩过，别再踩）
+
+1. **artifact 动作必须同大版本**：`upload-artifact@v7` 配 `download-artifact@v8` 会让每条
+   流水线在 `repack-manager` 挂在 `digest-mismatch`，而它打印的 sha256 与期望值**一模一样**
+   （v8 校验的归档摘要 v7 根本不写，而 upload 还没有 v8）。表现是 `build-manager` 全绿、
+   最终 APK 产物永远不出现。
+2. **ShellCheck 闸门是"任何 note 都算失败"**：`ludeeus/action-shellcheck` 默认 severity=style。
+   所以 `feature/tee` 里的 `[ cond ] && pass || bad` 这类断言惯用法也会让 CI 红。处理方式：
+   真正有风险的（`pass` 失败会掉进 `bad`）改成显式 `if/else`；测试脚本里的断言语义用
+   文件级 `# shellcheck disable=SC2015,...` 加理由豁免；引用/分词类要么修，要么逐行
+   `# shellcheck disable=` 并写清"为什么这里必须分词"。
+
 ## 本地过闸门（每次推送前）
 
 ```bash

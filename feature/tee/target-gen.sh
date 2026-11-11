@@ -22,7 +22,7 @@
 
 set -u
 
-HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+HERE=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 TS_DIR=${TS_DIR:-/data/adb/tricky_store}
 TARGET=${TG_TARGET:-$TS_DIR/target.txt}
 OPTOUT=${TG_OPTOUT:-$TS_DIR/target-optout.txt}
@@ -125,6 +125,8 @@ detector_route() {
     [ -x "$HEALTH" ] || [ -f "$HEALTH" ] || { printf 'off no-health-helper'; return 0; }
     _line=$(sh "$HEALTH" 2>/dev/null | head -n 1)
     [ -n "${_line:-}" ] || { printf 'off no-health-output'; return 0; }
+    # POSIX sh has no arrays; the line is a whitespace-separated tuple on purpose.
+    # shellcheck disable=SC2086
     set -- $_line
     _ok=${1:-0}
     _days=${2:--1}

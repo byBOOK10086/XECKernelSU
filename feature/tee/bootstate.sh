@@ -192,8 +192,11 @@ EOF
             bad "$DELETE_PROP still set ($(prop_get "$DELETE_PROP"))"
         else
             prop_del "$DELETE_PROP"
-            [ -n "$(prop_get "$DELETE_PROP")" ] && bad "$DELETE_PROP could not be removed" \
-                || pass "$DELETE_PROP removed"
+            if [ -n "$(prop_get "$DELETE_PROP")" ]; then
+                bad "$DELETE_PROP could not be removed"
+            else
+                pass "$DELETE_PROP removed"
+            fi
         fi
     fi
     say "bootstate: properties checked=$set_total changed=$set_changed"
@@ -202,13 +205,6 @@ EOF
 # ---------------------------------------------------------------------------
 # raw boot parameters (cmdline / bootconfig)
 # ---------------------------------------------------------------------------
-
-override_for() {
-    printf '%s\n' "$OVERRIDES" | awk -v k="$1" '
-        NF { split($0, p, "="); if (p[1] == k) { print substr($0, length(p[1]) + 2); exit } }
-    '
-}
-
 # Both rewrite passes read the override table from this file so the shell only
 # has to write it once; passing a multi-line table through `awk -v` depends on
 # the awk flavour (toybox included), a file does not.
@@ -307,9 +303,11 @@ apply_overlay() {
         mv -f "$STAGE_DIR/cmdline.inc" "$STAGE_DIR/cmdline" 2>/dev/null
         chmod 644 "$STAGE_DIR/cmdline" 2>/dev/null
         if [ "$MODE" = check ]; then
-            grep -q 'androidboot.verifiedbootstate=green' "$PROCFS/cmdline" 2>/dev/null \
-                && pass "/proc/cmdline locked view" \
-                || bad "/proc/cmdline still shows the real boot state"
+            if grep -q 'androidboot.verifiedbootstate=green' "$PROCFS/cmdline" 2>/dev/null; then
+                pass "/proc/cmdline locked view"
+            else
+                bad "/proc/cmdline still shows the real boot state"
+            fi
         elif ! grep -q 'androidboot.verifiedbootstate=green' "$PROCFS/cmdline" 2>/dev/null; then
             bind_over "$STAGE_DIR/cmdline" "$PROCFS/cmdline" && pass "/proc/cmdline overlay"
         else
@@ -323,9 +321,11 @@ apply_overlay() {
         rewrite_bootconfig "$PROCFS/bootconfig" "$STAGE_DIR/bootconfig" "$STAGE_DIR/overrides"
         chmod 644 "$STAGE_DIR/bootconfig" 2>/dev/null
         if [ "$MODE" = check ]; then
-            grep -q 'verifiedbootstate[[:space:]]*=[[:space:]]*green' "$PROCFS/bootconfig" 2>/dev/null \
-                && pass "/proc/bootconfig locked view" \
-                || bad "/proc/bootconfig still shows the real boot state"
+            if grep -q 'verifiedbootstate[[:space:]]*=[[:space:]]*green' "$PROCFS/bootconfig" 2>/dev/null; then
+                pass "/proc/bootconfig locked view"
+            else
+                bad "/proc/bootconfig still shows the real boot state"
+            fi
         elif ! grep -q 'verifiedbootstate[[:space:]]*=[[:space:]]*green' "$PROCFS/bootconfig" 2>/dev/null; then
             bind_over "$STAGE_DIR/bootconfig" "$PROCFS/bootconfig" && pass "/proc/bootconfig overlay"
         else

@@ -14,7 +14,7 @@ set -u
 QUIET=0
 [ "${1:-}" = "--quiet" ] && QUIET=1
 
-HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+HERE=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 TS_DIR=${TS_DIR:-/data/adb/tricky_store}
 TARGET=${TG_TARGET:-$TS_DIR/target.txt}
 HEALTH=${TG_HEALTH:-$HERE/keybox-health.sh}
@@ -68,8 +68,13 @@ case "$ok" in
         pass T1-1 "keybox verdict: $verdict"
         case "$days" in
             ''|*[!0-9-]*) fail T1-2 "leaf lifetime unknown ($days)" ;;
-            *) [ "$days" -ge 7 ] && pass T1-2 "leaf has ${days} days left" \
-                    || fail T1-2 "leaf has only ${days} days left" ;;
+            *)
+                if [ "$days" -ge 7 ]; then
+                    pass T1-2 "leaf has ${days} days left"
+                else
+                    fail T1-2 "leaf has only ${days} days left"
+                fi
+                ;;
         esac
         case "$root" in
             google|google_rkp) pass T1-3 "chain anchored at $root" ;;
