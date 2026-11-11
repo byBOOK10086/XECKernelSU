@@ -31,6 +31,14 @@ on:
           - android15-6.6
           - android16-6.12
           - android17-6.18
+  # Build Manager calls this so the arm64 ksud can carry the per-KMI modules.
+  workflow_call:
+    inputs:
+      kmi:
+        description: 'KMI to build ("all" builds every variant)'
+        required: false
+        default: 'all'
+        type: string
   push:
     paths:
       - 'third_party/susfs4ksu-lkm/**'
@@ -50,7 +58,7 @@ jobs:
       - name: Select the KMI list
         id: select
         env:
-          REQUESTED: ${{ github.event_name == 'workflow_dispatch' && inputs.kmi || 'all' }}
+          REQUESTED: ${{ inputs.kmi || 'all' }}
         run: |
           set -euo pipefail
           declare -A IMAGES=(

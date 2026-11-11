@@ -104,8 +104,17 @@ jobs:
   build-ksuinit:
     uses: ./.github/workflows/ksuinit.yml
 
+  # SUSFS ships as a loadable module rather than a rebuilt kernel image. Building it in this
+  # same run is what lets the arm64 ksud carry one `<kmi>_susfs_guard_lkm.ko` per KMI, which
+  # init_event loads right after kernelsu.ko - so one flash of this kernel gives root, the
+  # TEE engine and SUSFS together.
+  build-susfs-lkm:
+    uses: ./.github/workflows/build-susfs-lkm.yml
+    with:
+      kmi: all
+
   build-ksud:
-    needs: [build-lkm, build-ksuinit]
+    needs: [build-lkm, build-ksuinit, build-susfs-lkm]
     strategy:
       matrix:
         include:
@@ -117,6 +126,7 @@ jobs:
       target: ${{ matrix.target }}
       pack_lkm: true
       pack_ksuinit: true
+      pack_susfs: true
   
   build-ksud-extra:
     needs: [build-lkm, build-ksuinit]
