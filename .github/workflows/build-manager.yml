@@ -216,7 +216,7 @@ jobs:
         with:
           # Comma-separated with no spaces: the action does not trim, and a
           # ", " separator leaves a leading space on every sum after the first.
-          allow-checksums: 56aaec82e4c7d2f2c8665bc9ce429eaa47393e6e1e7b9165021cc3ec161667,23397ebec7143ce2ef8966e5fd817afc0f7e465d4ff9c9686608d2f72e19427c
+          allow-checksums: 56aaec82e4c7d2f2c8665bc9ce429eaa47393e6e1e7b1e9165021cc3ec161667,23397ebec7143ce2ef8966e5fd817afc0f7e465d4ff9c9686608d2f72e19427c
 
       - name: Build with Gradle
         run: |
