@@ -5,6 +5,10 @@ its own LICENSE file next to the code; the list here is the index, not a replace
 Every vendored tree also carries an `UPSTREAM.md` (or `VENDORED.md`) that records the exact
 pin, the files that differ from that pin, and how CI rebuilds it.
 
+The human-readable declaration - what each upstream is used for, which revision is pinned,
+what we changed, and which upstreams are deliberately **not** used - is
+[`docs/UPSTREAMS.md`](docs/UPSTREAMS.md).
+
 ## Version tracking
 
 The three upstream projects all publish a machine-readable version. These are the endpoints
@@ -81,3 +85,19 @@ to check before bumping a pin:
 The module trees bundled inside `ksud` (TA_enhanced, tricky_store) carry their own
 `module.prop` and NOTICE files inside each tree. They are materialised to
 `/data/adb/modules` at boot; their licences are stated in those files.
+
+## Prebuilt components kept from upstream KernelSU
+
+- `userspace/ksud/bin/{aarch64,x86_64,riscv64}/busybox` - BusyBox, **GPL-2.0**, shipped unmodified
+  by upstream KernelSU. It backs module scripts and the download path.
+- `userspace/ksuinit` - the early-boot loader, same project and licence as the rest of the
+  userspace (GPL-3.0).
+
+## Build-time dependencies (not vendored)
+
+These are pulled by Gradle / cargo during CI and never committed:
+
+- AndroidX Compose, Miuix (Apache-2.0) and the Kotlin runtime - manager UI.
+- Rust crates declared in `userspace/ksud/Cargo.lock` (audited by `cargo`/CI, not copied here).
+- Kernel build images `ghcr.io/ylarod/ddk-min:<kmi>-20260828@sha256:...` - every one is pinned
+  by digest in `.github/workflows/`.
