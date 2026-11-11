@@ -251,8 +251,8 @@
       "reason": "ported built-in module installer (stamp/version refresh + stage scripts); split candidate once the TEE payload lands"
     },
     "userspace/ksud/src/cli.rs": {
-      "lines": 841,
-      "reason": "upstream command table"
+      "lines": 959,
+      "reason": "upstream cli + the ported \builtin subcommand family (status/tee/install/start/force-boot)"
     },
     "userspace/ksud/src/feature.rs": {
       "lines": 470,

@@ -9,8 +9,8 @@ use crate::boot_patch::{BootPatchArgs, BootRestoreArgs};
 use crate::lkm_image::BootPatchV2Args;
 use crate::module::regenerate_preinit;
 use crate::{
-    apk_sign, assets, debug, defs, init_event, ksu_uapi, ksucalls, module, module_config, sulog,
-    utils,
+    apk_sign, assets, builtin, debug, defs, init_event, ksu_uapi, ksucalls, module, module_config,
+    sulog, utils,
 };
 
 /// KernelSU userspace cli
@@ -130,6 +130,12 @@ enum Commands {
         command: BootInfo,
     },
     /// For developers
+    /// Bundled TEE engine and module trees
+    Builtin {
+        #[command(subcommand)]
+        command: BuiltinCmd,
+    },
+
     Debug {
         #[command(subcommand)]
         command: Debug,
@@ -177,6 +183,33 @@ enum BootInfo {
         /// toggle to another slot
         #[arg(short = 'u', long, default_value = "false")]
         ota: bool,
+    },
+}
+
+#[derive(clap::Subcommand, Debug)]
+enum BuiltinCmd {
+    /// Print the TEE engine and force-boot switches as JSON
+    Status,
+
+    /// Print or set the bundled TEE/TS engine switch (on|off)
+    ///
+    /// Turning it off only stops the keystore2 injection; the root side and the modules
+    /// keep working.
+    Tee {
+        /// on or off; omit to print the current state
+        value: Option<String>,
+    },
+
+    /// Materialise the bundled module trees under /data/adb/modules
+    Install,
+
+    /// Install the bundled trees and (re)start the TEE engine in this session
+    Start,
+
+    /// Print or set "start the bundled engine on boot even behind a gate"
+    ForceBoot {
+        /// on or off; omit to print the current state
+        value: Option<String>,
     },
 }
 
@@ -537,6 +570,91 @@ pub fn run() -> Result<()> {
         Commands::SoftReboot => crate::soft_reboot::soft_reboot(),
 
         Commands::Insmod { module, params } => debug::insmod(&module, &params),
+
+        Commands::Builtin { command } => match command {
+            BuiltinCmd::Status => {
+                println!(
+                    "{}",
+                    serde_json::json!({
+                        "tee": if builtin::tee_engine_enabled() { "on" } else { "off" },
+                        "force_boot": if builtin::force_boot_enabled() { "on" } else { "off" },
+                    })
+                );
+                Ok(())
+            }
+            BuiltinCmd::Tee { value } => {
+                match value {
+                    None => println!(
+                        "{}",
+                        if builtin::tee_engine_enabled() {
+                            "on"
+                        } else {
+                            "off"
+                        }
+                    ),
+                    Some(raw) => {
+                        let enabled = match raw.trim().to_ascii_lowercase().as_str() {
+                            "on" | "1" | "true" | "enable" => true,
+                            "off" | "0" | "false" | "disable" => false,
+                            other => bail!("unknown TEE switch '{other}', expected on or off"),
+                        };
+                        let now = builtin::set_tee_engine_enabled(enabled)?;
+                        println!("tee={}", if now { "on" } else { "off" });
+                    }
+                }
+                Ok(())
+            }
+            BuiltinCmd::Install => {
+                let report = builtin::install_builtin_modules_forced()?;
+                println!("modules={}", report.modules);
+                println!("rewritten={}", report.rewritten);
+                Ok(())
+            }
+            BuiltinCmd::Start => {
+                let report = builtin::start_tee_engine(true)?;
+                println!("engine_dir={}", report.engine_dir);
+                println!("modules={}", report.install.modules);
+                println!("rewritten={}", report.install.rewritten);
+                for run in &report.scripts {
+                    println!(
+                        "script={}/{} spawned={}",
+                        run.module,
+                        run.stage,
+                        u8::from(run.spawned)
+                    );
+                }
+                println!("engine_pid={}", report.engine_pid);
+                println!("injected={}", u8::from(report.injected));
+                for dir in &report.yielded {
+                    println!("yielded={dir}");
+                }
+                Ok(())
+            }
+            BuiltinCmd::ForceBoot { value } => {
+                match value {
+                    None => println!(
+                        "{}",
+                        if builtin::force_boot_enabled() {
+                            "on"
+                        } else {
+                            "off"
+                        }
+                    ),
+                    Some(raw) => {
+                        let enabled = match raw.trim().to_ascii_lowercase().as_str() {
+                            "on" | "1" | "true" | "enable" => true,
+                            "off" | "0" | "false" | "disable" => false,
+                            other => {
+                                bail!("unknown force-boot switch '{other}', expected on or off")
+                            }
+                        };
+                        let now = builtin::set_force_boot(enabled)?;
+                        println!("force_boot={}", if now { "on" } else { "off" });
+                    }
+                }
+                Ok(())
+            }
+        },
 
         Commands::Module { command } => {
             utils::switch_mnt_ns(1)?;
