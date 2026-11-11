@@ -233,6 +233,11 @@ enum Susfs {
         /// path to refresh
         path: String,
     },
+    /// Refresh the fake kstat of a path from a full clone of itself
+    UpdateSusKstatFullClone {
+        /// path to refresh
+        path: String,
+    },
     /// Redirect opens of one path to another
     AddOpenRedirect {
         /// target path
@@ -1074,6 +1079,7 @@ pub fn run() -> Result<()> {
             Susfs::AddSusPathLoop { path } => susfs::add_sus_path_loop(&path),
             Susfs::AddSusKstat { path } => susfs::add_sus_kstat(&path),
             Susfs::UpdateSusKstat { path } => susfs::update_sus_kstat(&path),
+            Susfs::UpdateSusKstatFullClone { path } => susfs::update_sus_kstat_full_clone(&path),
             Susfs::AddOpenRedirect {
                 target,
                 redirected,

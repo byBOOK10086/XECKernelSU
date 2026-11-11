@@ -18,7 +18,6 @@ const CMD_SUSFS_SHOW_ENABLED_FEATURES: u32 = 0x555e2;
 const CMD_SUSFS_SHOW_VARIANT: u32 = 0x555e3;
 const CMD_SUSFS_ADD_SUS_KSTAT: u32 = 0x55570;
 const CMD_SUSFS_UPDATE_SUS_KSTAT: u32 = 0x55571;
-const CMD_SUSFS_ADD_SUS_KSTAT_STATICALLY: u32 = 0x55572;
 const CMD_SUSFS_ADD_SUS_MAP: u32 = 0x60020;
 const CMD_SUSFS_SET_UNAME: u32 = 0x55590;
 const CMD_SUSFS_ENABLE_LOG: u32 = 0x555a0;
@@ -657,49 +656,4 @@ pub fn update_sus_kstat(path: &str) -> anyhow::Result<()> {
 
 pub fn update_sus_kstat_full_clone(path: &str) -> anyhow::Result<()> {
     update_sus_kstat_impl(path, true)
-}
-
-#[allow(clippy::too_many_arguments)]
-pub fn add_sus_kstat_statically(
-    path: &str,
-    ino: u64,
-    dev: u64,
-    nlink: u32,
-    size: u64,
-    atime_sec: i64,
-    atime_nsec_opt: u64,
-    mtime_sec: i64,
-    mtime_nsec_opt: u64,
-    ctime_sec: i64,
-    ctime_nsec_opt: u64,
-    blocks: u64,
-    blksize: i64,
-) -> anyhow::Result<()> {
-    let metadata = std::fs::metadata(path)
-        .map_err(|e| anyhow::anyhow!("stat SUSFS kstat target {path}: {e}"))?;
-    let mut cmd = SusfsKstat {
-        is_statically: true,
-        target_ino: metadata.ino() as c_ulong,
-        target_pathname: [0; SUSFS_MAX_LEN_PATHNAME],
-        spoofed_ino: ino as c_ulong,
-        spoofed_dev: dev as c_ulong,
-        spoofed_nlink: nlink,
-        spoofed_size: size as i64,
-        spoofed_atime_tv_sec: atime_sec as c_long,
-        spoofed_atime_tv_nsec: atime_nsec_opt as c_ulong,
-        spoofed_mtime_tv_sec: mtime_sec as c_long,
-        spoofed_mtime_tv_nsec: mtime_nsec_opt as c_ulong,
-        spoofed_ctime_tv_sec: ctime_sec as c_long,
-        spoofed_ctime_tv_nsec: ctime_nsec_opt as c_ulong,
-        spoofed_blocks: blocks as i64,
-        spoofed_blksize: blksize as c_long,
-        flags: KSTAT_SPOOF_AUTO_FULL_CLONE,
-        err: ERR_CMD_NOT_SUPPORTED,
-    };
-    copy_path_into(&mut cmd.target_pathname, path)?;
-    submit_kstat(
-        CMD_SUSFS_ADD_SUS_KSTAT_STATICALLY,
-        &mut cmd,
-        "static kstat add",
-    )
 }

@@ -251,7 +251,7 @@
       "reason": "ported built-in module installer (stamp/version refresh + stage scripts); split candidate once the TEE payload lands"
     },
     "userspace/ksud/src/cli.rs": {
-      "lines": 1090,
+      "lines": 1096,
       "reason": "SUSFS command surface: `ksud susfs status|version|variant|features|baseline|set-uname|set-cmdline|enable-log|avc-spoof|hide-sus-mnts|add-sus-path|add-sus-path-loop|add-sus-kstat|update-sus-kstat|add-open-redirect|add-sus-map` lives next to the other subcommands; clap needs the enum and the dispatch in one file. Re-pinned to the ported size; shrinks from here."
     },
     "userspace/ksud/src/feature.rs": {
