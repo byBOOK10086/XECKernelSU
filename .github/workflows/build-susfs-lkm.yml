@@ -1,0 +1,155 @@
+name: Build SUSFS LKM
+
+# SUSFS as a loadable kernel module: no kernel rebuild, no boot image flashing. The .ko is
+# built per KMI against the digest-pinned DDK images the upstream project uses, the loader is
+# built from tools/susfs_insmod.c, and everything is packed into a KernelSU module zip that
+# picks the right .ko from /proc/sys/kernel/osrelease at boot.
+#
+#   1. module  - one job per KMI, produces susfs_guard_lkm.ko
+#   2. pack    - collects them, builds the loader, packs susfs_guard_lkm-module-<tag>-arm64.zip
+#
+# The upstream project's own workflow carries ~1,000 lines of verification gates (kallsyms
+# import assertions, CFI site checks, per-hook symbol tables). This one keeps the artifact
+# checks that protect the device - no linked kallsyms_* symbol, module zip actually contains
+# all eight KMIs - and leaves the rest to upstream's CI; we build their tagged source.
+
+on:
+  workflow_dispatch:
+    inputs:
+      kmi:
+        description: 'Build a single KMI ("all" builds every variant)'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - android12-5.10
+          - android13-5.10
+          - android13-5.15
+          - android14-5.15
+          - android14-6.1
+          - android15-6.6
+          - android16-6.12
+          - android17-6.18
+  push:
+    paths:
+      - 'third_party/susfs4ksu-lkm/**'
+      - '.github/workflows/build-susfs-lkm.yml'
+
+jobs:
+  module:
+    name: susfs (${{ matrix.variant }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.kmi == 'all' || inputs.kmi == matrix.variant }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { variant: android12-5.10, image: "ghcr.io/ylarod/ddk-min:android12-5.10-20260828@sha256:272ada1e61c525116032246df2a790d1ccec1804b7a9e0b09203c5e650dcb78e" }
+          - { variant: android13-5.10, image: "ghcr.io/ylarod/ddk-min:android13-5.10-20260828@sha256:e5ce038ba38408ad26aae1f2622cfb44dfbf6634b025bf197aa08beac0794f5b" }
+          - { variant: android13-5.15, image: "ghcr.io/ylarod/ddk-min:android13-5.15-20260828@sha256:9e68cd9fcab748584755d31ba88ef134efc938dbde17f258c2652315f6cd81cd" }
+          - { variant: android14-5.15, image: "ghcr.io/ylarod/ddk-min:android14-5.15-20260828@sha256:bbf697a8fe995704268eef710921c9d2ea4f146954690d7ea97887f3a4014a6a" }
+          - { variant: android14-6.1, image: "ghcr.io/ylarod/ddk-min:android14-6.1-20260828@sha256:1dd6ac340b627a90a4031d6d0df6b129d8cc949b139fb56032c898f023d3d5d3" }
+          - { variant: android15-6.6, image: "ghcr.io/ylarod/ddk-min:android15-6.6-20260828@sha256:51159bc935c75a282fc65bc87e02f16bd098d1cdf55dc558c4fdd0fcf7a132e2" }
+          - { variant: android16-6.12, image: "ghcr.io/ylarod/ddk-min:android16-6.12-20260828@sha256:fd3ec5cc71d7f2716212e9df8d5674a9afe68fb769282fcac87b83f207f949ee" }
+          - { variant: android17-6.18, image: "ghcr.io/ylarod/ddk-min:android17-6.18-20260828@sha256:fb8b66200bf402cf65a751060fc1aa29524b9fa8840feef16c7b196a4f3f0e6e" }
+    container:
+      image: ${{ matrix.image }}
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check the DDK environment
+        run: |
+          set -e
+          echo "variant = ${{ matrix.variant }}  KDIR=$KDIR  KERNEL_SRC=$KERNEL_SRC"
+          test -f "$KDIR/Makefile" || { echo "::error::KDIR is not a prepared kernel tree"; exit 1; }
+          clang --version | head -1
+
+      - name: Build susfs_guard_lkm.ko
+        run: |
+          set -e
+          make -k -C "$KDIR" M="$PWD/third_party/susfs4ksu-lkm/kernel"             ARCH=arm64 CC=clang LLVM=1 LLVM_IAS=1 modules -j"$(nproc)"
+
+      - name: Artifact gates
+        run: |
+          set -e
+          KO="third_party/susfs4ksu-lkm/kernel/susfs_guard_lkm.ko"
+          test -f "$KO" || { echo "::error::no .ko produced"; find . -name '*.ko' | head; exit 1; }
+          file "$KO"
+          # The loaders resolve these from kallsyms at runtime; linking them would make the
+          # module refuse to load on a kernel that does not export them.
+          ks=$(nm -u "$KO" | grep -cE 'kallsyms_(lookup_name|lookup|lookup_size_offset|on_each_symbol|on_each_symbol_by_name)' || true)
+          echo "undefined kallsyms symbols: $ks (must be 0)"
+          test "$ks" -eq 0 || { nm -u "$KO" | grep kallsyms_ || true; exit 1; }
+          cp "$KO" "susfs_guard_lkm-${{ matrix.variant }}.ko"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: susfs_guard_lkm.ko-${{ matrix.variant }}
+          path: susfs_guard_lkm-${{ matrix.variant }}.ko
+          if-no-files-found: error
+
+  pack:
+    name: pack KernelSU module zip
+    needs: module
+    if: ${{ always() && !cancelled() && needs.module.result != 'skipped' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Collect the per-KMI modules
+        uses: actions/download-artifact@v7
+        with:
+          pattern: 'susfs_guard_lkm.ko-*'
+          path: ko
+
+      - name: Flatten the artifact directories
+        run: |
+          set -euo pipefail
+          cd ko
+          for d in */; do
+            cp "$d"/*.ko .
+          done
+          rm -rf ./*/
+          ls -l
+
+      - name: Build the loader
+        run: |
+          set -e
+          mkdir -p bin
+          clang --target=aarch64-linux-gnu -O2 -nostdlib -static-pie \
+                -fno-stack-protector -fno-builtin -fuse-ld=lld -Wl,-e,_start \
+                -o bin/susfs_insmod third_party/susfs4ksu-lkm/tools/susfs_insmod.c
+          file bin/susfs_insmod
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Pack
+        run: |
+          set -euo pipefail
+          tag="$(echo "$GITHUB_REF_NAME" | tr '/' '-')-$(git rev-parse --short HEAD)"
+          python third_party/susfs4ksu-lkm/tools/pack_module.py \
+            --ko-dir ko --insmod bin/susfs_insmod \
+            --tag "$tag" --sha "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" \
+            --out "dist/susfs_guard_lkm-module-$tag-arm64.zip"
+          ls -l dist
+          python - <<'PY'
+          import glob, zipfile
+          z = zipfile.ZipFile(glob.glob('dist/*.zip')[0])
+          names = z.namelist()
+          kos = [n for n in names if n.endswith('.ko')]
+          print('module zip entries:', len(names), 'ko files:', len(kos))
+          print('\n'.join(sorted(kos)))
+          assert len(kos) >= 1, 'no .ko inside the module zip'
+          PY
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: susfs_guard_lkm-module-arm64
+          path: dist/*.zip
+          if-no-files-found: error

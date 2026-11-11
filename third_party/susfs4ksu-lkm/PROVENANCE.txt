@@ -1,0 +1,4 @@
+source: https://github.com/inforcqb/susfs4ksu-for-lkm
+commit: f95ae4c4c7df7050b2e13bc5d26403e5e0786d00
+date: 2026-11-10T05:45:32Z
+tarball: C:\Users\Lenovo\Desktop\kernelSU\_scratch\susfs_lkm.tar.gz
