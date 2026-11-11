@@ -72,7 +72,7 @@ gantt
 |---|---|---|
 | GKI 内置（主）| 🟢 6/7 KMI | `android12-5.10` / `13-5.10` / `13-5.15` / `14-5.15` / `14-6.1` / `15-6.6` 全绿；产物 `susfs-gki-android12-5.10` 33,362,264 B |
 | GKI 缺口 | 🔴 | `android16-6.12`：内核镜像仓没有该分支历史（只在上游 GitLab），补丁 hunk 对不上 |
-| LKM 自带（本次）| 🟡 编译中 | `scripts/prepare_susfs_lkm.py` 把 `third_party/susfs4ksu-lkm` 暂存进 `kernel/susfs/`，并把与 `kernelsu.ko` 重名的 12 个全局符号改名（299 处）；`KSU_MERGE_SUSFS_LKM=1` 时编进**同一个** `.ko` |
+| LKM 自带 | 🟢 8/8 KMI | `scripts/prepare_susfs_lkm.py` 把 `third_party/susfs4ksu-lkm` 暂存进 `kernel/susfs/`，并把与 `kernelsu.ko` 重名的 12 个全局符号改名（299 处）；`KSU_MERGE_SUSFS_LKM=1` 编进**同一个** `.ko`，实测 `android12-5.10`：`kernelsu.ko` 416 KB → 1.3 MB（`llvm-strip -d` 后）|
 | 用户态驱动 | 🟢 | `userspace/ksud/src/susfs.rs` 661 行、15 条 `reboot(2)` supercall、`provision_baseline()` 开机剥 `/data/adb` 等 |
 | 已知缺口 | ⏳ | `android17-6.18` 上游无 GKI 分支 → 只能走 LKM |
 
@@ -112,7 +112,7 @@ gantt
 
 | 项 | 起点 | 现状 |
 |---|---|---|
-| LKM 自带 SUSFS | `6d734d91` | 8 KMI 编译已派发（`build-lkm.yml` 的 `susfs=true`），等结果 |
+| LKM 自带 SUSFS | `6d734d91` / `d257d782` | 🟢 8/8 KMI 编译成功（run `43089461513`）：SUSFS 编进**同一个** `kernelsu.ko`；`android12-5.10` 从 416 KB → 1.3 MB（`llvm-strip -d` 后）；默认开关已翻正 |
 | APK 首版 | `904b3e1` | 21,776,030 B 已产出并核对 `libksud.so` 10,874,496 B / `classes.dex` 6,520,488 B；旧图标已换 |
 | GKI 7/7 | — | 6/7 绿；`android16-6.12` 卡在内核镜像仓无该分支（见 §4 #2）|
 
@@ -129,7 +129,7 @@ gantt
 | 4 | 管理器 TEE / SUSFS 状态卡 | 目前只有脚本/CLI 层 |
 | 5 | 站点接入新仓 | 现有站点流水线只认旧仓 |
 | 6 | uapi 三副本守卫 | 旧仓 `check_uapi_mirror.py` 未搬 |
-| 7 | LKM 自带 SUSFS 的编译验证 | `6d734d91` 已落地（暂存 + 12 个符号改名 + `KSU_MERGE_SUSFS_LKM`）；8 KMI 结果未回；合并后 `kernelsu.ko` 预计每 KMI 涨 2.2–4.8 MB |
+| 7 | ✅ LKM 自带 SUSFS（`6d734d91` + `d257d782`）| 8/8 KMI 编译成功；`kernel/susfs/` 构建期生成、不进 git；默认开关已翻正（`susfs: true`）|
 
 
 <details>
@@ -163,5 +163,5 @@ gantt
 | 项 | 数值 |
 |---|---|
 | `ksud-aarch64` 产物 | 23.3 MB（zip，含两套内置引擎 + 内核模块）|
-| SUSFS 代码 | 合并进 `kernelsu.ko` 后每 KMI +2.2–4.8 MB；独立 payload 实测 44.1 MB（8 KMI），`strip` 掉 14.0 MB 后 23.8 MB，**不进 APK** |
+| SUSFS 代码 | 合并进 `kernelsu.ko`：`android12-5.10` 416 KB → 1.3 MB（`llvm-strip -d` 后，8 个 KMI 同量级）；独立 payload 实测 44.1 MB → strip 后 23.8 MB，**不进 APK** |
 | 仓库体积 | 1413 文件 / 16.9 MB |

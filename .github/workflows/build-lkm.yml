@@ -20,14 +20,14 @@ on:
       susfs:
         description: 'Compile SUSFS into kernelsu.ko'
         required: false
-        default: false
+        default: true
         type: boolean
   workflow_dispatch:
     inputs:
       susfs:
         description: 'Compile SUSFS into kernelsu.ko'
         required: false
-        default: false
+        default: true
         type: boolean
 jobs:
   build-lkm:
