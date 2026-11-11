@@ -126,45 +126,45 @@ static int handle_zygote_next_setresuid(uid_t ruid)
 do_susfs_work:
     {
         // Do not umount here as we are in init namespace now
-int ksu_handle_setresuid(uid_t old_uid, uid_t new_uid)
-{
-    // we rely on the fact that zygote always call setresuid(3) with same uids
+        int ksu_handle_setresuid(uid_t old_uid, uid_t new_uid)
+        {
+            // we rely on the fact that zygote always call setresuid(3) with same uids
 
-    if (unlikely(is_uid_manager(new_uid))) {
-        spin_lock_irq(&current->sighand->siglock);
-        ksu_seccomp_allow_cache(current->seccomp.filter, __NR_reboot);
-        ksu_set_task_tracepoint_flag(current);
-        spin_unlock_irq(&current->sighand->siglock);
+            if (unlikely(is_uid_manager(new_uid))) {
+                spin_lock_irq(&current->sighand->siglock);
+                ksu_seccomp_allow_cache(current->seccomp.filter, __NR_reboot);
+                ksu_set_task_tracepoint_flag(current);
+                spin_unlock_irq(&current->sighand->siglock);
 
-        ksu_install_fd();
-        return 0;
-    }
+                ksu_install_fd();
+                return 0;
+            }
 
-    if (ksu_is_allow_uid_for_current(new_uid)) {
-        if (current->seccomp.mode == SECCOMP_MODE_FILTER && current->seccomp.filter) {
-            spin_lock_irq(&current->sighand->siglock);
-            ksu_seccomp_allow_cache(current->seccomp.filter, __NR_reboot);
-            spin_unlock_irq(&current->sighand->siglock);
+            if (ksu_is_allow_uid_for_current(new_uid)) {
+                if (current->seccomp.mode == SECCOMP_MODE_FILTER && current->seccomp.filter) {
+                    spin_lock_irq(&current->sighand->siglock);
+                    ksu_seccomp_allow_cache(current->seccomp.filter, __NR_reboot);
+                    spin_unlock_irq(&current->sighand->siglock);
+                }
+                ksu_set_task_tracepoint_flag(current);
+            } else {
+                ksu_clear_task_tracepoint_flag_if_needed(current);
+            }
+
+            // Handle kernel umount
+            ksu_handle_umount(old_uid, new_uid);
+
+            return 0;
         }
-        ksu_set_task_tracepoint_flag(current);
-    } else {
-        ksu_clear_task_tracepoint_flag_if_needed(current);
-    }
-
-    // Handle kernel umount
-    ksu_handle_umount(old_uid, new_uid);
-
-    return 0;
-}
 #endif /* CONFIG_KSU_SUSFS */
 
-void __init ksu_setuid_hook_init(void)
-{
-    ksu_kernel_umount_init();
-}
+        void __init ksu_setuid_hook_init(void)
+        {
+            ksu_kernel_umount_init();
+        }
 
-void __exit ksu_setuid_hook_exit(void)
-{
-    pr_info("ksu_core_exit\n");
-    ksu_kernel_umount_exit();
-}
+        void __exit ksu_setuid_hook_exit(void)
+        {
+            pr_info("ksu_core_exit\n");
+            ksu_kernel_umount_exit();
+        }

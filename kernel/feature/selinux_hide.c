@@ -72,13 +72,14 @@ typedef ssize_t (*write_op_fn)(struct file *, char *, size_t);
 
 static write_op_fn *selinux_write_op;
 
-KSU_SUSFS_LINKAGE int security_context_to_sid_with_policy(struct selinux_policy *policy, const char *scontext, u32 scontext_len,
-                                               u32 *sid, u32 def_sid, gfp_t gfp_flags, u32 *orig_sid_p, int *orig_rc_p);
+KSU_SUSFS_LINKAGE int security_context_to_sid_with_policy(struct selinux_policy *policy, const char *scontext,
+                                                          u32 scontext_len, u32 *sid, u32 def_sid, gfp_t gfp_flags,
+                                                          u32 *orig_sid_p, int *orig_rc_p);
 KSU_SUSFS_LINKAGE int security_sid_to_context_with_policy(struct selinux_policy *policy, u32 sid, char **scontext,
-                                               u32 *scontext_len);
+                                                          u32 *scontext_len);
 static int security_context_to_sid_live(const char *scontext, u32 scontext_len, u32 *sid);
-KSU_SUSFS_LINKAGE void security_compute_av_user_with_policy(struct selinux_policy *policy, u32 ssid, u32 tsid, u16 tclass,
-                                                 struct av_decision *avd);
+KSU_SUSFS_LINKAGE void security_compute_av_user_with_policy(struct selinux_policy *policy, u32 ssid, u32 tsid,
+                                                            u16 tclass, struct av_decision *avd);
 static void (*security_dump_masked_av_fn)(struct policydb *policydb, struct context *scontext, struct context *tcontext,
                                           u16 tclass, u32 permissions, const char *reason) = NULL;
 static void (*context_struct_compute_av_fn)(struct policydb *policydb, struct context *scontext,
@@ -101,7 +102,6 @@ static void (*context_struct_compute_av_fn)(struct policydb *policydb, struct co
      * 只影响警告，不改变链接属性。 */
 KSU_SUSFS_LINKAGE struct selinux_state fake_state __maybe_unused;
 #endif
-
 
 static write_op_fn *context_write, *access_write;
 static write_op_fn orig_context_write, orig_access_write;
