@@ -45,10 +45,20 @@ jobs:
     # `<kmi>_susfs_guard_lkm.ko` per KMI, and late_load/init_event loads it right after
     # kernelsu.ko - no module install, no second flash. Off by default because eight .ko files
     # add megabytes to every ksud; turn it on once the payload size is settled.
+    #
+    # build-susfs-lkm.yml names its artifacts `susfs_guard_lkm-<kmi>.ko` (that is what
+    # third_party/susfs4ksu-lkm/tools/pack_module.py requires); the asset name ksud looks up is
+    # `<kmi>_susfs_guard_lkm.ko`, so the copy also renames.
     - name: Prepare SUSFS LKM files
       if: ${{ inputs.pack_susfs }}
       run: |
-        cp susfs_guard_lkm.ko-*/*_susfs_guard_lkm.ko ./userspace/ksud/bin/aarch64/
+        set -e
+        for d in susfs_guard_lkm.ko-*/; do
+          ko="$(ls "$d"*.ko | head -1)"
+          kmi="$(basename "$ko" .ko)"
+          kmi="${kmi#susfs_guard_lkm-}"
+          cp "$ko" "./userspace/ksud/bin/aarch64/${kmi}_susfs_guard_lkm.ko"
+        done
         ls -l ./userspace/ksud/bin/aarch64/*_susfs_guard_lkm.ko
         
     - name: Setup rustup

@@ -118,12 +118,12 @@ jobs:
           ks=$(nm -u "$KO" | grep -cE 'kallsyms_(lookup_name|lookup|lookup_size_offset|on_each_symbol|on_each_symbol_by_name)' || true)
           echo "undefined kallsyms symbols: $ks (must be 0)"
           test "$ks" -eq 0 || { nm -u "$KO" | grep kallsyms_ || true; exit 1; }
-          cp "$KO" "${{ matrix.variant }}_susfs_guard_lkm.ko"
+          cp "$KO" "susfs_guard_lkm-${{ matrix.variant }}.ko"
 
       - uses: actions/upload-artifact@v7
         with:
           name: susfs_guard_lkm.ko-${{ matrix.variant }}
-          path: ${{ matrix.variant }}_susfs_guard_lkm.ko
+          path: susfs_guard_lkm-${{ matrix.variant }}.ko
           if-no-files-found: error
 
   pack:
@@ -145,11 +145,11 @@ jobs:
         run: |
           set -euo pipefail
           cd ko
-          for d in */; do
-            cp "$d"/*.ko .
-          done
-          rm -rf ./*/
-          ls -l
+          # download-artifact writes one directory per artifact, but a run that
+          # built a single KMI comes back flat - accept both shapes.
+          find . -mindepth 2 -name '*.ko' -exec cp -t . {} +
+          test -n "$(find . -maxdepth 1 -name '*.ko' -print -quit)"
+          ls -l *.ko
 
       - name: Build the loader
         run: |
