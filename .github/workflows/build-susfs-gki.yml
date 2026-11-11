@@ -271,7 +271,13 @@ jobs:
           # 捕获编译输出，失败时以 annotation 形式给出可读的错误段落
           BUILD_LOG=$(mktemp)
           set +e
-          make O="$ODIR" ARCH=arm64 LLVM=1 LLVM_IAS=1 -j"$(nproc)" Image.gz >"$BUILD_LOG" 2>&1
+          # The pinned susfs4ksu commit carries helpers whose only call sites are in
+          # baseline kernels newer than this KMI (susfs_switch_to_ksu_domain,
+          # susfs_restore_creds). -Werror turns those into build failures on a vendor
+          # patch we do not own, so unused-function warnings are the one warning class
+          # switched off here; our own tree is warning-clean and still gated elsewhere.
+          make O="$ODIR" ARCH=arm64 LLVM=1 LLVM_IAS=1 KCFLAGS="-Wno-unused-function" \
+            -j"$(nproc)" Image.gz >"$BUILD_LOG" 2>&1
           BUILD_RC=$?
           set -e
           # Errors first: GitHub truncates annotations, and a wall of "CC ..." lines hides
