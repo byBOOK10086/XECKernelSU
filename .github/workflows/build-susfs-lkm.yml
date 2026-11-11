@@ -180,15 +180,29 @@ jobs:
             --ko-dir ko --insmod bin/susfs_insmod \
             --tag "$tag" --sha "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" \
             --out "dist/susfs_guard_lkm-module-$tag-arm64.zip"
+          # One ZIP per KMI as well: a device only ever needs its own, and the
+          # all-KMI ZIP is ~19 MB while a single one is 1.3-3.4 MB. The manager
+          # downloads the matching ZIP and installs it like any other module.
+          for ko in ko/*.ko; do
+            kmi="$(basename "$ko" .ko)"
+            kmi="${kmi#susfs_guard_lkm-}"
+            solo="$(mktemp -d)"
+            cp "$ko" "$solo/"
+            python third_party/susfs4ksu-lkm/tools/pack_module.py \
+              --ko-dir "$solo" --insmod bin/susfs_insmod \
+              --tag "$tag-$kmi" --sha "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" \
+              --kmi-override "$kmi" \
+              --out "dist/susfs_guard_lkm-module-$tag-$kmi-arm64.zip"
+            rm -rf "$solo"
+          done
           ls -l dist
           python - <<'PY'
           import glob, zipfile
-          z = zipfile.ZipFile(glob.glob('dist/*.zip')[0])
-          names = z.namelist()
-          kos = [n for n in names if n.endswith('.ko')]
-          print('module zip entries:', len(names), 'ko files:', len(kos))
-          print('\n'.join(sorted(kos)))
-          assert len(kos) >= 1, 'no .ko inside the module zip'
+          for path in sorted(glob.glob('dist/*.zip')):
+              z = zipfile.ZipFile(path)
+              kos = [n for n in z.namelist() if n.endswith('.ko')]
+              print('%-64s entries=%d ko=%d' % (path.rsplit('/', 1)[-1], len(z.namelist()), len(kos)))
+              assert kos, 'no .ko inside %s' % path
           PY
 
       - uses: actions/upload-artifact@v7

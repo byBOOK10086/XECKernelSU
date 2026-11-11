@@ -126,7 +126,11 @@ jobs:
       target: ${{ matrix.target }}
       pack_lkm: true
       pack_ksuinit: true
-      pack_susfs: true
+      # Deliberately off: measured .ko sizes are 3.1-7.8 MB per KMI (44 MB for the
+      # eight), and a device only needs its own. The SUSFS module ZIP (one per KMI,
+      # 1.3-3.4 MB) is the delivery path; flip this to true only if a build really
+      # should carry every KMI inside ksud.
+      pack_susfs: false
   
   build-ksud-extra:
     needs: [build-lkm, build-ksuinit]
@@ -210,9 +214,9 @@ jobs:
       - name: Validate the Gradle wrapper jars
         uses: gradle/actions/wrapper-validation@v4
         with:
-          allow-checksums: >-
-            56aaec82e4c7d2f2c8665bc9ce429eaa47393e6e1e7b9165021cc3ec161667,
-            23397ebec7143ce2ef8966e5fd817afc0f7e465d4ff9c9686608d2f72e19427c
+          # Comma-separated with no spaces: the action does not trim, and a
+          # ", " separator leaves a leading space on every sum after the first.
+          allow-checksums: 56aaec82e4c7d2f2c8665bc9ce429eaa47393e6e1e7b9165021cc3ec161667,23397ebec7143ce2ef8966e5fd817afc0f7e465d4ff9c9686608d2f72e19427c
 
       - name: Build with Gradle
         run: |
