@@ -23,6 +23,10 @@ data class SettingsUiState(
     val enableFloatingBottomBarBlur: Boolean = false,
     val enableNavigationBadge: Boolean = true,
     val pageScale: Float = 1.0f,
+    val componentTransparent: Boolean = false,
+    val wallpaperLight: String = "",
+    val wallpaperDark: String = "",
+    val wallpaperBlur: Int = 0,
     val moduleDescriptionMaxLines: Int = 4,
     val enableWebDebugging: Boolean = false,
 

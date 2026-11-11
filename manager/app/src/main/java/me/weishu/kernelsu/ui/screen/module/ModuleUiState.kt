@@ -58,10 +58,28 @@ data class ModuleUiState(
     val checkModuleUpdate: Boolean = true,
     val isSafeMode: Boolean = false,
     val magiskInstalled: Boolean = false,
+    /**
+     * 这台设备是不是"Magisk 路线"（挂载态：没有 KSU 驱动应答且内核低于 5.10）。
+     *
+     * 判据与 [me.weishu.kernelsu.ui.util.isMountState] 同一处，不另立口径。与 [magiskInstalled]
+     * 的区别很关键：内核态设备（5.10+，以及 <5.10 但有 KSU 驱动的 KPatch）上出现真 Magisk
+     * 才是**冲突**，而挂载态设备上 Magisk 是预期内的 —— 那种设备模块列表、模块操作都照常
+     * 可用（目录同为 `/data/adb/modules`）。
+     */
+    val magiskRoute: Boolean = false,
     val confirmDialogState: ModuleConfirmDialogState? = null,
 ) {
+    /**
+     * 真正与 Magisk 冲突（内核态设备上另有真 Magisk）时，才禁掉模块操作。
+     *
+     * 等价于 `magiskInstalled && Natives.version > 0`（有驱动应答 = 内核态），外加
+     * "GKI 但还没装驱动"这一种：那同样是内核态设备，Magisk 在它上面就是另一套 root 实现。
+     */
+    val magiskConflict: Boolean
+        get() = magiskInstalled && !magiskRoute
+
     val installButtonVisible: Boolean
-        get() = !(isSafeMode || magiskInstalled)
+        get() = !(isSafeMode || magiskConflict)
 }
 
 @Immutable

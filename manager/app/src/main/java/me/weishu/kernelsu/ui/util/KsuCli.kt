@@ -14,6 +14,7 @@ import com.topjohnwu.superuser.CallbackList
 import com.topjohnwu.superuser.Shell
 import com.topjohnwu.superuser.ShellUtils
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.parcelize.Parcelize
 import me.weishu.kernelsu.BuildConfig
@@ -712,4 +713,25 @@ fun launchApp(packageName: String, userId: Int? = null) {
 fun restartApp(packageName: String, userId: Int? = null) {
     forceStopApp(packageName, userId)
     launchApp(packageName, userId)
+}
+
+/**
+ * Wait for a root shell, up to [timeoutMs], off the main thread.
+ *
+ * createRootShell here makes one attempt and can hand back a shell that is not
+ * root yet (the provider may still be settling right after boot). Callers that
+ * must have root - binding the root service, reading the allowlist - retry here
+ * instead of failing on the first attempt.
+ */
+suspend fun awaitRootShell(
+    globalMnt: Boolean = false,
+    timeoutMs: Long = 10_000L,
+): Shell = withContext(Dispatchers.IO) {
+    val deadline = SystemClock.elapsedRealtime() + timeoutMs
+    var shell = getRootShell(globalMnt)
+    while (!shell.isRoot && SystemClock.elapsedRealtime() < deadline) {
+        delay(150)
+        shell = getRootShell(globalMnt)
+    }
+    shell
 }

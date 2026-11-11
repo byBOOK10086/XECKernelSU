@@ -370,4 +370,533 @@
     <string name="script_param_below_min">不能小于 %d</string>
     <string name="script_param_above_max">不能大于 %d</string>
     <string name="script_param_invalid">无效的值</string>
+
+    <string name="home_stat_kernel">内核</string>
+    <string name="home_stat_manager">管理器</string>
+    <string name="home_stat_superuser">超级用户</string>
+    <string name="home_stat_module_total">模块总数</string>
+    <string name="home_stat_module_enabled">启用模块</string>
+    <string name="home_stat_edit_title">自定义数据面板</string>
+    <string name="home_stat_edit_slot">位置 %1$d</string>
+    <string name="home_stat_edit_pick">选择要放入所选位置的项目</string>
+    <string name="home_stat_edit_used">已占用</string>
+    <string name="home_stat_edit_reset">恢复默认</string>
+    <string name="home_stat_edit_done">完成</string>
+    <string name="home_stat_edit_move_left">左移</string>
+    <string name="home_stat_edit_move_right">右移</string>
+    <string name="home_stat_edit_hint">长按数据面板可自定义</string>
+
+    <string name="home_susfs_status">SUSFS</string>
+    <string name="home_susfs_unsupported">未启用（内核未打 SUSFS 补丁）</string>
+
+    <string name="home_developers_list"><![CDATA[
+项目开发者及贡献者名单（官方公示）
+
+本项目由 XEC（3228636402）发起并开发。以下成员在项目开发、图标提供、UI 设计、测试反馈及模块支持等方面作出了重要贡献。特此公示，并致以诚挚感谢（以下排名不分先后）：
+
+项目开发者/作者
+XEC（3228636402）
+
+APK 图标提供
+阿零不是阿麟（3068258374）
+今天蕾姆了吗（2941123540）
+
+UI 美学设计
+XEC（3228636402）
+小Y（3961592339）
+橙子（370753004）
+
+BUG 测试与质量反馈
+永雏塔菲喵（1658998584）
+江不辞（3318621299）
+阿零不是阿麟（3068258374）
+小Y（3961592339）
+力克千均（602432323）
+贝利亚大王（3483361380）
+大表哥（381283226）
+薇尔莉特（1941333061）
+我曾是少年。（1187779562）
+廿二序（3917257393）
+花香蝶自来(2815014730)
+等
+
+模块支持
+微微微（2898395199）
+
+AK3构建
+凌洛 (3239554101)
+
+API支持
+疑问小猫 (3301237007)
+四、致谢
+本项目基于 tiann/KernelSU 修改开发，感谢 KernelSU 作者 weishu（tiann）与上游社区；感谢 HMA-OSS（frknkrc44）、TEESimulator-RS（JingMatrix、Enginex0）、Tricky Addon（Enginex0）、susfs4ksu（sidex15、simonpunk）、LSPosed 等上游项目的贡献。 感谢 GhostLock（YuKongA/ghostlock-app，Apache-2.0）开源的一键提权载荷与 profile 工具链；感谢 KPatch-Next（KernelSU-Next/KPatch-Next，GPL-2.0）为 5.10 以下内核路线提供的 KernelPatch 二进制。
+感谢 DuckDetector（Eltavine 与 Duck Apps 贡献者，https://github.com/eltavine/Duck-Detector-Refactoring ，Apache-2.0）：本项目对其公开的检测器语义与证据模型做了完整的对抗性审计，本项目的环境隐蔽能力以该项目的检测项为校准基准。
+项目开发者 XEC 谨向以上所有人员致以诚挚感谢。感谢各位在开发、设计、测试与模块支持等环节所作出的贡献。
+特此公示，并致谢忱。
+
+官方交流群：941895988
+
+XEC 项目组
+]]></string>
+    <string name="home_hero_idle">ROOT 未就绪</string>
+    <string name="home_hero_inactive">内核未运行</string>
+    <string name="home_hero_kernel_mode">内核态</string>
+    <string name="home_hero_probing">正在获取 Root</string>
+    <string name="home_hero_ready">ROOT 已就绪</string>
+    <string name="home_hero_ready_subtitle">系统环境正常，可以开始安装</string>
+    <string name="home_hero_ready_title">已准备就绪</string>
+    <string name="home_hero_running">内核正常运行</string>
+    <string name="home_refresh">刷新</string>
+    <string name="home_section_device">设备</string>
+    <string name="home_update_tap_hint">点按查看更新内容</string>
+    <string name="home8_auth_records">授权记录</string>
+    <string name="home8_auth_records_sub">查看 Root 使用记录</string>
+    <string name="home8_boot_state">启动状态</string>
+    <string name="home8_root_count">Root 授权数量</string>
+    <string name="home8_root_count_sub">已手动开启权限的应用</string>
+    <string name="home8_section_overview">运行概况</string>
+    <string name="home8_section_security">安全状态</string>
+    <string name="home8_section_support">支持与关于</string>
+    <string name="home8_tag_off">未启用</string>
+    <string name="home8_tag_on">已启用</string>
+    <string name="home8_tag_stable">稳定</string>
+
+    <string name="remote_add_link">添加链接</string>
+    <string name="remote_assistant_receive">接收模块</string>
+    <string name="remote_assistant_share">分享模块</string>
+    <string name="remote_assistant_title">远程模块助手</string>
+    <string name="remote_hub_auth_title_login">登录 XEC 模块仓库</string>
+    <string name="remote_hub_auth_title_register">注册 XEC 模块仓库账号</string>
+    <string name="remote_hub_back">返回</string>
+    <string name="remote_hub_bad_days">有效期需为 0-3650 天</string>
+    <string name="remote_hub_bad_uses">可使用次数需为 1-9999</string>
+    <string name="remote_hub_code_label">短码（发给接收者）</string>
+    <string name="remote_hub_expire_days">有效期（天，0=永久）</string>
+    <string name="remote_hub_expired">登录已过期，请重新登录</string>
+    <string name="remote_hub_fail">操作失败，请稍后再试</string>
+    <string name="remote_hub_fill_both">请填写用户名和密码</string>
+    <string name="remote_hub_generate">生成短码</string>
+    <string name="remote_hub_logged_in">已登录：%1$s</string>
+    <string name="remote_hub_logged_out">已退出登录</string>
+    <string name="remote_hub_login">登录 / 注册</string>
+    <string name="remote_hub_logout">退出登录</string>
+    <string name="remote_hub_max_uses">可使用次数</string>
+    <string name="remote_hub_not_logged">未登录——生成与使用短码需要账号</string>
+    <string name="remote_hub_note">远程模块存在风险。账号用于记录分发与使用行为（用户名、时间、IP），注册即表示知悉并同意。</string>
+    <string name="remote_hub_password">密码（至少 6 位）</string>
+    <string name="remote_hub_submit_login">登录</string>
+    <string name="remote_hub_submit_register">注册并登录</string>
+    <string name="remote_hub_switch_login">已有账号？点此登录</string>
+    <string name="remote_hub_switch_register">没有账号？点此注册</string>
+    <string name="remote_hub_username">用户名（2-32 字符）</string>
+    <string name="remote_key_force_label">本次强制脚本（可空）</string>
+    <string name="remote_key_plan_hint">有些模块安装时要按音量键选择。在这里写好脚本，接收端会自动替你按：up@1500,up@3000 = 装到 1.5 秒按一下音量上、3 秒再按一下；up~600 = 等安装脚本打出按键提示后 600ms 再按。脚本没覆盖到的，刷入过程中用下面的手动按键补。</string>
+    <string name="remote_key_plan_label">按键脚本（可空）</string>
+    <string name="remote_key_plan_ok">语法正常，将随这条链接发给接收端</string>
+    <string name="remote_keypad_idle">以 root 注入真实的音量键事件；先点一下可以自检这台设备能否注入。</string>
+    <string name="remote_keypad_title">手动补按键（安装脚本等待时按）</string>
+    <string name="remote_link_label">链接 %1$d</string>
+    <string name="remote_recv_back">返回</string>
+    <string name="remote_recv_done">已刷入 %1$d 个模块，建议重启后生效。</string>
+    <string name="remote_recv_failed">失败于：%1$s
+详情见下方日志。</string>
+    <string name="remote_recv_hint">粘贴分享者给你的短码（XEC- 开头，需登录），旧的加密码或直链也兼容，将自动下载并按顺序刷入。可多次点「添加链接」批量填写，一次性全部刷入。</string>
+    <string name="remote_recv_link_placeholder">粘贴加密码或直链</string>
+    <string name="remote_recv_running">正在处理，请保持屏幕常亮…</string>
+    <string name="remote_recv_start">开始刷入</string>
+    <string name="remote_recv_stop">停止</string>
+    <string name="remote_recv_stopped">已按你的要求停止。</string>
+    <string name="remote_recv_warning">请确保你充分了解对方是谁，对方的目的，及刷入后的风险。此刷入模式若对方传递恶意文件将无法阻拦，可能会对你的财产造成不可逆的损失，若造成损失我们将不承担任何法律责任。</string>
+    <string name="remote_recv_warning_confirm">确定</string>
+    <string name="remote_recv_warning_reject">拒绝</string>
+    <string name="remote_recv_warning_title">刷入前必读</string>
+    <string name="remote_remove">移除</string>
+    <string name="remote_share_copied">已复制</string>
+    <string name="remote_share_copy">复制</string>
+    <string name="remote_share_hint">粘贴模块 zip 直链，或点下方按钮把本地文件上传到 XEC 模块仓库——然后生成一条短码发给接收者。短码需登录生成，可设置可使用次数与有效期；一条短码可包含多个模块。注意：网盘的「分享页」链接是网页不是文件，程序无法下载。</string>
+    <string name="remote_share_offline">生成加密码（免登录）</string>
+    <string name="remote_share_offline_done">加密码已复制。接收端粘到「接收」页即可。</string>
+    <string name="remote_share_offline_empty">还没有可编码的链接：先粘一条直链或上传一个模块。</string>
+    <string name="remote_submit_index">提交到模块仓库索引</string>
+    <string name="remote_submit_index_note">上传的文件只有直链。要让模块出现在模块仓库列表里，需要用 GitHub 表单提交一次；否则只能靠加密码或直链分发。</string>
+    <string name="remote_upload_done">已上传 %1$d 个文件，设置次数后点「生成短码」。</string>
+    <string name="remote_upload_oversize">%1$s 超过 500 MB，接收端下不动。</string>
+    <string name="remote_upload_partial">已上传 %1$d 个文件；失败：%2$s</string>
+    <string name="remote_upload_pick">上传模块文件到仓库</string>
+
+    <string name="terminal_cancel">取消</string>
+    <string name="terminal_clear">清屏</string>
+    <string name="terminal_copy_all">复制输出</string>
+    <string name="terminal_copy_path">复制路径</string>
+    <string name="terminal_delete">删除</string>
+    <string name="terminal_execute">执行</string>
+    <string name="terminal_files_empty">（空目录）</string>
+    <string name="terminal_fm_apply">应用</string>
+    <string name="terminal_fm_bookmark">固定书签</string>
+    <string name="terminal_fm_clear_selection">取消选择</string>
+    <string name="terminal_fm_close">关闭</string>
+    <string name="terminal_fm_copy">复制</string>
+    <string name="terminal_fm_copy_output">复制输出</string>
+    <string name="terminal_fm_copy_path">复制路径</string>
+    <string name="terminal_fm_count">%1$d 项</string>
+    <string name="terminal_fm_cut">剪切</string>
+    <string name="terminal_fm_date">修改时间</string>
+    <string name="terminal_fm_delete">删除</string>
+    <string name="terminal_fm_delete_confirm">确定删除 %1$d 项？此操作不可撤销。</string>
+    <string name="terminal_fm_edit">编辑</string>
+    <string name="terminal_fm_execute">执行</string>
+    <string name="terminal_fm_extract">解压到当前目录</string>
+    <string name="terminal_fm_forward">正序</string>
+    <string name="terminal_fm_hidden_off">不显示隐藏</string>
+    <string name="terminal_fm_hidden_on">显示隐藏文件</string>
+    <string name="terminal_fm_home">根目录</string>
+    <string name="terminal_fm_install">安装</string>
+    <string name="terminal_fm_install_failed">安装失败</string>
+    <string name="terminal_fm_install_perm">请先允许本应用安装未知来源的应用</string>
+    <string name="terminal_fm_install_system">用系统安装器安装</string>
+    <string name="terminal_fm_installed">安装完成</string>
+    <string name="terminal_fm_jump">跳转到路径</string>
+    <string name="terminal_fm_loading">正在读取…</string>
+    <string name="terminal_fm_mode">模式</string>
+    <string name="terminal_fm_name_hint">名称</string>
+    <string name="terminal_fm_new_file">新建文件</string>
+    <string name="terminal_fm_new_folder">新建文件夹</string>
+    <string name="terminal_fm_no_app">系统里没有能打开 %1$s 的应用</string>
+    <string name="terminal_fm_no_output">（无输出）</string>
+    <string name="terminal_fm_notice">提示</string>
+    <string name="terminal_fm_ok">确定</string>
+    <string name="terminal_fm_op_failed">操作失败：%1$s</string>
+    <string name="terminal_fm_open">打开</string>
+    <string name="terminal_fm_open_terminal">在此打开终端</string>
+    <string name="terminal_fm_open_with">用系统应用打开</string>
+    <string name="terminal_fm_owner">属主</string>
+    <string name="terminal_fm_paste">粘贴</string>
+    <string name="terminal_fm_paste_done">粘贴完成</string>
+    <string name="terminal_fm_path">路径</string>
+    <string name="terminal_fm_perms">权限</string>
+    <string name="terminal_fm_properties">属性</string>
+    <string name="terminal_fm_recursive">递归应用到子项</string>
+    <string name="terminal_fm_rename">重命名</string>
+    <string name="terminal_fm_reverse">反序</string>
+    <string name="terminal_fm_run_title">执行输出 · %1$s（退出码 %2$d）</string>
+    <string name="terminal_fm_save">保存</string>
+    <string name="terminal_fm_saved">已保存</string>
+    <string name="terminal_fm_search">搜索</string>
+    <string name="terminal_fm_search_empty">没有匹配项</string>
+    <string name="terminal_fm_search_hint">文件名包含</string>
+    <string name="terminal_fm_search_results">命中 %1$d 项</string>
+    <string name="terminal_fm_select_all">全选</string>
+    <string name="terminal_fm_selected">已选 %1$d 项</string>
+    <string name="terminal_fm_sha256">计算 SHA-256</string>
+    <string name="terminal_fm_share">分享</string>
+    <string name="terminal_fm_size">大小</string>
+    <string name="terminal_fm_sort_name">名称</string>
+    <string name="terminal_fm_sort_size">大小</string>
+    <string name="terminal_fm_sort_time">时间</string>
+    <string name="terminal_fm_text_hint">文件内容（可直接编辑）</string>
+    <string name="terminal_fm_type">类型</string>
+    <string name="terminal_fm_type_dir">目录</string>
+    <string name="terminal_fm_type_file">文件</string>
+    <string name="terminal_here">当前目录</string>
+    <string name="terminal_hint_command">输入命令…</string>
+    <string name="terminal_open">打开</string>
+    <string name="terminal_parent_dir">上一级</string>
+    <string name="terminal_paste">粘贴</string>
+    <string name="terminal_perm_apply">应用</string>
+    <string name="terminal_perm_group">属组</string>
+    <string name="terminal_perm_octal">权限（八进制）</string>
+    <string name="terminal_perm_others">其他</string>
+    <string name="terminal_perm_owner">属主</string>
+    <string name="terminal_perm_owner_field">属主（用户:组）</string>
+    <string name="terminal_permissions">权限</string>
+    <string name="terminal_tab">补全</string>
+    <string name="terminal_tab_console">终端</string>
+    <string name="terminal_tab_files">文件</string>
+
+    <string name="terminal">终端</string>
+
+    <string name="settings_themes_default">默认外观</string>
+    <string name="store_action_cancel">取消</string>
+    <string name="store_action_in_use">使用中</string>
+    <string name="store_action_open">打开</string>
+    <string name="store_action_retry">重试</string>
+    <string name="store_action_save">收藏</string>
+    <string name="store_action_saved">已收藏</string>
+    <string name="store_badge_free">免费</string>
+    <string name="store_category_theme">整包主题</string>
+    <string name="store_detail_about">介绍</string>
+    <string name="store_detail_changelog">更新内容</string>
+    <string name="store_detail_checksum">SHA-256 %1$s</string>
+    <string name="store_detail_collapse">收起</string>
+    <string name="store_detail_elements">包含</string>
+    <string name="store_detail_expand">展开</string>
+    <string name="store_detail_missing">这条主题已经不在索引里了</string>
+    <string name="store_detail_related">相关推荐</string>
+    <string name="store_detail_requires">最低管理器版本</string>
+    <string name="store_detail_size">大小</string>
+    <string name="store_detail_title">主题详情</string>
+    <string name="store_detail_updated">更新时间</string>
+    <string name="store_detail_version">版本</string>
+    <string name="store_download_cancelled">已取消</string>
+    <string name="store_download_clear_finished">清空记录</string>
+    <string name="store_download_failed">下载失败</string>
+    <string name="store_download_queued">排队中</string>
+    <string name="store_downloads_count">%1$s 次下载</string>
+    <string name="store_element_font">字体</string>
+    <string name="store_element_wallpaper">壁纸</string>
+    <string name="store_elements_all">全部元素</string>
+    <string name="store_empty_catalog">商店里还没有主题</string>
+    <string name="store_empty_catalog_hint">索引已经加载成功，但里面暂时没有主题。</string>
+    <string name="store_error_cache">缓存读写失败</string>
+    <string name="store_error_no_network">没有网络连接</string>
+    <string name="store_error_parse">索引内容无法解析</string>
+    <string name="store_error_unknown">未知错误</string>
+    <string name="store_error_unreachable">所有镜像都连不上</string>
+    <string name="store_filters_all">全部</string>
+    <string name="store_library_downloads">下载</string>
+    <string name="store_library_empty_downloads">还没有下载过主题</string>
+    <string name="store_library_empty_downloads_hint">下载过的主题会出现在这里。</string>
+    <string name="store_library_empty_favorites">还没有收藏</string>
+    <string name="store_library_empty_favorites_hint">在主题详情里点收藏，就会出现在这里。</string>
+    <string name="store_library_favorites">收藏</string>
+    <string name="store_no_filter_result">没有符合当前筛选的主题</string>
+    <string name="store_notice_already_installed">已经装过了</string>
+    <string name="store_notice_favorited">已收藏</string>
+    <string name="store_notice_history_cleared">搜索历史已清空</string>
+    <string name="store_notice_queued">已加入下载队列：%1$s</string>
+    <string name="store_notice_source_reset">已恢复内置数据源</string>
+    <string name="store_notice_source_saved">数据源已保存</string>
+    <string name="store_notice_unfavorited">已取消收藏</string>
+    <string name="store_preview_position">%1$d / %2$d</string>
+    <string name="store_rank_empty">还没有足够的数据生成榜单</string>
+    <string name="store_rank_hot">下载榜</string>
+    <string name="store_rank_latest">新品榜</string>
+    <string name="store_rank_no_rating">还没有评分数据</string>
+    <string name="store_rank_rating">好评榜</string>
+    <string name="store_rating_value">%1$s 分</string>
+    <string name="store_reset_filters">清空筛选</string>
+    <string name="store_result_count">共 %1$d 个主题</string>
+    <string name="store_retry">重试</string>
+    <string name="store_search_action">搜索</string>
+    <string name="store_search_clear">清空搜索</string>
+    <string name="store_search_clear_history">清空</string>
+    <string name="store_search_empty_hint">按名称、作者或标签搜索。</string>
+    <string name="store_search_empty_input">搜索主题商店</string>
+    <string name="store_search_history">搜索历史</string>
+    <string name="store_search_hot">热门标签</string>
+    <string name="store_search_no_result">没有找到「%1$s」</string>
+    <string name="store_search_title">搜索</string>
+    <string name="store_section_recommend">为你推荐</string>
+    <string name="store_sort_hot">最热</string>
+    <string name="store_sort_latest">最新</string>
+    <string name="store_sort_rating">好评</string>
+    <string name="store_sort_recommend">推荐</string>
+    <string name="store_source_builtin">内置数据源</string>
+    <string name="store_source_hint">可以指向你自己的 themes.json；留空则使用内置数据源。</string>
+    <string name="store_source_input">https://example.com/themes.json</string>
+    <string name="store_source_reset">恢复内置</string>
+    <string name="store_source_save">保存</string>
+    <string name="store_source_title">数据源</string>
+    <string name="store_tab_browse">分类</string>
+    <string name="store_tab_home">推荐</string>
+    <string name="store_tab_mine">我的</string>
+    <string name="store_tab_rank">排行</string>
+    <string name="store_tags_all">全部标签</string>
+    <string name="store_updated_at">更新于 %1$s</string>
+    <string name="store_view_all">查看全部</string>
+    <string name="theme_editor_author">作者</string>
+    <string name="theme_editor_background">背景图</string>
+    <string name="theme_editor_badge_color">文字颜色（#RRGGBB，可选）</string>
+    <string name="theme_editor_badge_hint">模式词本身（LKM/GKI/KernelPatch）由系统生成、不可编辑；全部留空即移除该元素。</string>
+    <string name="theme_editor_badge_prefix">模式词前缀</string>
+    <string name="theme_editor_badge_preview">预览：%1$sGKI%2$s</string>
+    <string name="theme_editor_badge_suffix">模式词后缀</string>
+    <string name="theme_editor_badge_title">模式牌元素</string>
+    <string name="theme_editor_bg_clear">清除</string>
+    <string name="theme_editor_bg_dark">深色背景</string>
+    <string name="theme_editor_bg_light">浅色背景</string>
+    <string name="theme_editor_bg_none">未设置</string>
+    <string name="theme_editor_block_color_clear">不要颜色</string>
+    <string name="theme_editor_block_dim">黑纱</string>
+    <string name="theme_editor_block_home_info">首页 · 设备信息卡</string>
+    <string name="theme_editor_block_home_privilege">首页 · 提权入口卡</string>
+    <string name="theme_editor_block_home_status">首页 · 状态卡</string>
+    <string name="theme_editor_block_home_support">首页 · 支持链接卡</string>
+    <string name="theme_editor_block_home_update">首页 · 更新卡</string>
+    <string name="theme_editor_block_home_warning">首页 · 告警卡</string>
+    <string name="theme_editor_block_no_color">未设颜色</string>
+    <string name="theme_editor_block_opacity">透明度</string>
+    <string name="theme_editor_block_when">生效档位</string>
+    <string name="theme_editor_block_when_both">两档</string>
+    <string name="theme_editor_block_when_dark">暗档</string>
+    <string name="theme_editor_block_when_light">亮档</string>
+    <string name="theme_editor_blocks">区块背景</string>
+    <string name="theme_editor_blocks_hint">给首页某一张卡片单独设颜色和/或图。只有你动过的区块会写进主题包，其余保持原样。</string>
+    <string name="theme_editor_colors_dark">深色配色</string>
+    <string name="theme_editor_colors_light">浅色配色</string>
+    <string name="theme_editor_description">详细说明</string>
+    <string name="theme_editor_dirty">有未保存的改动</string>
+    <string name="theme_editor_glass">玻璃</string>
+    <string name="theme_editor_glass_hint">1.0 就是现在的样子；越小越透，越大越深。</string>
+    <string name="theme_editor_hint_tokens">点颜色即可修改。只有你改过的令牌会写进主题包，其余沿用内置默认值。</string>
+    <string name="theme_editor_id">ID（字母、数字、. _ -）</string>
+    <string name="theme_editor_invalid_id">ID 必须以字母开头，只能含字母、数字、. _ -</string>
+    <string name="theme_editor_name">主题名</string>
+    <string name="theme_editor_name_required">请填写主题名</string>
+    <string name="theme_editor_neon">模块页（霓虹板）</string>
+    <string name="theme_editor_neon_hint">模块页有自己的一套配色；不在这里改，它就保持原样。</string>
+    <string name="theme_editor_new">新建主题</string>
+    <string name="theme_editor_pick_image">选择图片</string>
+    <string name="theme_editor_reset_token">重置</string>
+    <string name="theme_editor_save">保存主题</string>
+    <string name="theme_editor_save_failed">保存失败：%1$s</string>
+    <string name="theme_editor_saved">已保存：%1$s</string>
+    <string name="theme_editor_shapes">圆角</string>
+    <string name="theme_editor_summary">一句话简介</string>
+    <string name="theme_editor_title">主题编辑器</string>
+    <string name="theme_editor_version">版本</string>
+    <string name="themes_applied">已应用：%1$s</string>
+    <string name="themes_apply">应用</string>
+    <string name="themes_apply_failed">应用失败：%1$s</string>
+    <string name="themes_by">作者：%1$s</string>
+    <string name="themes_category_colors">配色</string>
+    <string name="themes_category_mode_badge">模式牌</string>
+    <string name="themes_delete">删除</string>
+    <string name="themes_delete_confirm">删除主题 %1$s？主题包会被删掉；它铺出去的背景会留作你的壁纸。</string>
+    <string name="themes_download">下载</string>
+    <string name="themes_downloading">下载中… %1$d%%</string>
+    <string name="themes_empty">这里还没有内容</string>
+    <string name="themes_export">导出主题包</string>
+    <string name="themes_export_done">已保存 %1$s</string>
+    <string name="themes_export_failed">导出失败：%1$s</string>
+    <string name="themes_featured">精选</string>
+    <string name="themes_import">导入主题包</string>
+    <string name="themes_import_done">已导入：%1$s</string>
+    <string name="themes_import_failed">导入失败：%1$s</string>
+    <string name="themes_installed">已安装</string>
+    <string name="themes_offline">没有网络</string>
+    <string name="themes_open_form">去 GitHub 开 issue（可选）</string>
+    <string name="themes_publish">发布到主题商城</string>
+    <string name="themes_publish_entry_summary">本机有 %1$s 个主题，挑一个传到主题商城</string>
+    <string name="themes_publish_entry_title">发布我的主题</string>
+    <string name="themes_publish_failed">上传失败：%1$s</string>
+    <string name="themes_publish_pending">已提交。机器人 10 分钟内收录，之后刷新商城就能看到；下面这条直链也可以贴进 GitHub 表单。</string>
+    <string name="themes_publish_picker_empty">还没有可发布的主题。先去「编辑器」做一个，或用 .xectheme 导入一个。</string>
+    <string name="themes_publish_picker_hint">包会传到 XEC 网盘，主题仓库的机器人 10 分钟内自动收录，不需要 GitHub 账号。</string>
+    <string name="themes_publish_picker_title">选择要发布的主题</string>
+    <string name="themes_refresh">刷新</string>
+    <string name="themes_restore_default">恢复默认外观</string>
+    <string name="themes_restored">已恢复默认外观</string>
+    <string name="themes_search_hint">搜索主题</string>
+    <string name="themes_source">源：%1$s</string>
+    <string name="themes_source_fallback">%1$s 不可用 · 已改用 %2$s</string>
+    <string name="themes_tab_editor">编辑器</string>
+    <string name="themes_tab_mine">我的</string>
+    <string name="themes_tab_store">商城</string>
+    <string name="themes_title">主题</string>
+    <string name="themes_updatable">可更新</string>
+
+    <string name="hide_one_tap_subtitle">紫罗兰工具箱 · 隐藏环境一键部署</string>
+    <string name="hide_one_tap_title">一键隐藏</string>
+    <string name="island_modules_count">%1$d 个模块（%2$d 启用）</string>
+    <string name="module_description">介绍</string>
+    <string name="module_sheet_background">背景</string>
+    <string name="module_sheet_background_clear_hint">长按「背景」按钮可清除这张卡的背景</string>
+    <string name="module_sheet_capability_hint">Action、WebUi 仅当模块包含对应能力时可点击</string>
+    <string name="module_sheet_version_label">版本号</string>
+    <string name="module_update_url">更新 URL</string>
+    <string name="privilege_entry_subtitle">GhostLock 一键提权，识别不了的机型给手动操作空间</string>
+    <string name="privilege_title">提权</string>
+    <string name="stealth_confirm_body">开启后将隐藏桌面图标。打开管理器的方式：设置 → 关于手机 → 连点版本号 10 下（连点 5 下解锁开发者选项的原生行为不受影响）。注意：开启后管理器会退回桌面一次——那是它在隐藏自己的图标，属预期。随时可用的兜底命令：
+%1$s</string>
+    <string name="stealth_summary">隐藏图标；设置 → 关于手机 → 连点版本号 10 下打开管理器（连点 5 下的开发者选项行为不受影响）</string>
+    <string name="stealth_title">隐身入口</string>
+    <string name="superkey_applied">已生效</string>
+    <string name="superkey_apply">设置锁密码</string>
+    <string name="superkey_apply_failed">操作被拒绝（密码不对，或手机重启过还没重新设置）</string>
+    <string name="superkey_arm_guard">开启保护</string>
+    <string name="superkey_clear">清除</string>
+    <string name="superkey_dialog_hint">锁密码只保存在这台手机里：本机加密存储，不上传；重启后保护自动解除（这也是忘记密码时的恢复办法——重启后在这里重新设置）。保护期间，修改应用权限、受限名单和功能开关都要先验证锁密码。</string>
+    <string name="superkey_generate">随机生成</string>
+    <string name="superkey_new_key_label">新锁密码</string>
+    <string name="superkey_old_key_label">当前锁密码（更换/清除时必填）</string>
+    <string name="superkey_settings_summary">开启后，改动任何应用的 Root 权限都要先输入锁密码，防止恶意软件偷改权限</string>
+    <string name="superkey_settings_title">安全锁</string>
+    <string name="superkey_state_armed">保护中</string>
+    <string name="superkey_state_disarmed">未开启</string>
+    <string name="superkey_state_set">已设置</string>
+    <string name="superkey_state_unset">未设置</string>
+    <string name="superkey_status">锁密码：%1$s · 保护：%2$s</string>
+    <string name="tools_external_modules_summary">可选扩展：TEE 引擎、TA 增强，以及 Zygisk 跳转入口</string>
+    <string name="tools_external_modules_title">扩展模块</string>
+    <string name="tools_section_tools">工具</string>
+    <string name="tools_terminal_summary">带文件管理的命令行终端</string>
+    <string name="tools_terminal_title">终端</string>
+    <string name="tools_title">工具箱</string>
+
+    <string name="webui">WebUi</string>
+
+    <string name="module_download_hash_mismatch">校验和不匹配：下载的文件已丢弃，请换一个来源或重新下载。</string>
+    <string name="module_repos_detail_no_readme">这个模块没有提供说明。</string>
+    <string name="module_repos_detail_no_release">暂无可下载版本。</string>
+    <string name="module_repos_sort_created">创建时间</string>
+    <string name="module_repos_source">模块仓库源</string>
+    <string name="module_repos_source_bad_url">请输入 http(s) 地址</string>
+    <string name="module_repos_source_current">仓库源：%1$s</string>
+    <string name="module_repos_source_fallback">%1$s 不可用 · 已改用 %2$s</string>
+    <string name="module_repos_source_hint">modules.json 地址</string>
+    <string name="module_repos_source_official">官方源</string>
+    <string name="module_repos_source_save">保存并刷新</string>
+    <string name="module_repos_source_summary">当前使用 %1$s；把模块 zip 传到同一台服务器上，它就会出现在这个列表里。</string>
+    <string name="module_repos_source_use_default">用我的仓库</string>
+
+    <string name="ext_modules_checking_root">正在检查 Root 权限…</string>
+    <string name="ext_modules_download_and_install">下载并安装</string>
+    <string name="ext_modules_download_failed">下载失败，请检查网络后重试。</string>
+    <string name="ext_modules_downloading">正在下载… %1$d%%</string>
+    <string name="ext_modules_install_again">重新安装</string>
+    <string name="ext_modules_install_failed">安装失败。</string>
+    <string name="ext_modules_install_failed_detail">安装失败：%1$s</string>
+    <string name="ext_modules_install_ok">安装完成，重启设备后生效。</string>
+    <string name="ext_modules_installing">正在安装…</string>
+    <string name="ext_modules_intro">可选扩展。本项目的模块从我们自己的 Releases 下载并由管理器安装；第三方条目只提供跳转链接，本应用不内置、不编译、也不转发它的代码。</string>
+    <string name="ext_modules_kind_install">在此安装</string>
+    <string name="ext_modules_kind_link">浏览器打开</string>
+    <string name="ext_modules_no_browser">没有可以打开该页面的应用。</string>
+    <string name="ext_modules_open_releases">打开 Releases 页面</string>
+    <string name="ext_modules_root_required">当前没有可用的 Root，无法安装模块。请确认本管理器已获得 Root 授权。</string>
+    <string name="ext_modules_section_own">本项目提供</string>
+    <string name="ext_modules_section_third_party">第三方（仅跳转）</string>
+    <string name="ext_modules_source_own">由本项目构建并分发（GPL-3.0）</string>
+    <string name="ext_modules_source_third_party">第三方 · AGPL-3.0-or-later · 由其作者维护 · 本应用不分发</string>
+    <string name="ext_modules_ta_summary">安装与 TEE 引擎配合使用的可信应用（TA）增强模块，与管理器一起构建和分发。</string>
+    <string name="ext_modules_ta_title">TA 增强</string>
+    <string name="ext_modules_tee_summary">安装内核模块用于密钥处理的 TEE 引擎模块，与管理器一起构建和分发。</string>
+    <string name="ext_modules_tee_title">TEE 引擎</string>
+    <string name="ext_modules_title">扩展模块</string>
+    <string name="ext_modules_zygisk_summary">ReZygisk 是由其作者自行维护的 Zygisk 实现，属于第三方软件，使用 AGPL-3.0-or-later 许可；本应用不分发它。按钮会在浏览器中打开其上游 Releases 页面。</string>
+    <string name="ext_modules_zygisk_title">Zygisk（ReZygisk）</string>
+    <string name="wallpaper_applied">背景已更新</string>
+    <string name="wallpaper_blur_summary">模糊壁纸本身，参照 iOS 桌面壁纸的观感：玻璃材质折射到的也是模糊后的图。</string>
+    <string name="wallpaper_blur_title">背景模糊</string>
+    <string name="wallpaper_builtin_short">内置</string>
+    <string name="wallpaper_clear">恢复内置</string>
+    <string name="wallpaper_clear_all">两档都恢复内置随机池</string>
+    <string name="wallpaper_dark_title">深色档</string>
+    <string name="wallpaper_import_failed">图片导入失败：%1$s</string>
+    <string name="wallpaper_importing">正在处理图片…</string>
+    <string name="wallpaper_light_title">浅色档</string>
+    <string name="wallpaper_note">图片只写入本机应用私有目录：不申请存储权限、不上传，卸载应用时随应用一起删除。\n浅色、深色两档分别指定——只改一档时，另一档继续用内置随机池。\n全应用的液态玻璃都采你选的这张图作为折射源；AMOLED 纯黑档为了保住纯黑底，仍然会把背景盖住。\n导入时会按最长边 2560 重编码为 JPEG，相册里的原图不会被改动。</string>
+    <string name="wallpaper_note_title">说明</string>
+    <string name="wallpaper_pick">选择图片</string>
+    <string name="wallpaper_replace">更换图片</string>
+    <string name="wallpaper_slot_builtin">当前使用内置随机池：每次冷启动随机抽一张。</string>
+    <string name="wallpaper_slot_custom">当前使用你选择的图片（仅此档生效）。</string>
+    <string name="wallpaper_slot_solid_black">当前使用纯黑（固定，不再参与内置随机池轮换）。</string>
+    <string name="wallpaper_slot_solid_white">当前使用纯白（固定，不再参与内置随机池轮换）。</string>
+    <string name="wallpaper_solid_black">纯黑</string>
+    <string name="wallpaper_solid_white">纯白</string>
+    <string name="wallpaper_title">自定义背景</string>
+    <string name="xec_tile_label">XEC 隐藏</string>
+    <string name="xec_tile_subtitle">点击进入一键隐藏</string>
 </resources>

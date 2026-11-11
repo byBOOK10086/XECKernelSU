@@ -88,6 +88,10 @@ class SettingsViewModel(
             }
             val isDefaultUmountModules = repo.isDefaultUmountModules()
             val uiMode = repo.uiMode
+            val componentTransparent = repo.componentTransparent
+            val wallpaperLight = repo.wallpaperLight
+            val wallpaperDark = repo.wallpaperDark
+            val wallpaperBlur = repo.wallpaperBlur
             val autoJailbreak = repo.autoJailbreak
             val useSoftReboot = repo.useSoftReboot
             val isLateLoadMode = Natives.isLateLoadMode
@@ -108,6 +112,10 @@ class SettingsViewModel(
                     enableFloatingBottomBarBlur = enableFloatingBottomBarBlur,
                     enableNavigationBadge = enableNavigationBadge,
                     pageScale = pageScale,
+                    componentTransparent = componentTransparent,
+                    wallpaperLight = wallpaperLight,
+                    wallpaperDark = wallpaperDark,
+                    wallpaperBlur = wallpaperBlur,
                     moduleDescriptionMaxLines = moduleDescriptionMaxLines,
                     enableWebDebugging = enableWebDebugging,
                     colorStyle = colorStyle,
@@ -252,6 +260,27 @@ class SettingsViewModel(
     fun setEnableNavigationBadge(enabled: Boolean) {
         repo.enableNavigationBadge = enabled
         _uiState.update { it.copy(enableNavigationBadge = enabled) }
+    }
+
+    fun setComponentTransparent(enabled: Boolean) {
+        repo.componentTransparent = enabled
+        _uiState.update { it.copy(componentTransparent = enabled) }
+    }
+
+    fun setWallpaperLight(path: String) {
+        repo.wallpaperLight = path
+        _uiState.update { it.copy(wallpaperLight = path) }
+    }
+
+    fun setWallpaperDark(path: String) {
+        repo.wallpaperDark = path
+        _uiState.update { it.copy(wallpaperDark = path) }
+    }
+
+    fun setWallpaperBlur(value: Int) {
+        val clamped = value.coerceIn(0, 100)
+        repo.wallpaperBlur = clamped
+        _uiState.update { it.copy(wallpaperBlur = clamped) }
     }
 
     fun setPageScale(scale: Float) {

@@ -102,9 +102,25 @@ class SettingsRepositoryImpl : SettingsRepository {
         get() = prefs.getBoolean("nav_rail_expanded", false)
         set(value) = prefs.edit { putBoolean("nav_rail_expanded", value) }
 
+    override var componentTransparent: Boolean
+        get() = prefs.getBoolean("component_transparent", false)
+        set(value) = prefs.edit { putBoolean("component_transparent", value) }
+
     override var pageScale: Float
         get() = prefs.getFloat("page_scale", 1.0f)
         set(value) = prefs.edit { putFloat("page_scale", value) }
+
+    override var wallpaperLight: String
+        get() = prefs.getString("wallpaper_light", "").orEmpty()
+        set(value) = prefs.edit { putString("wallpaper_light", value) }
+
+    override var wallpaperDark: String
+        get() = prefs.getString("wallpaper_dark", "").orEmpty()
+        set(value) = prefs.edit { putString("wallpaper_dark", value) }
+
+    override var wallpaperBlur: Int
+        get() = prefs.getInt("wallpaper_blur", 0).coerceIn(0, 100)
+        set(value) = prefs.edit { putInt("wallpaper_blur", value.coerceIn(0, 100)) }
 
     override var moduleDescriptionMaxLines: Int
         get() = prefs.getInt("module_description_max_lines", 4)

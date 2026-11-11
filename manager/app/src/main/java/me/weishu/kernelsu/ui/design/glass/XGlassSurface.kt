@@ -1,0 +1,384 @@
+package me.weishu.kernelsu.ui.design.glass
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import me.weishu.kernelsu.ui.component.liquid.InnerShadow
+import me.weishu.kernelsu.ui.component.liquid.innerShadow
+import me.weishu.kernelsu.ui.component.liquid.lens
+import me.weishu.kernelsu.ui.component.liquid.vibrancy
+import me.weishu.kernelsu.ui.design.clear.LocalWallpaperBackdrop
+import me.weishu.kernelsu.ui.design.clear.xClearGlassLayer
+import me.weishu.kernelsu.ui.design.token.Xc
+import me.weishu.kernelsu.ui.design.token.XcBlockBackground
+import me.weishu.kernelsu.ui.design.token.colorOrNull
+import me.weishu.kernelsu.ui.design.token.scaleAlpha
+import me.weishu.kernelsu.ui.design.token.scaleBy
+import top.yukonga.miuix.kmp.blur.BlendColorEntry
+import top.yukonga.miuix.kmp.blur.BlurColors
+import top.yukonga.miuix.kmp.blur.LayerBackdrop
+import top.yukonga.miuix.kmp.blur.blur
+import top.yukonga.miuix.kmp.blur.drawBackdrop
+import top.yukonga.miuix.kmp.blur.textureBlur
+import top.yukonga.miuix.kmp.shader.isRuntimeShaderSupported
+
+/**
+ * XEC Fluid Glass · 玻璃表面。
+ *
+ * 全应用唯一允许绘制"玻璃"的入口。所有容器（栏、卡片、弹层）都必须走这里，
+ * 原因是这里一次性管住了三件容易各自出错的事：
+ *
+ * 1. **圆角**：`shape` 只会取 `Xc.shapes` 的值。本设计里没有直角矩形容器。
+ * 2. **折射真的生效**：miuix 的 `lens()` 内部要求 `shape as? CornerBasedShape`，
+ *    一旦传 `RectangleShape` 它会静默 `return` —— 过去"液态玻璃"其实只有模糊、
+ *    没有折射，根因就在这里。
+ * 3. **三档降级**：`lens` 需要 AGSL（API 33+），`textureBlur` 需要 RenderEffect（API 31+），
+ *    都没有时退回半透明纯色，保证任何设备上都不出现"没画出来的空白块"。
+ *
+ * @param backdrop 由 `rememberBlurBackdrop` 产出；为 `null` 表示设备/设置不支持模糊。
+ * @param tint 玻璃上覆色，叠在模糊结果之上，决定玻璃"有多深"。
+ * @param rim 是否描一圈渐变亮边。没有模糊的设备上，这圈边是唯一的层次来源。
+ * @param block 这张卡片的专属背景（`Xc.blocks` 里的一条），默认 `null` = 今天的样子。
+ *   见 [drawXcBlock]：颜色/图/黑纱都画在玻璃**之下**、圆角之内。
+ */
+@Composable
+fun XGlassSurface(
+    backdrop: LayerBackdrop?,
+    modifier: Modifier = Modifier,
+    shape: Shape = Xc.shapes.lg,
+    // 主题可调的三个旋钮：覆色浓度、模糊半径、亮边强度。全部是**倍率**（默认 1 = 原样），
+    // 所以没有主题时这里算出来的值与过去逐字节一致。
+    tint: Color = Xc.colors.glassTint.scaleAlpha(Xc.glass.tintAlpha),
+    blurRadius: Dp = 6.dp.scaleBy(Xc.glass.blurRadius),
+    refraction: Dp = 24.dp.scaleBy(Xc.glass.refraction),
+    rimColor: Color = Xc.colors.glassRim.scaleAlpha(Xc.glass.rimAlpha),
+    rim: Boolean = true,
+    innerHighlight: Boolean = true,
+    glassEnabled: Boolean = true,
+    block: XcBlockBackground? = null,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    Box(
+        modifier = modifier.xGlassLayer(
+            backdrop = backdrop,
+            shape = shape,
+            tint = tint,
+            blurRadius = blurRadius,
+            refraction = refraction,
+            rimColor = rimColor,
+            rim = rim,
+            innerHighlight = innerHighlight,
+            glassEnabled = glassEnabled,
+            block = block,
+        ),
+        content = content,
+    )
+}
+
+/**
+ * 玻璃**卡体**：把一枚 miuix `Card` 的实心底换成真玻璃。
+ *
+ * 和 [xGlassRim] 的关系：`xGlassRim` 只画那一圈 1dp 渐变亮边，卡体实色仍由 miuix
+ * `Card` 自己铺 —— 所以引擎再强，卡片上也看不到折射。本函数把「卡体」也接进玻璃管线，
+ * 亮边由内部一并画出，**调用点不要再叠 `.xGlassRim(...)`**。
+ *
+ * 用法（两件事必须同时做，少一件就看不到玻璃）：
+ *
+ * ```
+ * Card(
+ *     modifier = modifier.xGlassBody(backdrop = backdrop, shape = Xc.shapes.md),
+ *     // 必要：miuix Card 的底色画在 modifier 链内侧，不清空就会盖住玻璃与亮边
+ *     colors = CardDefaults.defaultColors(color = Color.Transparent),
+ * ) { ... }
+ * ```
+ *
+ * 采样拓扑（卡体真玻璃的现状）：卡体处在页面级 backdrop 的录制子树**内部**，
+ * 采页面级 backdrop 就是自采样成环——渲染这层纹理要求先画卡体，画卡体又要求先渲染
+ * 这层纹理，递归没有出口，RenderThread 在 `RenderNode::prepareTreeImpl` 里无限递归，
+ * 进程直接原生 SIGSEGV（不是 ANR，也没有 Java 栈）。判据：消费者在采样源的录制
+ * 节点**子树内 ⇒ 崩**；是它的**兄弟 ⇒ 安全**。
+ *
+ * 所以卡体一律改采 [LocalWallpaperBackdrop]——壁纸 Image 的录制子树里**只有壁纸
+ * 自己**，任何组件采它都合法，并且折射出的正好是每张卡片身后那段壁纸，所见即所得。
+ * 形参 `backdrop` 保留只为不动五十几处调用点，**已不再消费**；「设备不支持 / 用户
+ * 关掉模糊 → 实色 + 亮边」的旧语义由壁纸源为 `null` 时的第三档自然承担（壁纸源跟
+ * 随同一个 enableBlur 开关）。
+ *
+ * 玻璃本体走透明玻璃链 [xClearGlassLayer]（AGSL 折射/菲涅尔/亮度自适应 →
+ * RenderEffect 毛玻璃 → 实色，三档降级），与顶栏、弹层逐像素同源；
+ * `innerHighlight` 形参在这条链里没有对应物，保留只为签名兼容。
+ *
+ * @param backdrop **已废弃，不再消费**（见上）。保留形参兼容既有调用点。
+ * @param tint 玻璃介质色。默认 [Xc.colors.clearGlassTint]——浅色档全透（真·透明玻璃），
+ *   深色档黑液态玻璃。语义色卡片可传同色系的低透明度版本，例如状态卡的
+ *   `Xc.colors.success.copy(alpha = 0.22f)`；不透明的 `successTint` 会把折射整个遮死。
+ *   旧的 `glassTint`（55% 磨砂覆色）在透明玻璃语言里太闷，只留给磨砂系组件。
+ * @param block 这张卡片的专属背景（首页六张卡片各传自己那一条）。默认 `null` =
+ *   今天的样子。画法见 [drawXcBlock]：在玻璃**之下**、圆角之内，所以"玻璃有多不透明"
+ *   这件事照旧由 `tint` 说了算，区块背景不会改变任何既有卡片的观感。
+ */
+@Composable
+@Suppress("UNUSED_PARAMETER")
+internal fun Modifier.xGlassBody(
+    backdrop: LayerBackdrop?,
+    shape: Shape = Xc.shapes.md,
+    tint: Color = Xc.colors.clearGlassTint.scaleAlpha(Xc.glass.tintAlpha),
+    blurRadius: Dp = 2.dp.scaleBy(Xc.glass.blurRadius),
+    refraction: Dp = 34.dp.scaleBy(Xc.glass.refraction),
+    rimColor: Color = Xc.colors.glassRim.scaleAlpha(Xc.glass.rimAlpha),
+    rim: Boolean = true,
+    innerHighlight: Boolean = true,
+    glassEnabled: Boolean = true,
+    block: XcBlockBackground? = null,
+): Modifier = this.xClearGlassLayer(
+    // 形参 backdrop 一律不用：调用点传来的都是页面级 backdrop，卡体就在它的录制子树里，
+    // 采它必成环。真正的采样源永远是壁纸（见 [LocalWallpaperBackdrop] 的 KDoc）。
+    backdrop = LocalWallpaperBackdrop.current,
+    shape = shape,
+    tint = tint,
+    blurRadius = blurRadius,
+    refraction = refraction,
+    rimColor = rimColor,
+    rim = rim,
+    glassEnabled = glassEnabled,
+    adaptive = true,
+    specular = Xc.glass.specular,
+    block = block,
+)
+
+/**
+ * 玻璃绘制的**唯一实现**：三档降级链。
+ *
+ * 之所以抽屉成一个函数，是因为卡片、栏、弹层必须逐像素同源 —— 各写一份必然漂移，
+ * 而"某处玻璃看起来不一样"这种问题几乎无法定位。所有玻璃入口
+ * （[XGlassSurface] / [xGlassBody]）都只是把参数原样转交到这里。
+ *
+ * 顺序上它必须挂在调用方 `modifier` 的**内侧**：外层的 `padding` 决定玻璃贴哪条边，
+ * 内层的 `clip` 才把折射外扩出的取样区裁回圆角。
+ */
+@Composable
+private fun Modifier.xGlassLayer(
+    backdrop: LayerBackdrop?,
+    shape: Shape,
+    tint: Color,
+    blurRadius: Dp,
+    refraction: Dp,
+    rimColor: Color,
+    rim: Boolean,
+    innerHighlight: Boolean,
+    glassEnabled: Boolean,
+    block: XcBlockBackground? = null,
+): Modifier {
+    val surface = Xc.colors.surface
+    val shaderSupported = remember { isRuntimeShaderSupported() }
+    val active = glassEnabled && backdrop != null
+
+    // 三档降级里，后两档都不能直接用半透明的 tint（会透出窗口黑底，面板塌成黑框），
+    // 需要先合成成不透明实色。算一次，两档共用。
+    val solidTint = if (tint.alpha >= 1f) tint else tint.compositeOver(surface)
+
+    // 卡片专属背景：挂在**整条玻璃链之前**（读 modifier 是从左到右，所以这里画在最下面）。
+    // 见 [drawXcBlock]：它只负责"给这张卡片垫一层颜色/图"，玻璃本体照旧按三档降级链画在上面。
+    val based = if (block == null) this else this.then(Modifier.xcBlockBackground(block))
+
+    return when {
+        active && shaderSupported -> based
+            .drawBackdrop(
+                backdrop = backdrop!!,
+                shape = { shape },
+                effects = {
+                    val refractPx = refraction.toPx()
+                    // 折射要在控件边界外取样，padding 小于折射量时边缘会被裁掉，
+                    // 表现为"折射只在中段出现、贴边消失"。
+                    padding = maxOf(28.dp.toPx(), refractPx)
+                    vibrancy()
+                    blur(blurRadius.toPx(), blurRadius.toPx())
+                    lens(refractionHeight = refractPx, refractionAmount = refractPx)
+                },
+                onDrawSurface = {
+                    drawRect(tint)
+                },
+            )
+            .clipTo(shape)
+            .xGlassRim(shape, rimColor, rim)
+            .innerShadow(shape = shape) {
+                if (innerHighlight) {
+                    InnerShadow(
+                        radius = 12.dp,
+                        color = Color.Black.copy(alpha = 0.10f),
+                    )
+                } else {
+                    null
+                }
+            }
+
+        // 回退一档：毛玻璃（RenderEffect，API 31-32）
+        // 混色跟着 tint 走，而不是写死 surface：现有三档令牌下两者完全等价
+        // （半透明 tint 同色系压在 surface 上就是 surface），但"白毛玻璃"那种
+        // 与明暗档无关的 tint 如果写死 surface，在 31/32 上会被糊回深色。
+        active -> based
+            .textureBlur(
+                backdrop = backdrop!!,
+                shape = shape,
+                blurRadius = 25f,
+                colors = BlurColors(
+                    blendColors = listOf(
+                        BlendColorEntry(color = solidTint.copy(alpha = 0.87f)),
+                    ),
+                ),
+            )
+            .clipTo(shape)
+            .xGlassRim(shape, rimColor, rim)
+
+        // 没有 backdrop（用户关掉了模糊 / 设备不支持 RenderEffect / 还没采样到图层）
+        // 时**不能**继续拿半透明的 tint 兜底：tint 是 0.55 Alpha 的深色，
+        // 直接 background 画上去会透出窗口底色，整块面板就塌成一块「黑框」——
+        // 这正是"弹窗/栏变黑方块"的来源。把 tint 合成到不透明的 surface 上，
+        // 色相保留、Alpha 归 1，与 `BlurredBar` 的无毛玻璃分支保持一致。
+        //
+        // 区块背景（主题里给某块卡片配的图/色）在这一支必须**画在底色之上**：
+        // 底色在这里是不透明的，挂在它前面（= 下面）等于被整块盖死。曾经的写法把
+        // `based`（含区块层）放在 `background(solidTint)` 之前，于是关掉模糊的设备上
+        // 主题区块背景全部静默失效 —— 2026-11-08 这轮全盘换装把 backdrop 恒置 null
+        // 之后，这条路径变成了**默认路径**，等于所有区块背景都失效。
+        else -> {
+            val solid = this
+                .background(color = solidTint, shape = shape)
+                .clipTo(shape)
+            val painted = if (block == null) {
+                solid
+            } else {
+                solid.then(Modifier.xcBlockBackground(block))
+            }
+            painted.xGlassRim(shape, rimColor, rim)
+        }
+    }
+}
+
+/**
+ * 画一层"卡片专属背景"：图 / 颜色 / 黑纱。
+ *
+ * internal：卡体走的是 [xClearGlassLayer]（透明玻璃链，在 `ClearGlass.kt`），它不在本文件的
+ * 调用链里，但区块背景的绘制必须**只有一份** —— 这份文件是"卡片背景长什么样"的唯一定义，
+ * 另一条链只管把它挂在玻璃之前。
+ *
+ * 就是卡片自己的背景，不参与玻璃管线 —— 所以把 `block` 形参留成默认 `null` 时，
+ * 既有调用点连一次绘制都不会多（[xGlassLayer] 在那里根本不挂这个 modifier）。
+ *
+ * 画在 `modifier` 链的**最前**，于是它永远在玻璃本体之下：玻璃有模糊/折射时它被压在
+ * 半透明的玻璃底下（这正是"卡片背景"该有的层次），而拿不到模糊的设备上玻璃本体会用
+ * 不透明实色兜底，那时卡片背景就被盖住了 —— 这是**既有兜底语义**的必然结果，
+ * 不与"卡片得有自己的背景"冲突：用户看到的仍然是那块玻璃。
+ *
+ * 三层从下到上：图（按中裁填满整个绘制区）、颜色、黑纱。后画的在上，所以"颜色 + 图"
+ * 同时设的时候颜色在上层（低透明度颜色就是给图叠色）。[XcBlockBackground.dim] 的黑纱
+ * 压在最上面，为的是让卡片上的文字在照片上也能读。
+ */
+@Composable
+internal fun Modifier.xcBlockBackground(block: XcBlockBackground): Modifier = this.drawWithContent {
+    drawXcBlock(block)
+    drawContent()
+}
+
+private fun DrawScope.drawXcBlock(block: XcBlockBackground) {
+    val opacity = block.opacity.coerceIn(0f, 1f)
+    if (opacity <= 0f) return
+    val image = block.imagePath?.let { XcBlockImageCache[it] }
+    if (image != null) drawXcBlockImage(image, opacity)
+    block.colorOrNull()?.let { color ->
+        // 颜色在图上：图（若有）先铺满，颜色再按自己的 alpha × opacity 压上去。
+        drawRect(color = color.copy(alpha = color.alpha * opacity))
+    }
+    val dim = block.dim.coerceIn(0f, 1f)
+    if (dim > 0f) {
+        // 黑纱固定黑色：它要的是"把图压暗让字能读"，跟着 tint 走就变成另一层染色了。
+        drawRect(brush = SolidColor(Color.Black), alpha = dim * opacity)
+    }
+}
+
+/**
+ * 中裁（center-crop）填满整个绘制区：不拉伸、不留白边，短边溢出部分裁掉。
+ * 与 Compose 的 `ContentScale.Crop` 同一套算法，只是这里要自己算 Rect
+ * （绘制层拿不到 Image 组件那套缩放）。
+ */
+private fun DrawScope.drawXcBlockImage(image: ImageBitmap, alpha: Float) {
+    val imageWidth = image.width.toFloat()
+    val imageHeight = image.height.toFloat()
+    if (imageWidth <= 0f || imageHeight <= 0f || size.width <= 0f || size.height <= 0f) return
+    val scale = maxOf(size.width / imageWidth, size.height / imageHeight)
+    val scaledWidth = imageWidth * scale
+    val scaledHeight = imageHeight * scale
+    val left = (size.width - scaledWidth) / 2f
+    val top = (size.height - scaledHeight) / 2f
+    clipRect(left, top, left + scaledWidth, top + scaledHeight) {
+        // 这个 drawImage 重载要的是整数像素矩形（IntOffset/IntSize），不是 Offset/Size。
+        drawImage(
+            image = image,
+            srcOffset = IntOffset.Zero,
+            srcSize = IntSize(image.width, image.height),
+            dstOffset = IntOffset(left.toInt(), top.toInt()),
+            dstSize = IntSize(scaledWidth.toInt(), scaledHeight.toInt()),
+            alpha = alpha,
+        )
+    }
+}
+
+/**
+ * 把内容裁进圆角里。
+ *
+ * 必须排在玻璃绘制**之后**：裁剪切在 `drawBackdrop` 前面会把折射所需的
+ * 外扩取样区一起裁掉，折射就又没了。
+ */
+@Composable
+private fun Modifier.clipTo(shape: Shape): Modifier = this.clip(shape)
+
+/**
+ * 玻璃边：上亮下暗的 1dp 渐变描边。
+ * 比纯色描边贵不了多少，但能立刻把"一块半透明色"变成"一片玻璃"。
+ *
+ * 它是 [xGlassLayer] 内部三档共用的收尾（所以玻璃体自己就带边框），另留给
+ * 「卡体暂时还不是玻璃」的调用点直接挂 —— 圆角由 miuix `Card` 自己裁，
+ * 缺的就是这圈亮边，因此只需要一个 `shape`：`.xGlassRim(Xc.shapes.md)`。
+ * 卡体也要换成真玻璃时改用 [xGlassBody]，两边不要同时挂，亮边会叠成两层。
+ * `rimColor` / `rim` 留默认值正是为了这个单参数用法；需要临时关掉亮边时
+ * 才显式传 `rim = false`。
+ */
+@Composable
+internal fun Modifier.xGlassRim(
+    shape: Shape,
+    rimColor: Color = Xc.colors.glassRim,
+    rim: Boolean = true,
+): Modifier =
+    if (!rim) {
+        this
+    } else {
+        this.border(
+            width = 1.dp,
+            brush = Brush.verticalGradient(
+                colors = listOf(
+                    rimColor.copy(alpha = 0.55f),
+                    rimColor.copy(alpha = 0.10f),
+                ),
+            ),
+            shape = shape,
+        )
+    }

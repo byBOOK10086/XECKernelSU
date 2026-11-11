@@ -24,6 +24,29 @@ data class HomeUiState(
     val latestVersionInfo: LatestVersionInfo,
     val currentManagerVersionCode: Long,
     val systemInfo: SystemInfo,
+    /**
+     * SUSFS variant reported by the kernel (`susfs -v` style string), or null
+     * when the feature is not present. Populated by the SUSFS probe; the home
+     * stat panel shows a placeholder until it arrives, so a null here means
+     * "not probed yet / not supported", never "supported and empty".
+     */
+    val susfsVersion: String? = null,
+    /**
+     * SUSFS variant/flavour string (`susfs4ksu`, `gki-decoupled`, ...). Null when
+     * the version is absent or the variant probe has not run.
+     */
+    val susfsVariant: String? = null,
+    /**
+     * Whether at least one root probe has completed.
+     *
+     * The first frame can only answer "not yet": the probe touches a root shell
+     * and must not run on the main thread. Without this flag the hero would show
+     * "root failed" for a few hundred milliseconds on every cold start. Warnings
+     * are gated on it, so an unknown state never renders as a failure.
+     */
+    val rootProbeSettled: Boolean = true,
+    /** True while a pull-to-refresh / toolbar refresh is in flight. */
+    val isRefreshing: Boolean = false,
 ) {
     val isSELinuxPermissive: Boolean
         get() = systemInfo.selinuxStatus == "Permissive"
@@ -64,4 +87,8 @@ data class HomeActions(
     val onInstallClick: () -> Unit,
     val onOpenUrl: (String) -> Unit,
     val onJailbreakClick: () -> Unit = {},
+    /** Pull-to-refresh and the header refresh button share this one callback. */
+    val onRefresh: () -> Unit = {},
+    val onOpenSuperuser: () -> Unit = {},
+    val onOpenSulog: () -> Unit = {},
 )

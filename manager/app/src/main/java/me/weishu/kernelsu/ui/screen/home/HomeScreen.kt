@@ -64,6 +64,11 @@ fun HomePager(
     val actions = HomeActions(
         onInstallClick = { navigator.push(Route.Install) },
         onOpenUrl = uriHandler::openUri,
+        // The header refresh button and pull-to-refresh both land here; the view
+        // model guards against a second pass while one is still running.
+        onRefresh = { viewModel.refresh() },
+        onOpenSuperuser = { navigator.push(Route.SuperUser) },
+        onOpenSulog = { navigator.push(Route.Sulog) },
         onJailbreakClick = {
             loadingDialog.showLoading()
             context.startService(Intent(context, MagicaService::class.java))

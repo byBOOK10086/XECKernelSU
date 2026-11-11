@@ -376,4 +376,533 @@
     <string name="script_param_below_min">Must be at least %d</string>
     <string name="script_param_above_max">Must be at most %d</string>
     <string name="script_param_invalid">Invalid value</string>
+
+    <string name="home_stat_kernel">Kernel</string>
+    <string name="home_stat_manager">Manager</string>
+    <string name="home_stat_superuser">Superuser</string>
+    <string name="home_stat_module_total">Modules</string>
+    <string name="home_stat_module_enabled">Enabled</string>
+    <string name="home_stat_edit_title">Customize data panel</string>
+    <string name="home_stat_edit_slot">Position %1$d</string>
+    <string name="home_stat_edit_pick">Pick an item for the selected position</string>
+    <string name="home_stat_edit_used">In use</string>
+    <string name="home_stat_edit_reset">Restore defaults</string>
+    <string name="home_stat_edit_done">Done</string>
+    <string name="home_stat_edit_move_left">Move left</string>
+    <string name="home_stat_edit_move_right">Move right</string>
+    <string name="home_stat_edit_hint">Long-press the data panel to customize it</string>
+
+    <string name="home_susfs_status">SUSFS</string>
+    <string name="home_susfs_unsupported">Not enabled (kernel lacks SUSFS patches)</string>
+
+    <string name="home_developers_list"><![CDATA[
+Project developers and contributors (official)
+
+This project is initiated and developed by XEC (3228636402). The following members made important contributions to development, icon design, UI design, testing feedback and module support. We hereby announce and sincerely thank them (in no particular order):
+
+Project developers/authors
+XEC (3228636402)
+
+APK icon design
+阿零不是阿麟 (3068258374)
+今天蕾姆了吗 (2941123540)
+
+UI aesthetic design
+XEC (3228636402)
+小Y (3961592339)
+橙子 (370753004)
+
+Bug testing and quality feedback
+永雏塔菲喵 (1658998584)
+江不辞 (3318621299)
+阿零不是阿麟 (3068258374)
+小Y (3961592339)
+力克千均 (602432323)
+贝利亚大王 (3483361380)
+大表哥 (381283226)
+薇尔莉特 (1941333061)
+我曾是少年。 (1187779562)
+廿二序 (3917257393)
+花香蝶自来 (2815014730)
+etc.
+
+Module support
+微微微 (2898395199)
+
+AK3 build
+凌洛 (3239554101)
+
+API support
+疑问小猫 (3301237007)
+IV. Acknowledgements
+This project is based on tiann/KernelSU. Thanks to KernelSU author weishu (tiann) and the upstream community; thanks to HMA-OSS (frknkrc44), TEESimulator-RS (JingMatrix, Enginex0), Tricky Addon (Enginex0), susfs4ksu (sidex15, simonpunk) and LSPosed for their upstream work. Thanks to GhostLock (YuKongA/ghostlock-app, Apache-2.0) for the one-tap elevate payload and profile toolchain, and to KPatch-Next (KernelSU-Next/KPatch-Next, GPL-2.0) for the KernelPatch binaries powering the sub-5.10 kernel route.
+Thanks to DuckDetector (Eltavine and the Duck Apps contributors, https://github.com/eltavine/Duck-Detector-Refactoring , Apache-2.0): this project audited its public detector semantics and evidence model as the calibration baseline for the environment-hiding work shipped here.
+Project developer XEC sincerely thanks all the above members for their contributions in development, design, testing and module support.
+We hereby announce and express our gratitude.
+
+Official group: 941895988
+
+XEC Project Team
+]]></string>
+    <string name="home_hero_idle">ROOT NOT READY</string>
+    <string name="home_hero_inactive">Kernel not running</string>
+    <string name="home_hero_kernel_mode">Kernel mode</string>
+    <string name="home_hero_probing">Getting root</string>
+    <string name="home_hero_ready">ROOT READY</string>
+    <string name="home_hero_ready_subtitle">System environment is healthy — installation can start</string>
+    <string name="home_hero_ready_title">Ready to go</string>
+    <string name="home_hero_running">Kernel running</string>
+    <string name="home_refresh">Refresh</string>
+    <string name="home_section_device">Device</string>
+    <string name="home_update_tap_hint">Tap to view the changelog</string>
+    <string name="home8_auth_records">Authorization log</string>
+    <string name="home8_auth_records_sub">Review how root has been used</string>
+    <string name="home8_boot_state">Boot state</string>
+    <string name="home8_root_count">Root grants</string>
+    <string name="home8_root_count_sub">Apps you enabled by hand</string>
+    <string name="home8_section_overview">Overview</string>
+    <string name="home8_section_security">Security status</string>
+    <string name="home8_section_support">Support and about</string>
+    <string name="home8_tag_off">Disabled</string>
+    <string name="home8_tag_on">Enabled</string>
+    <string name="home8_tag_stable">Stable</string>
+
+    <string name="remote_add_link">Add link</string>
+    <string name="remote_assistant_receive">Receive module</string>
+    <string name="remote_assistant_share">Share module</string>
+    <string name="remote_assistant_title">Remote Module Assistant</string>
+    <string name="remote_hub_auth_title_login">Sign in to XEC Module Repo</string>
+    <string name="remote_hub_auth_title_register">Create an XEC Module Repo account</string>
+    <string name="remote_hub_back">Back</string>
+    <string name="remote_hub_bad_days">Validity must be 0-3650 days</string>
+    <string name="remote_hub_bad_uses">Max uses must be 1-9999</string>
+    <string name="remote_hub_code_label">Code (send to receiver)</string>
+    <string name="remote_hub_expire_days">Valid for (days, 0 = forever)</string>
+    <string name="remote_hub_expired">Your sign-in expired, please sign in again</string>
+    <string name="remote_hub_fail">Operation failed, try again later</string>
+    <string name="remote_hub_fill_both">Enter both username and password</string>
+    <string name="remote_hub_generate">Generate code</string>
+    <string name="remote_hub_logged_in">Signed in: %1$s</string>
+    <string name="remote_hub_logged_out">Signed out</string>
+    <string name="remote_hub_login">Log in / Sign up</string>
+    <string name="remote_hub_logout">Log out</string>
+    <string name="remote_hub_max_uses">Max uses</string>
+    <string name="remote_hub_not_logged">Not signed in — an account is required to create and use codes</string>
+    <string name="remote_hub_note">Remote modules carry risk. Your account records distribution and usage (username, time, IP). Signing up means you acknowledge and accept this.</string>
+    <string name="remote_hub_password">Password (at least 6 chars)</string>
+    <string name="remote_hub_submit_login">Sign in</string>
+    <string name="remote_hub_submit_register">Sign up &amp; sign in</string>
+    <string name="remote_hub_switch_login">Have an account? Sign in</string>
+    <string name="remote_hub_switch_register">No account? Sign up</string>
+    <string name="remote_hub_username">Username (2-32 chars)</string>
+    <string name="remote_key_force_label">Force script for this batch (optional)</string>
+    <string name="remote_key_plan_hint">Some modules wait for a volume key during install. Write a script here and the receiving device replays it: up@1500,up@3000 presses volume-up at 1.5s and again at 3s; up~600 waits for the installer\'s key prompt and presses 600ms later. Use the manual buttons below for anything the script misses.</string>
+    <string name="remote_key_plan_label">Key script (optional)</string>
+    <string name="remote_key_plan_ok">Syntax OK — travels with this link</string>
+    <string name="remote_keypad_idle">Injects a real volume-key event as root. Tap one to test this device.</string>
+    <string name="remote_keypad_title">Manual keys (press while the installer waits)</string>
+    <string name="remote_link_label">Link %1$d</string>
+    <string name="remote_recv_back">Go back</string>
+    <string name="remote_recv_done">%1$d module(s) flashed. Reboot to apply.</string>
+    <string name="remote_recv_failed">Failed at: %1$s
+See the log below for details.</string>
+    <string name="remote_recv_hint">Paste the short code from the sender (starts with XEC-, sign-in required); legacy share codes and raw direct links still work. Every module is downloaded and flashed automatically, in order. Use \"Add link\" to batch multiple codes.</string>
+    <string name="remote_recv_link_placeholder">Paste share code or direct link</string>
+    <string name="remote_recv_running">Working, please keep the screen on…</string>
+    <string name="remote_recv_start">Flash now</string>
+    <string name="remote_recv_stop">Stop</string>
+    <string name="remote_recv_stopped">Stopped by you.</string>
+    <string name="remote_recv_warning">Make sure you fully understand who the sender is, what their purpose is, and the risks after flashing. This flashing mode cannot block malicious files sent by the other party, which may cause irreversible damage to your property. We assume no legal responsibility for any loss caused.</string>
+    <string name="remote_recv_warning_confirm">Confirm</string>
+    <string name="remote_recv_warning_reject">Reject</string>
+    <string name="remote_recv_warning_title">Read this before flashing</string>
+    <string name="remote_remove">Remove</string>
+    <string name="remote_share_copied">Copied</string>
+    <string name="remote_share_copy">Copy</string>
+    <string name="remote_share_hint">Paste direct links to module zips — or upload local files to the XEC module repo — then generate a SHORT code for the receiver. Codes require sign-in and let you set max uses and validity; one code can carry multiple modules. Note: cloud-drive SHARE PAGE links are web pages, not files — the app cannot download them.</string>
+    <string name="remote_share_offline">Generate offline code (no sign-in needed)</string>
+    <string name="remote_share_offline_done">Offline code copied. The receiver pastes it into Receive.</string>
+    <string name="remote_share_offline_empty">Nothing to encode yet. Paste a link or upload a module first.</string>
+    <string name="remote_submit_index">Submit to the module index</string>
+    <string name="remote_submit_index_note">Uploaded files only have a direct link. Submit them once with the GitHub form to list them in the module repo, otherwise the receiver needs the code or link.</string>
+    <string name="remote_upload_done">Uploaded %1$d file(s) — set uses, then tap \"Generate code\".</string>
+    <string name="remote_upload_oversize">%1$s is larger than 500 MB, the receiver cannot download it.</string>
+    <string name="remote_upload_partial">Uploaded %1$d file(s); failed: %2$s</string>
+    <string name="remote_upload_pick">Upload module files to the repo</string>
+
+    <string name="terminal_cancel">Cancel</string>
+    <string name="terminal_clear">Clear</string>
+    <string name="terminal_copy_all">Copy output</string>
+    <string name="terminal_copy_path">Copy path</string>
+    <string name="terminal_delete">Delete</string>
+    <string name="terminal_execute">Execute</string>
+    <string name="terminal_files_empty">(empty directory)</string>
+    <string name="terminal_fm_apply">Apply</string>
+    <string name="terminal_fm_bookmark">Pin folder</string>
+    <string name="terminal_fm_clear_selection">Clear selection</string>
+    <string name="terminal_fm_close">Close</string>
+    <string name="terminal_fm_copy">Copy</string>
+    <string name="terminal_fm_copy_output">Copy output</string>
+    <string name="terminal_fm_copy_path">Copy path</string>
+    <string name="terminal_fm_count">%1$d items</string>
+    <string name="terminal_fm_cut">Cut</string>
+    <string name="terminal_fm_date">Modified</string>
+    <string name="terminal_fm_delete">Delete</string>
+    <string name="terminal_fm_delete_confirm">Delete %1$d item(s)? This cannot be undone.</string>
+    <string name="terminal_fm_edit">Edit</string>
+    <string name="terminal_fm_execute">Execute</string>
+    <string name="terminal_fm_extract">Extract here</string>
+    <string name="terminal_fm_forward">Asc</string>
+    <string name="terminal_fm_hidden_off">Hidden off</string>
+    <string name="terminal_fm_hidden_on">Hidden shown</string>
+    <string name="terminal_fm_home">Root</string>
+    <string name="terminal_fm_install">Install</string>
+    <string name="terminal_fm_install_failed">Install failed</string>
+    <string name="terminal_fm_install_perm">Allow this app to install unknown apps first</string>
+    <string name="terminal_fm_install_system">Install with system installer</string>
+    <string name="terminal_fm_installed">Installed</string>
+    <string name="terminal_fm_jump">Jump to path</string>
+    <string name="terminal_fm_loading">Reading…</string>
+    <string name="terminal_fm_mode">Mode</string>
+    <string name="terminal_fm_name_hint">Name</string>
+    <string name="terminal_fm_new_file">New file</string>
+    <string name="terminal_fm_new_folder">New folder</string>
+    <string name="terminal_fm_no_app">No app on this device can open %1$s</string>
+    <string name="terminal_fm_no_output">(no output)</string>
+    <string name="terminal_fm_notice">Notice</string>
+    <string name="terminal_fm_ok">OK</string>
+    <string name="terminal_fm_op_failed">Failed: %1$s</string>
+    <string name="terminal_fm_open">Open</string>
+    <string name="terminal_fm_open_terminal">Terminal here</string>
+    <string name="terminal_fm_open_with">Open with system app</string>
+    <string name="terminal_fm_owner">Owner</string>
+    <string name="terminal_fm_paste">Paste</string>
+    <string name="terminal_fm_paste_done">Paste finished</string>
+    <string name="terminal_fm_path">Path</string>
+    <string name="terminal_fm_perms">Permissions</string>
+    <string name="terminal_fm_properties">Properties</string>
+    <string name="terminal_fm_recursive">Recursive</string>
+    <string name="terminal_fm_rename">Rename</string>
+    <string name="terminal_fm_reverse">Desc</string>
+    <string name="terminal_fm_run_title">Output · %1$s (exit %2$d)</string>
+    <string name="terminal_fm_save">Save</string>
+    <string name="terminal_fm_saved">Saved</string>
+    <string name="terminal_fm_search">Search</string>
+    <string name="terminal_fm_search_empty">No match</string>
+    <string name="terminal_fm_search_hint">File name contains</string>
+    <string name="terminal_fm_search_results">%1$d hit(s)</string>
+    <string name="terminal_fm_select_all">Select all</string>
+    <string name="terminal_fm_selected">%1$d selected</string>
+    <string name="terminal_fm_sha256">Compute SHA-256</string>
+    <string name="terminal_fm_share">Share</string>
+    <string name="terminal_fm_size">Size</string>
+    <string name="terminal_fm_sort_name">Name</string>
+    <string name="terminal_fm_sort_size">Size</string>
+    <string name="terminal_fm_sort_time">Time</string>
+    <string name="terminal_fm_text_hint">File content (view or edit)</string>
+    <string name="terminal_fm_type">Type</string>
+    <string name="terminal_fm_type_dir">Folder</string>
+    <string name="terminal_fm_type_file">File</string>
+    <string name="terminal_here">Show cwd</string>
+    <string name="terminal_hint_command">Type a command…</string>
+    <string name="terminal_open">Open</string>
+    <string name="terminal_parent_dir">Parent directory</string>
+    <string name="terminal_paste">Paste</string>
+    <string name="terminal_perm_apply">Apply</string>
+    <string name="terminal_perm_group">Group</string>
+    <string name="terminal_perm_octal">Mode (octal)</string>
+    <string name="terminal_perm_others">Others</string>
+    <string name="terminal_perm_owner">Owner</string>
+    <string name="terminal_perm_owner_field">Owner (user:group)</string>
+    <string name="terminal_permissions">Permissions</string>
+    <string name="terminal_tab">Tab</string>
+    <string name="terminal_tab_console">Console</string>
+    <string name="terminal_tab_files">Files</string>
+
+    <string name="terminal">Terminal</string>
+
+    <string name="settings_themes_default">Default look</string>
+    <string name="store_action_cancel">Cancel</string>
+    <string name="store_action_in_use">In use</string>
+    <string name="store_action_open">Open</string>
+    <string name="store_action_retry">Retry</string>
+    <string name="store_action_save">Save</string>
+    <string name="store_action_saved">Saved</string>
+    <string name="store_badge_free">Free</string>
+    <string name="store_category_theme">Full theme</string>
+    <string name="store_detail_about">About</string>
+    <string name="store_detail_changelog">What is new</string>
+    <string name="store_detail_checksum">SHA-256 %1$s</string>
+    <string name="store_detail_collapse">Show less</string>
+    <string name="store_detail_elements">Contains</string>
+    <string name="store_detail_expand">Show more</string>
+    <string name="store_detail_missing">This theme is no longer in the catalog</string>
+    <string name="store_detail_related">You may also like</string>
+    <string name="store_detail_requires">Needs manager</string>
+    <string name="store_detail_size">Size</string>
+    <string name="store_detail_title">Theme details</string>
+    <string name="store_detail_updated">Updated</string>
+    <string name="store_detail_version">Version</string>
+    <string name="store_download_cancelled">Cancelled</string>
+    <string name="store_download_clear_finished">Clear finished</string>
+    <string name="store_download_failed">Download failed</string>
+    <string name="store_download_queued">Queued</string>
+    <string name="store_downloads_count">%1$s downloads</string>
+    <string name="store_element_font">Font</string>
+    <string name="store_element_wallpaper">Wallpaper</string>
+    <string name="store_elements_all">All elements</string>
+    <string name="store_empty_catalog">The catalog is empty</string>
+    <string name="store_empty_catalog_hint">The index loaded, but it has no themes yet.</string>
+    <string name="store_error_cache">Cache read or write failed</string>
+    <string name="store_error_no_network">No network connection</string>
+    <string name="store_error_parse">The index cannot be parsed</string>
+    <string name="store_error_unknown">Unknown error</string>
+    <string name="store_error_unreachable">All mirrors are unreachable</string>
+    <string name="store_filters_all">All</string>
+    <string name="store_library_downloads">Downloads</string>
+    <string name="store_library_empty_downloads">Nothing downloaded yet</string>
+    <string name="store_library_empty_downloads_hint">Themes you download show up here.</string>
+    <string name="store_library_empty_favorites">Nothing saved yet</string>
+    <string name="store_library_empty_favorites_hint">Tap Save on a theme to keep it here.</string>
+    <string name="store_library_favorites">Saved</string>
+    <string name="store_no_filter_result">Nothing matches these filters</string>
+    <string name="store_notice_already_installed">Already installed</string>
+    <string name="store_notice_favorited">Saved</string>
+    <string name="store_notice_history_cleared">Search history cleared</string>
+    <string name="store_notice_queued">Queued: %1$s</string>
+    <string name="store_notice_source_reset">Back to the built-in catalog</string>
+    <string name="store_notice_source_saved">Catalog source saved</string>
+    <string name="store_notice_unfavorited">Removed from saved</string>
+    <string name="store_preview_position">%1$d / %2$d</string>
+    <string name="store_rank_empty">Not enough data for a ranking yet</string>
+    <string name="store_rank_hot">Most downloaded</string>
+    <string name="store_rank_latest">Newest</string>
+    <string name="store_rank_no_rating">No ratings yet</string>
+    <string name="store_rank_rating">Top rated</string>
+    <string name="store_rating_value">%1$s stars</string>
+    <string name="store_reset_filters">Reset filters</string>
+    <string name="store_result_count">%1$d themes</string>
+    <string name="store_retry">Try again</string>
+    <string name="store_search_action">Search</string>
+    <string name="store_search_clear">Clear search</string>
+    <string name="store_search_clear_history">Clear</string>
+    <string name="store_search_empty_hint">Search by name, author or tag.</string>
+    <string name="store_search_empty_input">Search the theme store</string>
+    <string name="store_search_history">Recent searches</string>
+    <string name="store_search_hot">Popular tags</string>
+    <string name="store_search_no_result">No results for &quot;%1$s&quot;</string>
+    <string name="store_search_title">Search</string>
+    <string name="store_section_recommend">Recommended for you</string>
+    <string name="store_sort_hot">Most downloaded</string>
+    <string name="store_sort_latest">Newest</string>
+    <string name="store_sort_rating">Top rated</string>
+    <string name="store_sort_recommend">Recommended</string>
+    <string name="store_source_builtin">Built-in catalog</string>
+    <string name="store_source_hint">Point the store at your own themes.json. Leave it empty to use the built-in catalog.</string>
+    <string name="store_source_input">https://example.com/themes.json</string>
+    <string name="store_source_reset">Use built-in</string>
+    <string name="store_source_save">Save</string>
+    <string name="store_source_title">Catalog source</string>
+    <string name="store_tab_browse">Browse</string>
+    <string name="store_tab_home">Featured</string>
+    <string name="store_tab_mine">Mine</string>
+    <string name="store_tab_rank">Ranking</string>
+    <string name="store_tags_all">All tags</string>
+    <string name="store_updated_at">Updated %1$s</string>
+    <string name="store_view_all">See all</string>
+    <string name="theme_editor_author">Author</string>
+    <string name="theme_editor_background">Background image</string>
+    <string name="theme_editor_badge_color">Text color (#RRGGBB, optional)</string>
+    <string name="theme_editor_badge_hint">The mode word itself (LKM/GKI/KernelPatch) is always generated by the system and cannot be edited. Leave everything empty to drop the element.</string>
+    <string name="theme_editor_badge_prefix">Text before the mode word</string>
+    <string name="theme_editor_badge_preview">Preview: %1$sGKI%2$s</string>
+    <string name="theme_editor_badge_suffix">Text after the mode word</string>
+    <string name="theme_editor_badge_title">Mode badge element</string>
+    <string name="theme_editor_bg_clear">Clear</string>
+    <string name="theme_editor_bg_dark">Dark background</string>
+    <string name="theme_editor_bg_light">Light background</string>
+    <string name="theme_editor_bg_none">Not set</string>
+    <string name="theme_editor_block_color_clear">No colour</string>
+    <string name="theme_editor_block_dim">Dim</string>
+    <string name="theme_editor_block_home_info">Home · device info card</string>
+    <string name="theme_editor_block_home_privilege">Home · privilege card</string>
+    <string name="theme_editor_block_home_status">Home · status card</string>
+    <string name="theme_editor_block_home_support">Home · support links card</string>
+    <string name="theme_editor_block_home_update">Home · update card</string>
+    <string name="theme_editor_block_home_warning">Home · warning cards</string>
+    <string name="theme_editor_block_no_color">No colour set</string>
+    <string name="theme_editor_block_opacity">Opacity</string>
+    <string name="theme_editor_block_when">Applies to</string>
+    <string name="theme_editor_block_when_both">Both</string>
+    <string name="theme_editor_block_when_dark">Dark</string>
+    <string name="theme_editor_block_when_light">Light</string>
+    <string name="theme_editor_blocks">Card backgrounds</string>
+    <string name="theme_editor_blocks_hint">Give a single home-screen card its own colour and/or picture. Only the cards you touch go into the package, everything else stays as it is.</string>
+    <string name="theme_editor_colors_dark">Dark colours</string>
+    <string name="theme_editor_colors_light">Light colours</string>
+    <string name="theme_editor_description">Description</string>
+    <string name="theme_editor_dirty">You have unsaved changes</string>
+    <string name="theme_editor_glass">Glass</string>
+    <string name="theme_editor_glass_hint">1.0 is the current look. Smaller = clearer, larger = deeper.</string>
+    <string name="theme_editor_hint_tokens">Tap a colour to change it. Only the tokens you touch are written into the package — everything else follows the built-in defaults.</string>
+    <string name="theme_editor_id">ID (letters, digits, . _ -)</string>
+    <string name="theme_editor_invalid_id">ID must start with a letter and contain only letters, digits, . _ -</string>
+    <string name="theme_editor_name">Name</string>
+    <string name="theme_editor_name_required">Give the theme a name</string>
+    <string name="theme_editor_neon">Module page (neon)</string>
+    <string name="theme_editor_neon_hint">The module page keeps its own palette unless you override it here.</string>
+    <string name="theme_editor_new">New theme</string>
+    <string name="theme_editor_pick_image">Pick an image</string>
+    <string name="theme_editor_reset_token">Reset</string>
+    <string name="theme_editor_save">Save theme</string>
+    <string name="theme_editor_save_failed">Save failed: %1$s</string>
+    <string name="theme_editor_saved">Saved: %1$s</string>
+    <string name="theme_editor_shapes">Corner radius</string>
+    <string name="theme_editor_summary">One-line summary</string>
+    <string name="theme_editor_title">Theme editor</string>
+    <string name="theme_editor_version">Version</string>
+    <string name="themes_applied">Applied: %1$s</string>
+    <string name="themes_apply">Apply</string>
+    <string name="themes_apply_failed">Could not apply: %1$s</string>
+    <string name="themes_by">by %1$s</string>
+    <string name="themes_category_colors">Colors</string>
+    <string name="themes_category_mode_badge">Mode badge</string>
+    <string name="themes_delete">Delete</string>
+    <string name="themes_delete_confirm">Delete theme %1$s? Its package is removed; a background it applied stays as your wallpaper.</string>
+    <string name="themes_download">Download</string>
+    <string name="themes_downloading">Downloading… %1$d%%</string>
+    <string name="themes_empty">Nothing here yet</string>
+    <string name="themes_export">Export package</string>
+    <string name="themes_export_done">Saved %1$s</string>
+    <string name="themes_export_failed">Export failed: %1$s</string>
+    <string name="themes_featured">Featured</string>
+    <string name="themes_import">Import package</string>
+    <string name="themes_import_done">Imported: %1$s</string>
+    <string name="themes_import_failed">Import failed: %1$s</string>
+    <string name="themes_installed">Installed</string>
+    <string name="themes_offline">No network</string>
+    <string name="themes_open_form">Open the GitHub form (optional)</string>
+    <string name="themes_publish">Publish to the store</string>
+    <string name="themes_publish_entry_summary">%1$s theme(s) on this device — upload one to the store</string>
+    <string name="themes_publish_entry_title">Publish my theme</string>
+    <string name="themes_publish_failed">Upload failed: %1$s</string>
+    <string name="themes_publish_pending">Submitted. The store bot collects it within ~10 minutes — refresh the store afterwards. The link below also works for the GitHub form.</string>
+    <string name="themes_publish_picker_empty">Nothing to publish yet. Create a theme in the editor, or import one with .xectheme.</string>
+    <string name="themes_publish_picker_hint">The package is uploaded to the XEC drive and the store bot collects it within ~10 minutes. No GitHub account needed.</string>
+    <string name="themes_publish_picker_title">Pick a theme to publish</string>
+    <string name="themes_refresh">Refresh</string>
+    <string name="themes_restore_default">Restore the default look</string>
+    <string name="themes_restored">Back to the default look</string>
+    <string name="themes_search_hint">Search themes</string>
+    <string name="themes_source">Source: %1$s</string>
+    <string name="themes_source_fallback">%1$s unreachable · using %2$s</string>
+    <string name="themes_tab_editor">Editor</string>
+    <string name="themes_tab_mine">Mine</string>
+    <string name="themes_tab_store">Store</string>
+    <string name="themes_title">Themes</string>
+    <string name="themes_updatable">Update available</string>
+
+    <string name="hide_one_tap_subtitle">Violet Toolbox · deploy hidden environment</string>
+    <string name="hide_one_tap_title">One-Tap Hide</string>
+    <string name="island_modules_count">%1$d modules (%2$d on)</string>
+    <string name="module_description">Description</string>
+    <string name="module_sheet_background">Photo</string>
+    <string name="module_sheet_background_clear_hint">Long-press the Photo button to clear this card\'s background</string>
+    <string name="module_sheet_capability_hint">Action and WebUi are available only when the module provides them</string>
+    <string name="module_sheet_version_label">Version</string>
+    <string name="module_update_url">Update URL</string>
+    <string name="privilege_entry_subtitle">GhostLock one-tap elevate, with a manual path for unmatched devices</string>
+    <string name="privilege_title">Elevate</string>
+    <string name="stealth_confirm_body">The launcher icon will be hidden. To open the manager: Settings → About phone → tap the build number 10 times in a row. The native 5-tap developer options unlock keeps working. Note: after enabling, the manager closes to the desktop once — that is it hiding its own icon. Fallback at any time:
+%1$s</string>
+    <string name="stealth_summary">Hide the icon; open the manager by tapping the build number in Settings 10 times (the 5-tap developer options behavior is untouched)</string>
+    <string name="stealth_title">Stealth entrance</string>
+    <string name="superkey_applied">Applied</string>
+    <string name="superkey_apply">Set password</string>
+    <string name="superkey_apply_failed">Rejected (wrong password, or the phone was rebooted since it was set)</string>
+    <string name="superkey_arm_guard">Turn on protection</string>
+    <string name="superkey_clear">Clear</string>
+    <string name="superkey_dialog_hint">The lock password never leaves this phone: stored encrypted on-device. Protection clears itself on reboot (that is also the recovery path if you forget it — just set a new one here). While protection is on, changing app permissions, restricted lists and feature switches requires the password.</string>
+    <string name="superkey_generate">Random</string>
+    <string name="superkey_new_key_label">New lock password</string>
+    <string name="superkey_old_key_label">Current lock password (required to change/clear)</string>
+    <string name="superkey_settings_summary">Once on, changing any app\'s Root permissions requires the lock password — malware cannot silently change them</string>
+    <string name="superkey_settings_title">Security lock</string>
+    <string name="superkey_state_armed">protected</string>
+    <string name="superkey_state_disarmed">off</string>
+    <string name="superkey_state_set">set</string>
+    <string name="superkey_state_unset">not set</string>
+    <string name="superkey_status">Lock password: %1$s · Protection: %2$s</string>
+    <string name="tools_external_modules_summary">Optional add-ons: TEE engine, TA enhancements and a Zygisk link-out</string>
+    <string name="tools_external_modules_title">External modules</string>
+    <string name="tools_section_tools">Tools</string>
+    <string name="tools_terminal_summary">Command-line terminal with a file manager</string>
+    <string name="tools_terminal_title">Terminal</string>
+    <string name="tools_title">Toolbox</string>
+
+    <string name="webui">WebUi</string>
+
+    <string name="module_download_hash_mismatch">Checksum mismatch: the downloaded file was discarded. Try another source or download again.</string>
+    <string name="module_repos_detail_no_readme">No description provided for this module.</string>
+    <string name="module_repos_detail_no_release">No downloadable release yet.</string>
+    <string name="module_repos_sort_created">Created time</string>
+    <string name="module_repos_source">Repository source</string>
+    <string name="module_repos_source_bad_url">Enter an http(s) URL</string>
+    <string name="module_repos_source_current">Repository: %1$s</string>
+    <string name="module_repos_source_fallback">%1$s unreachable · using %2$s</string>
+    <string name="module_repos_source_hint">modules.json URL</string>
+    <string name="module_repos_source_official">Official</string>
+    <string name="module_repos_source_save">Save &amp; refresh</string>
+    <string name="module_repos_source_summary">Using %1$s. Upload a module zip there and it shows up in this list.</string>
+    <string name="module_repos_source_use_default">My repo</string>
+
+    <string name="ext_modules_checking_root">Checking root access...</string>
+    <string name="ext_modules_download_and_install">Download and install</string>
+    <string name="ext_modules_download_failed">Download failed. Check your connection and try again.</string>
+    <string name="ext_modules_downloading">Downloading... %1$d%%</string>
+    <string name="ext_modules_install_again">Install again</string>
+    <string name="ext_modules_install_failed">Install failed.</string>
+    <string name="ext_modules_install_failed_detail">Install failed: %1$s</string>
+    <string name="ext_modules_install_ok">Installed. Reboot the device to activate it.</string>
+    <string name="ext_modules_installing">Installing...</string>
+    <string name="ext_modules_intro">Optional add-ons. Our modules are downloaded from our own release page and installed by the manager. The third-party entry is a link-out only: nothing from it is bundled, compiled or redistributed in this app.</string>
+    <string name="ext_modules_kind_install">Install here</string>
+    <string name="ext_modules_kind_link">Opens browser</string>
+    <string name="ext_modules_no_browser">No app is available to open the releases page.</string>
+    <string name="ext_modules_open_releases">Open releases page</string>
+    <string name="ext_modules_root_required">Root is not available right now, so the module cannot be installed. Check that this manager is granted root.</string>
+    <string name="ext_modules_section_own">From this project</string>
+    <string name="ext_modules_section_third_party">Third-party (link-out only)</string>
+    <string name="ext_modules_source_own">Built and distributed by this project (GPL-3.0)</string>
+    <string name="ext_modules_source_third_party">Third-party - AGPL-3.0-or-later - maintained by its authors - not distributed by this app</string>
+    <string name="ext_modules_ta_summary">Installs the trusted-application enhancement module used together with the TEE engine. Built and distributed together with the manager.</string>
+    <string name="ext_modules_ta_title">TA enhancement</string>
+    <string name="ext_modules_tee_summary">Installs the TEE engine module used by the kernel module for key handling. Built and distributed together with the manager.</string>
+    <string name="ext_modules_tee_title">TEE engine</string>
+    <string name="ext_modules_title">External modules</string>
+    <string name="ext_modules_zygisk_summary">ReZygisk is a Zygisk implementation maintained by its own authors. It is third-party software licensed AGPL-3.0-or-later and is not distributed by this app. The button opens its upstream releases page in your browser.</string>
+    <string name="ext_modules_zygisk_title">Zygisk (ReZygisk)</string>
+    <string name="wallpaper_applied">Background updated</string>
+    <string name="wallpaper_blur_summary">Blurs the wallpaper itself, the way iOS blurs the home-screen image: the glass surfaces refract the blurred picture too.</string>
+    <string name="wallpaper_blur_title">Wallpaper blur</string>
+    <string name="wallpaper_builtin_short">Built-in</string>
+    <string name="wallpaper_clear">Restore built-in</string>
+    <string name="wallpaper_clear_all">Restore the built-in pool for both modes</string>
+    <string name="wallpaper_dark_title">Dark mode</string>
+    <string name="wallpaper_import_failed">Could not import the image: %1$s</string>
+    <string name="wallpaper_importing">Processing the image…</string>
+    <string name="wallpaper_light_title">Light mode</string>
+    <string name="wallpaper_note">The image is written to this app\'s private directory only: no storage permission, no upload, and it is removed together with the app when you uninstall it.\nLight and dark are configured separately — leave one alone and it keeps using the built-in random pool.\nEvery liquid-glass surface refracts the image you pick. The AMOLED black theme still covers the background to keep true black.\nOn import the image is re-encoded to JPEG with a 2560 px long edge; the original in your gallery is never modified.</string>
+    <string name="wallpaper_note_title">How it works</string>
+    <string name="wallpaper_pick">Choose image</string>
+    <string name="wallpaper_replace">Replace image</string>
+    <string name="wallpaper_slot_builtin">Using the built-in pool: a random one each cold start.</string>
+    <string name="wallpaper_slot_custom">Using your own image for this mode.</string>
+    <string name="wallpaper_slot_solid_black">Pure black · fixed, no longer rotating with the built-in pool.</string>
+    <string name="wallpaper_slot_solid_white">Pure white · fixed, no longer rotating with the built-in pool.</string>
+    <string name="wallpaper_solid_black">Pure black</string>
+    <string name="wallpaper_solid_white">Pure white</string>
+    <string name="wallpaper_title">Custom background</string>
+    <string name="xec_tile_label">XEC Hide</string>
+    <string name="xec_tile_subtitle">Open one-tap hide</string>
 </resources>

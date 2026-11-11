@@ -11,7 +11,11 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
@@ -19,18 +23,21 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.add
@@ -41,26 +48,25 @@ import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.Code
-import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.VisibilityOff
+import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -69,31 +75,34 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.dropShadow
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.shadow.Shadow
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.FixedScale
-import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Job
@@ -103,28 +112,34 @@ import me.weishu.kernelsu.R
 import me.weishu.kernelsu.data.model.Module
 import me.weishu.kernelsu.data.model.ModuleUpdateInfo
 import me.weishu.kernelsu.data.repository.isSoftRebootPreferred
+import me.weishu.kernelsu.ui.LocalMainPagerState
+import me.weishu.kernelsu.ui.navigation3.LocalNavigator
+import me.weishu.kernelsu.ui.navigation3.Route
 import me.weishu.kernelsu.ui.component.ListPopupDefaults
 import me.weishu.kernelsu.ui.component.ObserveAsEvents
 import me.weishu.kernelsu.ui.component.ScrollToTopOnChange
 import me.weishu.kernelsu.ui.component.SearchStatus
+import me.weishu.kernelsu.ui.component.dialog.XDialog
+import me.weishu.kernelsu.ui.component.dialog.XDialogTitle
 import me.weishu.kernelsu.ui.component.dialog.rememberConfirmDialog
 import me.weishu.kernelsu.ui.component.dialog.rememberLoadingDialog
 import me.weishu.kernelsu.ui.component.miuix.SearchBarFake
 import me.weishu.kernelsu.ui.component.miuix.SearchBox
 import me.weishu.kernelsu.ui.component.miuix.SearchPager
+import me.weishu.kernelsu.ui.design.glass.xGlassBody
+import me.weishu.kernelsu.ui.design.island.IslandTopBar
+import me.weishu.kernelsu.ui.design.token.Xc
+import me.weishu.kernelsu.ui.design.token.XcNeon
 import me.weishu.kernelsu.ui.theme.LocalEnableBlur
-import me.weishu.kernelsu.ui.theme.LocalModuleDescriptionMaxLines
 import me.weishu.kernelsu.ui.theme.isInDarkTheme
 import me.weishu.kernelsu.ui.util.BlurredBar
 import me.weishu.kernelsu.ui.util.getFileName
 import me.weishu.kernelsu.ui.util.reboot
 import me.weishu.kernelsu.ui.util.rememberBlurBackdrop
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
-import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.DropdownImpl
 import top.yukonga.miuix.kmp.basic.FloatingActionButton
 import top.yukonga.miuix.kmp.basic.FloatingActionButtonDefaults
-import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.ListPopupColumn
@@ -137,6 +152,7 @@ import top.yukonga.miuix.kmp.basic.SnackbarHost
 import top.yukonga.miuix.kmp.basic.SnackbarHostState
 import top.yukonga.miuix.kmp.basic.SnackbarResult
 import top.yukonga.miuix.kmp.basic.Switch
+import top.yukonga.miuix.kmp.basic.SwitchDefaults
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
@@ -149,7 +165,6 @@ import top.yukonga.miuix.kmp.icon.extended.Download
 import top.yukonga.miuix.kmp.icon.extended.Sort
 import top.yukonga.miuix.kmp.icon.extended.Undo
 import top.yukonga.miuix.kmp.icon.extended.UploadCloud
-import top.yukonga.miuix.kmp.overlay.OverlayDialog
 import top.yukonga.miuix.kmp.overlay.OverlayListPopup
 import top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
@@ -213,7 +228,6 @@ fun ModulePagerMiuix(
                 html = it.html,
                 confirm = it.confirm,
                 dismiss = it.dismiss,
-                restricted = it.restricted,
             )
         }
     }
@@ -257,14 +271,55 @@ fun ModulePagerMiuix(
 
     val backdrop = rememberBlurBackdrop(enableBlur)
     val blurActive = backdrop != null
-    val barColor = if (blurActive) Color.Transparent else colorScheme.surface
+    val barColor = if (blurActive) Color.Transparent else colorScheme.surface.copy(alpha = 1f)
+
+    val loadingDialog = rememberLoadingDialog()
+
+    // 长按 → 全局面板状态（面板由 MainActivity 根层渲染）。动作闭包在这里
+    // 捕获 ModuleActions/ViewModel，面板展示期间保持有效。
+    fun showModuleSheet(module: Module) {
+        ModuleSheetState.show(
+            module = module,
+            updateUrl = uiState.updateInfo[module.id]?.downloadUrl ?: "",
+            onExecuteAction = { actions.onExecuteModuleAction(module) },
+            onOpenWebUi = { if (module.hasWebUi) actions.onOpenWebUi(module) },
+            onUpdate = {
+                actions.onRequestUpdateConfirmation(
+                    module,
+                    uiState.updateInfo[module.id] ?: ModuleUpdateInfo.Empty,
+                )
+            },
+            onUninstall = { actions.onRequestUninstallConfirmation(module) },
+            onUndoUninstall = {
+                scope.launch {
+                    loadingDialog.withLoading { actions.onUndoUninstallModule(module) }
+                }
+            },
+            onAddActionShortcut = { type -> onModuleAddShortcut(module, type) },
+        )
+    }
+
+    // 长按操作面板改为全局状态 + 根层渲染（MainActivity）：页面级渲染会被
+    // pager 翻页几何带走/错位（长按后不出现、切到相邻页才冒出来、按钮点不中）。
+    // 这里只负责把 Module 和当时的动作闭包存进 ModuleSheetState。
+    val navigator = LocalNavigator.current
 
     Scaffold(
+        containerColor = Color.Transparent,
         topBar = {
-            BlurredBar(backdrop) {
-                searchStatus.TopAppBarAnim(backgroundColor = barColor) {
+            // 灵动岛：顶栏本身就是岛的展开态（无玻璃底）；上滑收缩成岛。
+            IslandTopBar(
+                islandTitle = stringResource(R.string.module),
+                islandLive = stringResource(
+                    R.string.island_modules_count,
+                    uiState.moduleList.size,
+                    uiState.moduleList.count { it.enabled },
+                ),
+                statusActive = me.weishu.kernelsu.Natives.isFullFeatured(),
+            ) {
+                searchStatus.TopAppBarAnim(backgroundColor = Color.Transparent) {
                     TopAppBar(
-                        color = barColor,
+                        color = Color.Transparent,
                         title = stringResource(R.string.module),
                         actions = {
                             Box {
@@ -330,10 +385,15 @@ fun ModulePagerMiuix(
                                 modifier = Modifier
                                     .alpha(if (searchStatus.isCollapsed()) 1f else 0f)
                                     .onGloballyPositioned { coordinates ->
-                                        with(density) {
-                                            val newOffsetY = coordinates.positionInWindow().y.toDp()
-                                            if (searchStatus.offsetY != newOffsetY) {
-                                                actions.onSearchStatusChange(searchStatus.copy(offsetY = newOffsetY))
+                                        // Freeze the collapsed anchor while expanding/collapsing.
+                                        // Using the live scroll position during exit makes the result
+                                        // layer chase the list and visibly jump outside the frame.
+                                        if (searchStatus.isCollapsed()) {
+                                            with(density) {
+                                                val newOffsetY = coordinates.positionInWindow().y.toDp()
+                                                if (searchStatus.offsetY != newOffsetY) {
+                                                    actions.onSearchStatusChange(searchStatus.copy(offsetY = newOffsetY))
+                                                }
                                             }
                                         }
                                     }
@@ -359,7 +419,7 @@ fun ModulePagerMiuix(
                 val moduleInstall = stringResource(id = R.string.module_install)
                 val confirmTitle = stringResource(R.string.module)
                 var zipUris by remember { mutableStateOf<List<Uri>>(emptyList()) }
-                val confirmDialog = rememberConfirmDialog(
+                val fabConfirmDialog = rememberConfirmDialog(
                     onConfirm = {
                         actions.onOpenFlash(zipUris)
                     }
@@ -385,23 +445,32 @@ fun ModulePagerMiuix(
                     if (uris.size == 1) {
                         actions.onOpenFlash(listOf(uris.first()))
                     } else if (uris.size > 1) {
-                        // multiple files selected
                         zipUris = uris
                         val moduleNames = uris.mapIndexed { index, uri -> "\n${index + 1}. ${uri.getFileName(context)}" }.joinToString("")
                         val confirmContent = installPromptWithName.format(moduleNames)
-                        confirmDialog.showConfirm(
+                        fabConfirmDialog.showConfirm(
                             title = confirmTitle,
                             content = confirmContent
                         )
                     }
                 }
+                val neon = XcNeon.colors
                 FloatingActionButton(
                     modifier = Modifier
                         .padding(bottom = bottomInnerPadding + 20.dp, end = 20.dp)
-                        .border(0.05.dp, colorScheme.outline.copy(alpha = 0.5f), CircleShape),
+                        .dropShadow(
+                            shape = CircleShape,
+                            shadow = Shadow(
+                                radius = 20.dp,
+                                color = neon.fabGlow,
+                                offset = DpOffset(0.dp, 4.dp),
+                            ),
+                        )
+                        .clip(CircleShape)
+                        .background(XcNeon.gradient)
+                        .size(64.dp),
                     shadowElevation = 0.dp,
                     onClick = {
-                        // Select the zip files to install
                         val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
                             type = "application/zip"
                             putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
@@ -412,8 +481,8 @@ fun ModulePagerMiuix(
                         Icon(
                             Icons.Rounded.Add,
                             moduleInstall,
-                            modifier = Modifier.size(40.dp),
-                            tint = colorScheme.onPrimary
+                            modifier = Modifier.size(28.dp),
+                            tint = Color.White
                         )
                     },
                 )
@@ -434,6 +503,9 @@ fun ModulePagerMiuix(
                     updateInfoMap = uiState.updateInfo,
                     actions = actions,
                     onModuleAddShortcut = ::onModuleAddShortcut,
+                    onLongPressModule = { module ->
+                        showModuleSheet(module)
+                    },
                     contentPadding = PaddingValues(
                         top = 6.dp,
                         start = 0.dp,
@@ -456,7 +528,9 @@ fun ModulePagerMiuix(
         },
         contentWindowInsets = WindowInsets.systemBars.add(WindowInsets.displayCutout).only(WindowInsetsSides.Horizontal)
     ) { innerPadding ->
-        if (uiState.magiskInstalled) {
+        // 只有"内核态设备上另有真 Magisk"才算冲突（那时模块流水线让给 Magisk）；
+        // 5.10 以下的挂载态设备上 Magisk 就是这条路的 root 实现，列表照常显示。
+        if (uiState.magiskConflict) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -496,9 +570,12 @@ fun ModulePagerMiuix(
                 contentPadding = contentPadding,
             ) {
                 if (modules.isEmpty()) {
+                    // 空态必须是可滚动容器：PullToRefresh 靠子容器的 nested scroll
+                    // 分发下拉手势，普通 Box 会把手势吞成死区（下拉永远没反应）。
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
                             .padding(
                                 top = innerPadding.calculateTopPadding(),
                                 start = innerPadding.calculateStartPadding(layoutDirection),
@@ -527,7 +604,9 @@ fun ModulePagerMiuix(
                         refreshTick.intValue,
                         isBusy = { latestRefreshing.value },
                     ) { latestModules.value }
-                    Box(modifier = if (backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier) {
+                    Box(
+                        modifier = if (backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier
+                    ) {
                         ModuleList(
                             modifier = Modifier
                                 .fillMaxHeight()
@@ -540,7 +619,10 @@ fun ModulePagerMiuix(
                             onModuleAddShortcut = { module, type ->
                                 onModuleAddShortcut(module, type)
                             },
-                            contentPadding = contentPadding,
+                            onLongPressModule = { module ->
+                                showModuleSheet(module)
+                            },
+                                    contentPadding = contentPadding,
                             listState = listState,
                         )
                     }
@@ -579,111 +661,109 @@ private fun ModuleShortcutDialog(
     fun copyShortcutUrl() {
         val url = shortcutState.buildShortcutUrl() ?: return
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        clipboard.setPrimaryClip(ClipData.newPlainText("KernelSU deep link", url))
+        clipboard.setPrimaryClip(ClipData.newPlainText("XEC deep link", url))
         Toast.makeText(context, resources.getString(R.string.module_shortcut_scheme_copied), Toast.LENGTH_SHORT).show()
     }
 
-    OverlayDialog(
+    XDialog(
         show = show,
-        title = stringResource(R.string.module_shortcut_title),
         onDismissRequest = onDismissRequest,
-        content = {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        XDialogTitle(text = stringResource(R.string.module_shortcut_title))
+        Column(
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .padding(vertical = 16.dp)
+                    .size(100.dp)
+                    .clip(Xc.shapes.xl)
             ) {
-                Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier
-                        .padding(vertical = 16.dp)
-                        .size(100.dp)
-                        .clip(RoundedCornerShape(25.dp))
-                ) {
-                    val preview = shortcutState.previewIcon
-                    if (preview != null) {
-                        Image(
-                            bitmap = preview,
-                            modifier = Modifier.size(100.dp),
-                            contentDescription = null,
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .size(100.dp)
-                                .background(Color.White)
-                        )
-                        Image(
-                            painter = painterResource(id = R.drawable.ic_launcher_foreground),
-                            contentDescription = null,
-                            contentScale = FixedScale(1.5f)
-                        )
-                    }
-                }
-                Row {
-                    TextButton(
-                        modifier = Modifier.weight(1f),
-                        text = stringResource(id = R.string.module_shortcut_icon_pick),
-                        onClick = onPickShortcutIcon,
+                val preview = shortcutState.previewIcon
+                if (preview != null) {
+                    Image(
+                        bitmap = preview,
+                        modifier = Modifier.size(100.dp),
+                        contentDescription = null,
                     )
-                    AnimatedVisibility(
-                        visible = shortcutState.iconUri != shortcutState.defaultShortcutIconUri,
-                        enter = expandHorizontally() + slideInHorizontally(initialOffsetX = { it }),
-                        exit = shrinkHorizontally() + slideOutHorizontally(targetOffsetX = { it }),
-                        modifier = Modifier.align(Alignment.CenterVertically),
-                    ) {
-                        IconButton(
-                            onClick = shortcutState::resetIconToDefault,
-                            modifier = Modifier.padding(start = 12.dp)
-                        ) {
-                            Icon(
-                                imageVector = MiuixIcons.Undo,
-                                contentDescription = null,
-                                tint = colorScheme.onSurface,
-                                modifier = Modifier.size(28.dp),
-                            )
-                        }
-                    }
-                }
-                TextField(
-                    value = shortcutState.name,
-                    onValueChange = shortcutState::updateName,
-                    label = stringResource(id = R.string.module_shortcut_name_label)
-                )
-                if (shortcutState.hasExistingShortcut) {
-                    TextButton(
-                        text = stringResource(id = R.string.module_shortcut_delete),
-                        onClick = onDeleteShortcut,
-                        modifier = Modifier.fillMaxWidth(),
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(100.dp)
+                            .background(Color.White)
                     )
-                }
-                TextButton(
-                    text = stringResource(id = R.string.module_shortcut_copy_scheme),
-                    onClick = ::copyShortcutUrl,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    TextButton(
-                        text = stringResource(id = android.R.string.cancel),
-                        onClick = onDismissRequest,
-                        modifier = Modifier.weight(1f),
-                    )
-                    TextButton(
-                        text = if (shortcutState.hasExistingShortcut) {
-                            stringResource(id = R.string.module_update)
-                        } else {
-                            stringResource(id = android.R.string.ok)
-                        },
-                        onClick = onConfirmShortcut,
-                        colors = ButtonDefaults.textButtonColorsPrimary(),
-                        modifier = Modifier.weight(1f),
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                        contentDescription = null,
+                        contentScale = FixedScale(1.5f)
                     )
                 }
             }
+            Row {
+                TextButton(
+                    modifier = Modifier.weight(1f),
+                    text = stringResource(id = R.string.module_shortcut_icon_pick),
+                    onClick = onPickShortcutIcon,
+                )
+                AnimatedVisibility(
+                    visible = shortcutState.iconUri != shortcutState.defaultShortcutIconUri,
+                    enter = expandHorizontally() + slideInHorizontally(initialOffsetX = { it }),
+                    exit = shrinkHorizontally() + slideOutHorizontally(targetOffsetX = { it }),
+                    modifier = Modifier.align(Alignment.CenterVertically),
+                ) {
+                    IconButton(
+                        onClick = shortcutState::resetIconToDefault,
+                        modifier = Modifier.padding(start = 12.dp)
+                    ) {
+                        Icon(
+                            imageVector = MiuixIcons.Undo,
+                            contentDescription = null,
+                            tint = colorScheme.onSurface,
+                            modifier = Modifier.size(28.dp),
+                        )
+                    }
+                }
+            }
+            TextField(
+                value = shortcutState.name,
+                onValueChange = shortcutState::updateName,
+                label = stringResource(id = R.string.module_shortcut_name_label)
+            )
+            if (shortcutState.hasExistingShortcut) {
+                TextButton(
+                    text = stringResource(id = R.string.module_shortcut_delete),
+                    onClick = onDeleteShortcut,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            TextButton(
+                text = stringResource(id = R.string.module_shortcut_copy_scheme),
+                onClick = ::copyShortcutUrl,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                TextButton(
+                    text = stringResource(id = android.R.string.cancel),
+                    onClick = onDismissRequest,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(
+                    text = if (shortcutState.hasExistingShortcut) {
+                        stringResource(id = R.string.module_update)
+                    } else {
+                        stringResource(id = android.R.string.ok)
+                    },
+                    onClick = onConfirmShortcut,
+                    colors = ButtonDefaults.textButtonColorsPrimary(),
+                    modifier = Modifier.weight(1f),
+                )
+            }
         }
-    )
+    }
 }
 
 @Composable
@@ -693,6 +773,8 @@ private fun ModuleList(
     updateInfoMap: Map<String, ModuleUpdateInfo>,
     actions: ModuleActions,
     onModuleAddShortcut: (Module, ShortcutType) -> Unit,
+    onLongPressModule: (Module) -> Unit,
+    onOpenHidePack: () -> Unit = {},
     contentPadding: PaddingValues,
     listState: LazyListState = rememberLazyListState(),
 ) {
@@ -704,6 +786,9 @@ private fun ModuleList(
         contentPadding = contentPadding,
         overscrollEffect = null,
     ) {
+        item(key = "hide_pack_entry", contentType = "hide_pack") {
+            HidePackEntryCard(onClick = onOpenHidePack)
+        }
         items(
             items = modules,
             key = { it.id },
@@ -747,7 +832,10 @@ private fun ModuleList(
                         if (module.hasWebUi) {
                             actions.onOpenWebUi(module)
                         }
-                    }
+                    },
+                    onLongPress = {
+                        onLongPressModule(currentModuleState.value)
+                    },
                 )
             }
 
@@ -756,7 +844,6 @@ private fun ModuleList(
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ModuleItem(
     module: Module,
@@ -767,297 +854,342 @@ fun ModuleItem(
     onUpdate: () -> Unit,
     onExecuteAction: () -> Unit,
     onAddActionShortcut: (ShortcutType) -> Unit,
-    onOpenWebUi: () -> Unit
+    onOpenWebUi: () -> Unit,
+    onLongPress: () -> Unit,
 ) {
-    val secondaryContainer = colorScheme.secondaryContainer.copy(alpha = 0.8f)
-    val actionIconTint = colorScheme.onSurface.copy(alpha = if (isInDarkTheme()) 0.7f else 0.9f)
-    val updateBg = colorScheme.tertiaryContainer.copy(alpha = 0.6f)
-    val updateTint = colorScheme.onTertiaryContainer.copy(alpha = 0.8f)
-    val hasUpdate = updateUrl.isNotEmpty()
+    val neon = XcNeon.colors
     val textDecoration = if (module.remove) TextDecoration.LineThrough else null
     val hasDescription = module.description.isNotBlank()
-    val maxLinesLimit = LocalModuleDescriptionMaxLines.current
-    var expanded by rememberSaveable(module.id) { mutableStateOf(false) }
+    val hasUpdate = updateUrl.isNotEmpty()
+    val hapticFeedback = LocalHapticFeedback.current
 
-    Card(
+    // 平台标准点击/长按手势（见卡片上的 combinedClickable）：按压进度条按
+    // longPressTimeout（默认 400ms）走满，长按触发即满格。
+    val cardInteraction = remember { MutableInteractionSource() }
+    val isPressed by cardInteraction.collectIsPressedAsState()
+    val progress = remember { Animatable(0f) }
+    LaunchedEffect(isPressed) {
+        if (isPressed) {
+            progress.animateTo(1f, tween(durationMillis = 400, easing = LinearEasing))
+        } else {
+            progress.snapTo(0f)
+        }
+    }
+
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.98f else 1f,
+        animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing),
+        label = "cardScale",
+    )
+    val borderColor by animateColorAsState(
+        targetValue = if (isPressed) neon.cardBorderPressed else neon.cardBorder,
+        animationSpec = tween(durationMillis = 150),
+        label = "cardBorder",
+    )
+    val glowColor by animateColorAsState(
+        targetValue = if (isPressed) neon.glow else Color.Transparent,
+        animationSpec = tween(durationMillis = 150),
+        label = "cardGlow",
+    )
+
+    // DIY 背景（长按面板「背景」按钮设置）：按模块 id 取，组合内可订阅，设置后即时生效。
+    val backgroundUri = ModuleBackgrounds.backgroundOf(LocalContext.current, module.id)
+
+    Box(
         modifier = Modifier
-            .padding(horizontal = 12.dp)
-            .padding(bottom = 12.dp),
-        insideMargin = PaddingValues(16.dp),
-        onClick = if (hasDescription) {
-            { expanded = !expanded }
-        } else null
+            .padding(horizontal = 16.dp)
+            // 卡间距 20 → 8dp：列表从「一张张各自为政的卡」变成一条连续滚动的卡带，
+            // 一屏多看到一张卡；首卡上方那 6dp 在 LazyColumn 的 contentPadding.top 里，不动。
+            .padding(bottom = 8.dp)
+            .scale(scale)
+            .dropShadow(
+                shape = Xc.shapes.sm,
+                shadow = Shadow(
+                    radius = 24.dp,
+                    color = neon.cardShadow,
+                    offset = DpOffset(0.dp, 4.dp),
+                ),
+            )
+            .dropShadow(
+                shape = Xc.shapes.sm,
+                shadow = Shadow(
+                    radius = 22.dp,
+                    color = glowColor,
+                ),
+            )
+            // 真液态玻璃卡体：neon.cardBg 作为玻璃介质色（深色 60% 夜蓝、浅色 92% 白，
+            // 经 clearGlass 着色器的 media 模型混合，任何透明度都不会糊死折射）。
+            // rim 关掉——neon 自带一圈动效描边，再叠玻璃亮边就成双层。
+            .xGlassBody(
+                backdrop = null,
+                shape = Xc.shapes.sm,
+                tint = neon.cardBg,
+                rim = false,
+            )
+            .border(width = 1.dp, color = borderColor, shape = Xc.shapes.sm)
+            .combinedClickable(
+                // 平台标准语义：纹丝不动按住 longPressTimeout（默认 400ms）弹操作面板；
+                // 指头漂出 touchSlop 则长按取消、父级 HorizontalPager 正常翻页。
+                // 点击仍是打开 WebUI。此前自造 1000ms 计时器与父级同阈竞速，
+                // 微动必输、页面翻走，长按面板弹不出来。
+                interactionSource = cardInteraction,
+                indication = null,
+                onClick = { if (module.hasWebUi) onOpenWebUi() },
+                onLongClick = {
+                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onLongPress()
+                },
+            )
     ) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(
+        // DIY 背景层：图铺满整张卡（圆角由 ModuleCardBackdrop 按 shape 裁），画在玻璃
+        // 卡体之上、内容之下；scrim 见 ModuleBackgrounds.cardImageScrim —— 中段全透让
+        // 图当主角，只在标题行与底部压介质色保字（用户硬性要求「不能掩盖字体」）。
+        // 有背景时 modifier 上那圈描边会被图片盖住，这里再补一圈同色动效描边浮在最上面。
+        if (backgroundUri != null) {
+            ModuleCardBackdrop(
+                uri = backgroundUri,
+                shape = Xc.shapes.sm,
                 modifier = Modifier
-                    .weight(1f)
-                    .padding(end = 4.dp)
-            ) {
-                val moduleVersion = stringResource(id = R.string.module_version)
-                val moduleAuthor = stringResource(id = R.string.module_author)
-
-                SubcomposeLayout { constraints ->
-                    val spacingPx = 6.dp.roundToPx()
-                    var nameTextLayout: TextLayoutResult? = null
-                    val metaPlaceable = if (module.metamodule) {
-                        subcompose("meta") {
-                            Text(
-                                text = "META",
-                                fontSize = 12.sp,
-                                color = updateTint,
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(updateBg)
-                                    .padding(horizontal = 6.dp, vertical = 2.dp),
-                                fontWeight = FontWeight(750),
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                        }.first().measure(Constraints(0, constraints.maxWidth, 0, constraints.maxHeight))
-                    } else null
-
-                    val reserved = (metaPlaceable?.width ?: 0) + if (metaPlaceable != null) spacingPx else 0
-                    val nameMax = (constraints.maxWidth - reserved).coerceAtLeast(0)
-                    val namePlaceable = subcompose("name") {
-                        Text(
-                            text = module.name,
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight(550),
-                            color = colorScheme.onSurface,
-                            textDecoration = textDecoration,
-                            onTextLayout = { nameTextLayout = it }
-                        )
-                    }.first().measure(Constraints(constraints.minWidth, nameMax, constraints.minHeight, constraints.maxHeight))
-
-                    val width = (namePlaceable.width + reserved).coerceIn(constraints.minWidth, constraints.maxWidth)
-                    val height = maxOf(namePlaceable.height, metaPlaceable?.height ?: 0)
-
-                    layout(width, height) {
-                        namePlaceable.placeRelative(0, 0)
-                        val endX = nameTextLayout?.let { layoutRes ->
-                            val last = (layoutRes.lineCount - 1).coerceAtLeast(0)
-                            layoutRes.getLineRight(last).toInt()
-                        } ?: namePlaceable.width
-                        metaPlaceable?.placeRelative(endX + spacingPx, (height - (metaPlaceable.height)) / 2)
-                    }
-                }
+                    .matchParentSize()
+                    .clip(Xc.shapes.sm),
+            )
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .border(width = 1.dp, color = borderColor, shape = Xc.shapes.sm)
+            )
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                // 卡内竖向 18 → 14dp：配合 8dp 卡间距，单卡高度再省 8dp；
+                // 横向 16dp 不动（文字左缘与入口卡对齐），整卡仍是点击区（≥44dp）。
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "$moduleVersion: ${module.version}",
-                    fontSize = 12.sp,
-                    modifier = Modifier.padding(top = 2.dp),
-                    fontWeight = FontWeight(550),
-                    color = colorScheme.onSurfaceVariantSummary,
-                    textDecoration = textDecoration
+                    text = module.name,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = neon.textMain,
+                    textDecoration = textDecoration,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
-                Text(
-                    text = "$moduleAuthor: ${module.author}",
-                    fontSize = 12.sp,
-                    modifier = Modifier.padding(bottom = 1.dp),
-                    fontWeight = FontWeight(550),
-                    color = colorScheme.onSurfaceVariantSummary,
-                    textDecoration = textDecoration
-                )
-                module.preinitWarning()?.let {
+                if (module.metamodule) {
                     Text(
-                        text = stringResource(it),
+                        text = "META",
                         fontSize = 12.sp,
-                        modifier = Modifier.padding(bottom = 1.dp),
-                        fontWeight = FontWeight(550),
-                        color = colorScheme.error
+                        color = neon.metaText,
+                        fontWeight = FontWeight(750),
+                        modifier = Modifier
+                            .padding(start = 8.dp)
+                            .clip(Xc.shapes.xs)
+                            .background(neon.metaBg)
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                        softWrap = false,
                     )
                 }
-            }
-            Switch(
-                enabled = !module.update,
-                checked = module.enabled,
-                onCheckedChange = {
-                    if (it != module.enabled) onCheckChanged(it)
-                }
-            )
-        }
-
-        if (hasDescription) {
-            ExpandableDescriptionText(
-                text = module.description,
-                expanded = expanded,
-                maxLinesLimit = maxLinesLimit,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 2.dp),
-                fontSize = 14.sp,
-                color = colorScheme.onSurfaceVariantSummary,
-                textDecoration = textDecoration
-            )
-        }
-
-        HorizontalDivider(
-            modifier = Modifier.padding(vertical = 8.dp),
-            thickness = 0.5.dp,
-            color = colorScheme.outline.copy(alpha = 0.5f)
-        )
-
-        Row {
-            AnimatedVisibility(
-                visible = module.enabled && !module.remove && !module.update,
-                enter = fadeIn(),
-                exit = fadeOut()
-            ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (module.hasActionScript) {
-                        Row(
-                            modifier = Modifier
-                                .heightIn(min = 35.dp)
-                                .widthIn(min = 35.dp)
-                                .clip(CircleShape)
-                                .background(secondaryContainer)
-                                .combinedClickable(
-                                    onClick = onExecuteAction,
-                                    onLongClick = { onAddActionShortcut(ShortcutType.Action) }
-                                )
-                                .padding(
-                                    start = if (!module.hasWebUi && !hasUpdate) 6.dp else 0.dp,
-                                    end = if (!module.hasWebUi && !hasUpdate) 8.dp else 0.dp,
-                                ),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Icon(
-                                modifier = Modifier.size(24.dp),
-                                imageVector = Icons.Rounded.PlayArrow,
-                                tint = actionIconTint,
-                                contentDescription = stringResource(R.string.action)
-                            )
-                            if (!module.hasWebUi && !hasUpdate) {
-                                Text(
-                                    modifier = Modifier.padding(start = 3.dp, end = 4.dp),
-                                    text = stringResource(R.string.action),
-                                    color = actionIconTint,
-                                    fontWeight = FontWeight.Medium,
-                                    fontSize = 15.sp,
-                                )
-                            }
-                        }
-                    }
-                    if (module.hasWebUi) {
-                        Row(
-                            modifier = Modifier
-                                .heightIn(min = 35.dp)
-                                .widthIn(min = 35.dp)
-                                .clip(CircleShape)
-                                .background(secondaryContainer)
-                                .combinedClickable(
-                                    onClick = onOpenWebUi,
-                                    onLongClick = { onAddActionShortcut(ShortcutType.WebUI) }
-                                )
-                                .padding(horizontal = if (!module.hasActionScript && !hasUpdate) 10.dp else 0.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Icon(
-                                modifier = Modifier.size(22.dp),
-                                imageVector = Icons.Rounded.Code,
-                                tint = actionIconTint,
-                                contentDescription = stringResource(R.string.open)
-                            )
-                            if (!module.hasActionScript && !hasUpdate) {
-                                Text(
-                                    modifier = Modifier.padding(start = 4.dp, end = 2.dp),
-                                    text = stringResource(R.string.open),
-                                    color = actionIconTint,
-                                    fontWeight = FontWeight.Medium,
-                                    fontSize = 15.sp,
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            Spacer(Modifier.weight(1f))
-
-            AnimatedVisibility(
-                visible = hasUpdate,
-                enter = fadeIn(),
-                exit = fadeOut()
-            ) {
-                IconButton(
-                    modifier = Modifier.padding(end = 8.dp),
-                    backgroundColor = updateBg,
-                    enabled = !module.remove,
-                    minHeight = 35.dp,
-                    minWidth = 35.dp,
-                    onClick = onUpdate,
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(2.dp),
-                    ) {
-                        Icon(
-                            modifier = Modifier.size(20.dp),
-                            imageVector = MiuixIcons.UploadCloud,
-                            tint = updateTint,
-                            contentDescription = stringResource(R.string.module_update),
-                        )
-                        Text(
-                            modifier = Modifier.padding(start = 4.dp, end = 3.dp),
-                            text = stringResource(R.string.module_update),
-                            color = updateTint,
-                            fontWeight = FontWeight.Medium,
-                            fontSize = 15.sp
-                        )
-                    }
-                }
-            }
-            IconButton(
-                minHeight = 35.dp,
-                minWidth = 35.dp,
-                onClick = if (module.remove) onUndoUninstall else onUninstall,
-                backgroundColor = if (module.remove) {
-                    secondaryContainer.copy(alpha = 0.8f)
-                } else {
-                    secondaryContainer
-                },
-            ) {
-                val animatedPadding by animateDpAsState(
-                    targetValue = if (!hasUpdate) 10.dp else 0.dp,
-                    animationSpec = tween(durationMillis = 300)
+                Switch(
+                    enabled = !module.update,
+                    checked = module.enabled,
+                    onCheckedChange = {
+                        if (it != module.enabled) onCheckChanged(it)
+                    },
+                    // 四种状态色全部显式给：此前只覆盖了两个 thumb，轨道沿用 Miuix 默认的
+                    // primary / secondary，在深色霓虹卡片（半透明藏青）上几乎与卡片同色，
+                    // 用户报「深色模式看不清开关」就是这个原因。
+                    // 取色规则：轨道比卡片亮/暗一档（深档 34% 白，浅档 34% 的 #5B6478）；
+                    // 滑块与轨道反相（深档近白 #E0E7FF、浅档近黑 #1E1B4B）；开启态用青色轨道
+                    // + 纯白滑块。这样开/关两态在两种主题下都一眼可辨。
+                    colors = SwitchDefaults.switchColors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = neon.accentCyan,
+                        uncheckedThumbColor = neon.textMain,
+                        uncheckedTrackColor = neon.textSub.copy(alpha = 0.34f),
+                        disabledCheckedThumbColor = Color.White.copy(alpha = 0.70f),
+                        disabledCheckedTrackColor = neon.accentCyan.copy(alpha = 0.45f),
+                        disabledUncheckedThumbColor = neon.textMain.copy(alpha = 0.55f),
+                        disabledUncheckedTrackColor = neon.textSub.copy(alpha = 0.20f),
+                    ),
                 )
+            }
+
+            Text(
+                text = "${stringResource(R.string.module_version)}: ${module.version} · ${stringResource(R.string.module_author)}: ${module.author}",
+                fontSize = 14.sp,
+                modifier = Modifier.padding(top = 4.dp),
+                color = neon.textSub,
+                textDecoration = textDecoration,
+            )
+
+            if (hasDescription) {
+                Text(
+                    text = module.description,
+                    fontSize = 14.sp,
+                    modifier = Modifier.padding(top = 12.dp),
+                    color = neon.textSub,
+                    lineHeight = 22.sp,
+                    maxLines = 4,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+
+            if (hasUpdate && !module.remove) {
                 Row(
-                    modifier = Modifier.padding(horizontal = animatedPadding),
+                    modifier = Modifier
+                        .padding(top = 12.dp)
+                        .clip(CircleShape)
+                        .background(neon.pillBg)
+                        .pointerInput(Unit) {
+                            detectTapGestures { onUpdate() }
+                        }
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
-                        modifier = Modifier.size(20.dp),
-                        imageVector = if (module.remove) {
-                            MiuixIcons.Undo
-                        } else {
-                            MiuixIcons.Delete
-                        },
-                        tint = actionIconTint,
-                        contentDescription = null
+                        modifier = Modifier.size(16.dp),
+                        imageVector = MiuixIcons.UploadCloud,
+                        tint = neon.accentCyan,
+                        contentDescription = null,
                     )
-                    AnimatedVisibility(
-                        visible = !hasUpdate,
-                        enter = expandHorizontally(),
-                        exit = shrinkHorizontally()
-                    ) {
-                        Text(
-                            modifier = Modifier.padding(start = 4.dp, end = 3.dp),
-                            text = stringResource(
-                                if (module.remove) R.string.undo else R.string.uninstall
-                            ),
-                            color = actionIconTint,
-                            fontWeight = FontWeight.Medium,
-                            fontSize = 15.sp
-                        )
-                    }
+                    Text(
+                        modifier = Modifier.padding(start = 6.dp),
+                        text = stringResource(R.string.module_update),
+                        color = neon.accentCyan,
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 13.sp,
+                    )
                 }
             }
         }
+
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth(progress.value)
+                .height(3.dp)
+                .background(XcNeon.horizontalGradient),
+        )
     }
 }
+
+/**
+ * 「一键隐藏」入口卡：紫罗兰工具箱资源包的部署入口，固定在模块列表最上方。
+ * 卡体语言与 [ModuleItem] 完全同款（同圆角/玻璃/描边/按压缩放/辉光投影），
+ * 只是内容压缩成单行——视觉上就是列表里「没有开关的模块卡」。
+ */
+@Composable
+private fun HidePackEntryCard(onClick: () -> Unit) {
+    ModuleEntryCard(
+        icon = Icons.Rounded.VisibilityOff,
+        title = stringResource(R.string.hide_one_tap_title),
+        subtitle = stringResource(R.string.hide_one_tap_subtitle),
+        onClick = onClick,
+    )
+}
+
+/**
+ * 入口卡与模块卡的「同款语言」实现。逐项对齐 [ModuleItem]：
+ * 外距 horizontal 16 / bottom 20、Xc.shapes.sm、双 dropShadow（常态卡影 +
+ * 按压时霓虹辉光）、xGlassBody(neon.cardBg, rim=false)、1dp 动效描边、
+ * 按压 0.98 缩放（150ms FastOutSlowIn）。差异只有两处：入口卡没有长按，
+ * 所以没有按压进度条；箭头用图标而不是字形「›」。
+ */
+@Composable
+private fun ModuleEntryCard(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+) {
+    val neon = XcNeon.colors
+    val hapticFeedback = LocalHapticFeedback.current
+    val interaction = remember { MutableInteractionSource() }
+    val isPressed by interaction.collectIsPressedAsState()
+
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.98f else 1f,
+        animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing),
+        label = "entryCardScale",
+    )
+    val borderColor by animateColorAsState(
+        targetValue = if (isPressed) neon.cardBorderPressed else neon.cardBorder,
+        animationSpec = tween(durationMillis = 150),
+        label = "entryCardBorder",
+    )
+    val glowColor by animateColorAsState(
+        targetValue = if (isPressed) neon.glow else Color.Transparent,
+        animationSpec = tween(durationMillis = 150),
+        label = "entryCardGlow",
+    )
+
+    Box(
+        modifier = Modifier
+            .padding(horizontal = 16.dp)
+            // 入口卡与模块卡在同一张列表里滚动，间距必须同档（8dp），否则节奏断掉。
+            .padding(bottom = 8.dp)
+            .scale(scale)
+            .dropShadow(
+                shape = Xc.shapes.sm,
+                shadow = Shadow(
+                    radius = 24.dp,
+                    color = neon.cardShadow,
+                    offset = DpOffset(0.dp, 4.dp),
+                ),
+            )
+            .dropShadow(
+                shape = Xc.shapes.sm,
+                shadow = Shadow(
+                    radius = 22.dp,
+                    color = glowColor,
+                ),
+            )
+            .xGlassBody(
+                backdrop = null,
+                shape = Xc.shapes.sm,
+                tint = neon.cardBg,
+                rim = false,
+            )
+            .border(width = 1.dp, color = borderColor, shape = Xc.shapes.sm)
+            .combinedClickable(
+                interactionSource = interaction,
+                indication = null,
+                onClick = {
+                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onClick()
+                },
+            )
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = neon.accentCyan,
+                modifier = Modifier.size(20.dp),
+            )
+            Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
+                Text(
+                    text = title,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = neon.textMain,
+                )
+                Text(
+                    text = subtitle,
+                    fontSize = 11.sp,
+                    color = neon.textSub,
+                )
+            }
+            Icon(
+                imageVector = Icons.Rounded.ChevronRight,
+                contentDescription = null,
+                tint = neon.textSub,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+    }
+}
+

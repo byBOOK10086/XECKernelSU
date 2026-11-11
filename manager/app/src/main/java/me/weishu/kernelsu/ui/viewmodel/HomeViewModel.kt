@@ -5,6 +5,7 @@ import android.system.Os
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -33,13 +34,26 @@ class HomeViewModel(
     private val _uiState = MutableStateFlow(buildState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
+    private var refreshJob: Job? = null
+
     fun refresh() {
-        viewModelScope.launch {
-            val baseState = withContext(Dispatchers.IO) { buildState() }
-            _uiState.update { baseState }
-            if (baseState.checkUpdateEnabled) {
-                val latestVersionInfo = withContext(Dispatchers.IO) { checkNewVersion() }
-                _uiState.update { it.copy(latestVersionInfo = latestVersionInfo) }
+        if (refreshJob?.isActive == true) return
+        _uiState.update { it.copy(isRefreshing = true) }
+        refreshJob = viewModelScope.launch {
+            try {
+                val baseState = withContext(Dispatchers.IO) { buildState() }
+                // buildState() returns a fresh object whose isRefreshing is false;
+                // copying it wholesale would end the spinner early and re-enable
+                // the refresh button while this pass is still running.
+                _uiState.update { baseState.copy(isRefreshing = it.isRefreshing) }
+                if (baseState.checkUpdateEnabled) {
+                    val latestVersionInfo = withContext(Dispatchers.IO) { checkNewVersion() }
+                    _uiState.update { it.copy(latestVersionInfo = latestVersionInfo) }
+                }
+            } finally {
+                // On failure still clear the spinner: "nothing came back" is a
+                // better thing to show than a spinner that never stops.
+                _uiState.update { it.copy(isRefreshing = false) }
             }
         }
     }

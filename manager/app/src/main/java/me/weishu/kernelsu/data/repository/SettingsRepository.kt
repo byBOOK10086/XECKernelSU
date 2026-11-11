@@ -16,8 +16,15 @@ interface SettingsRepository {
     var enableFloatingBottomBar: Boolean
     var enableFloatingBottomBarBlur: Boolean
     var enableNavigationBadge: Boolean
+    /** Draw panel/list surfaces without their own background (XEC component switch). */
+    var componentTransparent: Boolean
     var navigationRailExpanded: Boolean
     var pageScale: Float
+    /** Custom wallpaper chosen by the user, stored as a file path ("" = none). */
+    var wallpaperLight: String
+    var wallpaperDark: String
+    /** Blur applied to the custom wallpaper, 0..100 (0 = none). */
+    var wallpaperBlur: Int
     var moduleDescriptionMaxLines: Int
     var enableWebDebugging: Boolean
     var moduleSortEnabledFirst: Boolean
