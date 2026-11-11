@@ -189,6 +189,8 @@ void __init ksu_supercalls_init(void)
 
 void __exit ksu_supercalls_exit(void)
 {
+#ifndef CONFIG_KSU_SUSFS
     unregister_kprobe(&reboot_kp);
+#endif // CONFIG_KSU_SUSFS
     ksu_supercall_cleanup_state();
 }
