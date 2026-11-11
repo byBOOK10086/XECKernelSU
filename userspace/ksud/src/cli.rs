@@ -596,7 +596,9 @@ pub fn run() -> Result<()> {
                         let enabled = match raw.trim().to_ascii_lowercase().as_str() {
                             "on" | "1" | "true" | "enable" => true,
                             "off" | "0" | "false" | "disable" => false,
-                            other => bail!("unknown TEE switch '{other}', expected on or off"),
+                            other => {
+                                anyhow::bail!("unknown TEE switch '{other}', expected on or off")
+                            }
                         };
                         let now = builtin::set_tee_engine_enabled(enabled)?;
                         println!("tee={}", if now { "on" } else { "off" });
@@ -645,7 +647,9 @@ pub fn run() -> Result<()> {
                             "on" | "1" | "true" | "enable" => true,
                             "off" | "0" | "false" | "disable" => false,
                             other => {
-                                bail!("unknown force-boot switch '{other}', expected on or off")
+                                anyhow::bail!(
+                                    "unknown force-boot switch '{other}', expected on or off"
+                                )
                             }
                         };
                         let now = builtin::set_force_boot(enabled)?;
