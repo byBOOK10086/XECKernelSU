@@ -13,6 +13,10 @@ on:
         required: false
         type: boolean
         default: false
+      pack_susfs:
+        required: false
+        type: boolean
+        default: false
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -36,6 +40,16 @@ jobs:
         mv ksuinit-aarch64/ksuinit ./userspace/ksud/bin/aarch64/
         mv ksuinit-x86_64/ksuinit ./userspace/ksud/bin/x86_64/
         mv ksuinit-riscv64/ksuinit ./userspace/ksud/bin/riscv64/
+
+    # SUSFS ships as a loadable module. Emitting it as input means the arm64 ksud carries one
+    # `<kmi>_susfs_guard_lkm.ko` per KMI, and late_load/init_event loads it right after
+    # kernelsu.ko - no module install, no second flash. Off by default because eight .ko files
+    # add megabytes to every ksud; turn it on once the payload size is settled.
+    - name: Prepare SUSFS LKM files
+      if: ${{ inputs.pack_susfs }}
+      run: |
+        cp susfs_guard_lkm.ko-*/*_susfs_guard_lkm.ko ./userspace/ksud/bin/aarch64/
+        ls -l ./userspace/ksud/bin/aarch64/*_susfs_guard_lkm.ko
         
     - name: Setup rustup
       run: |
@@ -56,6 +70,173 @@ jobs:
       with:
         ndk-version: r29
 
+    - name: Setup JDK 21 for builtin module build
+      if: inputs.target == 'aarch64-linux-android'
+      uses: actions/setup-java@v4
+      with:
+        distribution: temurin
+        java-version: '21'
+
+    # 2026-11-09：runner 取 kotlin-compiler-embeddable-2.3.0.jar 时先撞
+    # repo.maven.apache.org 再落到 github.com，两边都 504，构建直接红。
+    # 这个 jar 在 Central 和阿里云上是同一个文件（57,669,576 B），所以只**追加**
+    # 两个 Maven Central 的镜像源，不改任何坐标、不改版本、不动 pluginManagement。
+    - name: Point Gradle at Maven mirrors
+      if: inputs.target == 'aarch64-linux-android'
+      run: |
+        mkdir -p ~/.gradle/init.d
+        cat > ~/.gradle/init.d/ci-mirrors.gradle <<'EOF'
+        def mirrors = [
+            'https://maven.aliyun.com/repository/public',
+            'https://repo1.maven.org/maven2',
+        ]
+
+        // 2026-11-09 第三个 504：build-ksud 里的 TEESimulator-RS 工程在
+        // `:app:compileReleaseKotlin` 要下载 57MB 的 kotlin-compiler-embeddable-2.3.0.jar，
+        // runner 撞 repo.maven.apache.org 504，回落到 GitHub 上的同一个资产又是 504，
+        // BUILD FAILED，整个 build-ksud 红、repack/release 全跳过。
+        // Gradle 的规矩是"元数据从哪个仓库来，artifact 就只从那个仓库下"，所以把镜像
+        // **追加**在后面救不了它 —— 必须让元数据本身就从镜像来。
+        // beforeSettings 在 settings 脚本之前触发，此时塞进去的镜像会排在最前面
+        // （settings 脚本里的 google()/mavenCentral() 只会加在它们后面）。
+        // 只对 TEESimulator-RS 生效：manager 的 app 依赖几乎全在 Google 仓，前置只会
+        // 给每个依赖多加一次 404 往返。
+        // 已用真 Gradle 9.2.0 在本机演练：仓库顺序变成 aliyun -> repo1 -> Google -> MavenRepo，
+        // 且 kotlin-compiler-embeddable-2.3.0.jar（57,669,576 B）连同全部分支依赖
+        // 都从 aliyun 解析成功（BUILD SUCCESSFUL）。
+        beforeSettings { settings ->
+            try {
+                if (settings.settingsDir.absolutePath.replace('\\', '/').contains('TEESimulator-RS')) {
+                    mirrors.each { u ->
+                        settings.dependencyResolutionManagement.repositories.maven { url u }
+                    }
+                }
+            } catch (Throwable ignored) { }
+        }
+
+        // 其余工程只**追加**，不能替换项目自己声明的仓库：RepositoriesMode 默认
+        // PREFER_PROJECT，给一个没声明仓库的 project 塞 project 级仓库会把
+        // settings 里的 google()/mavenCentral() 整体顶掉（manager 的 app 炸过）。
+        settingsEvaluated { settings ->
+            try {
+                mirrors.each { u ->
+                    settings.dependencyResolutionManagement.repositories.maven { url u }
+                }
+            } catch (Throwable ignored) { }
+            try {
+                mirrors.each { u ->
+                    settings.pluginManagement.repositories.maven { url u }
+                }
+            } catch (Throwable ignored) { }
+        }
+
+        allprojects { project ->
+            project.buildscript.repositories {
+                mirrors.each { u -> maven { url u } }
+            }
+            project.afterEvaluate {
+                if (!project.repositories.isEmpty()) {
+                    project.repositories {
+                        mirrors.each { u -> maven { url u } }
+                    }
+                }
+            }
+        }
+        EOF
+        echo "wrote ~/.gradle/init.d/ci-mirrors.gradle"
+        cat ~/.gradle/init.d/ci-mirrors.gradle
+
+    - name: Install Android SDK components for builtin module build
+      if: inputs.target == 'aarch64-linux-android'
+      run: |
+        yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+        "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
+          "platforms;android-36" \
+          "build-tools;36.0.0" \
+          "ndk;27.3.13750724" \
+          "cmake;3.22.1" >/dev/null
+
+    - name: Install cargo-ndk
+      if: inputs.target == 'aarch64-linux-android'
+      run: cargo install cargo-ndk --locked
+
+    # 构建时把上游最新的 keybox 打进内置 tricky_store 模块（RustEmbed 之后会把它
+    # 一起打包进 ksud）。这样"刷入模块"本身就是一次密钥刷新，中国大陆用户不需要
+    # 设备端能连上 GitHub 也能拿到可信密钥。脚本拿不到源时不失败，保留仓库里那份。
+    - name: Refresh embedded keybox
+      if: inputs.target == 'aarch64-linux-android'
+      run: bash .github/scripts/refresh-keybox.sh
+
+    # 2026-11-09：runner 从 services.gradle.org 取 gradle-9.2.0-bin.zip 直接吃
+    # HTTP 504（wrapper 里没有镜像也没有重试），build-ksud 因此在 builtin-modules
+    # 那一步红掉。这里先把**同一个**发行包从自家镜像取下来（必须过官方 .sha256，
+    # 一个字节都不放松），解压后经 XEC_GRADLE_BIN 交给 build-builtin-modules.sh。
+    # 取不到就什么都不设、直接成功退出，脚本退回 ./gradlew 原路径 —— 这一步只会
+    # 让构建更稳，不会让它更容易失败。
+    - name: Prefetch Gradle distribution for builtin modules
+      if: inputs.target == 'aarch64-linux-android'
+      run: |
+        set -uo pipefail
+        GV=9.2.0
+        SHA=df67a32e86e3276d011735facb1535f64d0d88df84fa87521e90becc2d735444
+        ZIP="gradle-${GV}-bin.zip"
+        VENDOR="http://42.193.123.248:5244/d/vendor"
+        # 顺序按**实测**排，不是按"谁是我们自己的"排：
+        #   - services.gradle.org 其实是 302 到 github.com/gradle/gradle-distributions
+        #     的 release 资产，2026-11-09 整条 github 资产 CDN 都在 504；
+        #   - 自家盘对 GitHub runner 是跨境拉 144MB，实测一档能烧掉 10 分钟以上
+        #     （06:21:01 起，06:31:32 才放弃），放在第一位等于每跑一次先罚十分钟；
+        #   - 腾讯/华为的 Gradle 镜像不走 github，实测 200、5 秒拉完。
+        # 所以：腾讯 -> 华为 -> 自家盘 -> 官方（官方只作最后的兜底）。
+        # 自家盘仍然在列，它是"不依赖 github 也不依赖第三方"的那一路。
+        SOURCES="https://mirrors.cloud.tencent.com/gradle/${ZIP} \
+          https://mirrors.huaweicloud.com/gradle/${ZIP} \
+          ${VENDOR}/${ZIP} \
+          https://services.gradle.org/distributions/${ZIP} \
+          https://downloads.gradle.org/distributions/${ZIP}"
+        ok=0
+        for url in ${SOURCES}; do
+          # --speed-limit/--speed-time 是这里的关键：144MB 的大件，光有 --max-time
+          # 挡不住"连上了但只有几十 KB/s"的慢源（今天自家盘就是这样，一个源就吃掉
+          # 十分钟）。低于 200KB/s 持续 30 秒立刻断开，换下一个源。
+          # --max-time 也从 900 收到 420：四路源加起来最坏 ~28 分钟，而不是 ~1 小时。
+          _t0=$(date +%s)
+          if curl -fsSL --retry 2 --retry-all-errors --retry-delay 3 \
+               --connect-timeout 15 --max-time 420 \
+               --speed-limit 204800 --speed-time 30 \
+               -o "/tmp/${ZIP}" "${url}" 2>/dev/null \
+             && echo "${SHA}  /tmp/${ZIP}" | sha256sum -c - >/dev/null 2>&1; then
+            echo "gradle distribution from ${url} in $(( $(date +%s) - _t0 ))s"
+            ok=1
+            break
+          fi
+          echo "gradle distribution from ${url} failed after $(( $(date +%s) - _t0 ))s; trying next source" >&2
+        done
+        if [ "${ok}" != 1 ]; then
+          echo "::warning::could not fetch ${ZIP} from any source; falling back to the wrapper"
+          exit 0
+        fi
+        echo "${SHA}  /tmp/${ZIP}" | sha256sum -c -
+        mkdir -p "${RUNNER_TEMP}/xec-gradle"
+        unzip -q -o "/tmp/${ZIP}" -d "${RUNNER_TEMP}/xec-gradle"
+        BIN="${RUNNER_TEMP}/xec-gradle/gradle-${GV}/bin/gradle"
+        chmod +x "${BIN}"
+        if ! "${BIN}" --version; then
+          echo "::warning::pre-fetched Gradle does not run here; falling back to the wrapper"
+          exit 0
+        fi
+        echo "XEC_GRADLE_BIN=${BIN}" >> "${GITHUB_ENV}"
+
+    - name: Build builtin modules from vendored source
+      if: inputs.target == 'aarch64-linux-android'
+      env:
+        ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+      run: bash .github/scripts/build-builtin-modules.sh
+
+    # 外部分发的模块 zip（2026-10-16）：TEE 引擎与 TA 增强不再随内核/管理器默认运行，
+    # 改成"需要的人自己刷一个普通模块"。zip 就是模块目录本身（module.prop + 脚本 + 引擎
+    # 资产），用户在管理器检测页点一下就能下载并刷入，装完在模块列表里可见、可卸载。
+    # 只有 aarch64 那一份带引擎资产（x86_64 的 ksud 构建没有这些二进制），所以按 ABI 判断。
     - name: Build ksud
       env:
         ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
