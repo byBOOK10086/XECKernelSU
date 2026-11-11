@@ -24,6 +24,7 @@
 | 5 | 脚本必须是 LF、无 BOM（CRLF 会让 sh -n 与设备 mksh 双双失败） | CI 实测：CRLF 的脚本报 syntax error near unexpected token $'{\\r' |
 | 6 | 工作流/守卫脚本自身也要过闸门 | 守卫形同虚设 = 没有守卫 |
 | 7 | 文档即真源：排除项、预算理由、allowance 理由必须写在仓库里 | 旧仓的决策只活在会话记忆里 |
+| 8 | 字符串资源里的单引号必须转义（`\'`） | 实测：`stealth_note` 写了裸的 `app's`，`compileReleaseKotlin` 根本不看资源，CI 的 release 编译在 `mergeReleaseResources` 才炸，报的是**误导性**的 "Invalid unicode escape sequence in string"，整个推送被迫重做 |
 
 ## 人肉规矩（写在这里，评审时对照）
 
@@ -34,6 +35,18 @@
 4. **失败必须可见**：写操作要收集 stderr 并读回校验；禁止用尾部 `echo` 制造成功。
 5. **一次提交一件事**：每个批次一个提交，提交信息写清"搬了什么、剔除了什么、为什么"。
 6. **不做静默降级**：探测不到就显示"未知/未探测"，不要显示"不支持"或伪造成功。
+
+## 本地过闸门（每次推送前）
+
+```bash
+cd manager && ANDROID_HOME=<sdk> ./gradlew :app:compileReleaseKotlin :app:mergeReleaseResources
+python scripts/check_quality.py
+bash feature/tee/test/run.sh && bash feature/tee/test/run-bootstate.sh
+```
+
+`:app:mergeReleaseResources` 是必须的：`compileReleaseKotlin` 只编译 Kotlin，**不碰资源**。
+字符串转义、资源引用缺失、manifest 合并错误都只在资源这一步（或更后面的 release 打包）暴露，
+而 CI 上的 `build-manager` 才是第一个跑到那里的任务 —— 本地漏跑就等于让 CI 替你发现问题。
 
 ## 当前状态
 

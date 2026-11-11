@@ -816,7 +816,7 @@ See the log below for details.</string>
     <string name="module_update_url">Update URL</string>
     <string name="privilege_entry_subtitle">GhostLock one-tap elevate, with a manual path for unmatched devices</string>
     <string name="privilege_title">Elevate</string>
-    <string name="stealth_confirm_body">The launcher icon disappears; the manager itself stays installed. From then on it opens only from:\n1. the quick-settings tile "Stealth entrance", or\n2. a computer: %1$s\nThe icon vanishing right away is expected. This screen stays reachable while hidden, so the icon can be restored at any time.</string>
+    <string name="stealth_confirm_body">The launcher icon disappears; the manager itself stays installed. From then on it opens only from:\n1. the quick-settings tile \"Stealth entrance\", or\n2. a computer: %1$s\nThe icon vanishing right away is expected. This screen stays reachable while hidden, so the icon can be restored at any time.</string>
     <string name="stealth_summary">Hide the launcher icon; open the manager again from the quick-settings tile or adb</string>
     <string name="stealth_title">Stealth entrance</string>
     <string name="stealth_tile_label">Stealth entrance</string>
@@ -828,7 +828,7 @@ See the log below for details.</string>
     <string name="stealth_entry_broken">Not usable - fix this before hiding</string>
     <string name="stealth_state_drift">The stored state disagreed with the device; it has been corrected from what the package manager reports</string>
     <string name="stealth_entry_section">Way back in (set this up before hiding)</string>
-    <string name="stealth_tile_manual">This Android release has no API to add a tile for you: open quick settings, edit, and drag "Stealth entrance" in</string>
+    <string name="stealth_tile_manual">This Android release has no API to add a tile for you: open quick settings, edit, and drag \"Stealth entrance\" in</string>
     <string name="stealth_adb_title">Copy the adb fallback command</string>
     <string name="stealth_adb_copied">Copied</string>
     <string name="stealth_hide_action">Hide the launcher icon</string>
@@ -837,7 +837,7 @@ See the log below for details.</string>
     <string name="stealth_restore_summary">Re-enables the launcher component and reads the result back</string>
     <string name="stealth_hidden_done">Hidden; open the manager from the quick-settings tile or adb</string>
     <string name="stealth_restored_done">Launcher icon restored</string>
-    <string name="stealth_note">How it works: only this app's own component states are changed (PackageManager) - no root, no ksud, no shell. Every write is read back and the whole operation rolls back if the read-back disagrees. On every manager start the stored expectation is reconciled with what the package manager actually reports, so a backup restore or a system update cannot leave it looking hidden while an icon is still there.</string>
+    <string name="stealth_note">How it works: only this app\'s own component states are changed (PackageManager) - no root, no ksud, no shell. Every write is read back and the whole operation rolls back if the read-back disagrees. On every manager start the stored expectation is reconciled with what the package manager actually reports, so a backup restore or a system update cannot leave it looking hidden while an icon is still there.</string>
     <string name="superkey_applied">Applied</string>
     <string name="superkey_apply">Set password</string>
     <string name="superkey_apply_failed">Rejected (wrong password, or the phone was rebooted since it was set)</string>

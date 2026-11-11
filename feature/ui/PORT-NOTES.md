@@ -50,8 +50,11 @@ Only files upstream does not have are added verbatim.
 
 ## Gate for every batch
 
-`:app:compileReleaseKotlin` green against the upstream base, then a blob-level
-byte check of everything pushed.
+`:app:compileReleaseKotlin` **and** `:app:mergeReleaseResources` green against the upstream
+base, `python scripts/check_quality.py` green, then a blob-level byte check of everything
+pushed. The resource task is not optional: Kotlin compilation does not read `res/`, so a single
+unescaped apostrophe in `strings.xml` sailed past the local gate and killed CI's release build
+in `mergeReleaseResources` (see gate 8 in `docs/QUALITY-GATES.md`).
 
 ## Batch 2 - the navigation shell (screens become reachable)
 

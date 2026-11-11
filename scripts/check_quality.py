@@ -172,12 +172,47 @@ def check_line_endings():
             problems.append("%s: CRLF line endings; `sh -n` fails and so does the device" % key)
 
 
+STRING_TABLES = (
+    ROOT / "manager/app/src/main/res/values/strings.xml",
+    ROOT / "manager/app/src/main/res/values-zh-rCN/strings.xml",
+)
+STRING_ELEMENT = re.compile(r'<string name="([^"]+)">(.*?)</string>', re.S)
+
+
+def check_string_escapes():
+    """Apostrophes inside a string resource must be escaped.
+
+    Measured cost of skipping this: `stealth_note` shipped with a bare `app's`, which
+    `:app:compileReleaseKotlin` does not look at - resources are compiled later. CI's
+    release build then died in `mergeReleaseResources` with the misleading message
+    "Invalid unicode escape sequence in string", and the whole push had to be redone.
+    aapt2 wants `\\'` and `\\"`; a bare apostrophe is an error.
+    """
+    for table in STRING_TABLES:
+        if not table.is_file():
+            continue
+        text = table.read_text(encoding="utf-8", errors="replace")
+        for match in STRING_ELEMENT.finditer(text):
+            name, value = match.group(1), match.group(2)
+            line = text.count("\n", 0, match.start()) + 1
+            for i, ch in enumerate(value):
+                if ch != "'":
+                    continue
+                if i > 0 and value[i - 1] == "\\":
+                    continue
+                problems.append(
+                    "%s:%d: string `%s` has an unescaped apostrophe; write \\' "
+                    "(aapt2 fails the release build over it)" % (rel(table), line, name))
+                break
+
+
 def main():
     check_file_sizes()
     check_locales()
     check_workflows()
     check_swallowed_errors()
     check_line_endings()
+    check_string_escapes()
     if problems:
         print("quality gates failed (%d):" % len(problems))
         for p in problems:
