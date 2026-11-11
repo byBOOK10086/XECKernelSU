@@ -93,6 +93,65 @@ endif
 
 ccflags-y += -I$(KSU_KERNEL_DIR) -I$(KSU_KERNEL_DIR)/include
 
+# SUSFS inside kernelsu.ko (loadable-module build only). scripts/prepare_susfs_lkm.py stages the
+# vendored sources from third_party/susfs4ksu-lkm into susfs/, because kbuild cannot compile a
+# source that lives outside the module directory; the staged copy also has the handful of globals
+# renamed that kernelsu.ko already defines. Keep this out of the GKI build: there SUSFS is part
+# of the kernel proper and CONFIG_KSU_SUSFS is the switch.
+ifeq ($(KSU_MERGE_SUSFS_LKM),1)
+ifneq ($(wildcard $(KSU_KERNEL_DIR)/susfs/susfs_main.c),)
+kernelsu-objs += susfs/susfs_main.o
+kernelsu-objs += susfs/patch_memory.o
+kernelsu-objs += susfs/symbol_resolver.o
+kernelsu-objs += susfs/lsm_hook.o
+kernelsu-objs += susfs/susfs_uname.o
+kernelsu-objs += susfs/susfs_kstat.o
+kernelsu-objs += susfs/sus_map.o
+kernelsu-objs += susfs/sus_path.o
+kernelsu-objs += susfs/sus_mount.o
+kernelsu-objs += susfs/spoof_cmdline.o
+kernelsu-objs += susfs/susfs_open_redirect.o
+kernelsu-objs += susfs/susfs_enable_log.o
+kernelsu-objs += susfs/susfs_avc_spoof.o
+kernelsu-objs += susfs/susfs_supercall.o
+kernelsu-objs += susfs/susfs_hide_syms.o
+kernelsu-objs += susfs/imports_guard.o
+kernelsu-objs += susfs/ksu_umount_gate.o
+kernelsu-objs += susfs/ksu_allow_gate.o
+kernelsu-objs += susfs/susfs_fp_hook.o
+kernelsu-objs += susfs/susfs_opath.o
+kernelsu-objs += susfs/susfs_or_entry.o
+kernelsu-objs += susfs/susfs_create_gate.o
+kernelsu-objs += susfs/susfs_create_vfs.o
+kernelsu-objs += susfs/susfs_create_data.o
+kernelsu-objs += susfs/susfs_create_policy.o
+kernelsu-objs += susfs/sus_mount_identity.o
+kernelsu-objs += susfs/sus_mount_idmap.o
+kernelsu-objs += susfs/sus_mount_prefix.o
+kernelsu-objs += susfs/sus_mount_policy.o
+kernelsu-objs += susfs/sus_mount_view.o
+kernelsu-objs += susfs/sus_mount_ns_iter.o
+kernelsu-objs += susfs/fsnotify_lifetime.o
+kernelsu-objs += susfs/btf_layout.o
+kernelsu-objs += susfs/sus_dirent.o
+kernelsu-objs += susfs/kallrecon/lib/core.o
+kernelsu-objs += susfs/kallrecon/lib/access.o
+kernelsu-objs += susfs/kallrecon/lib/discover.o
+kernelsu-objs += susfs/kallrecon/lib/symbol.o
+kernelsu-objs += susfs/kallrecon/lib/slide.o
+kernelsu-objs += susfs/kallrecon/lib/fastboot.o
+kernelsu-objs += susfs/kallrecon/lib/hint.o
+kernelsu-objs += susfs/kallrecon/lib/variant.o
+kernelsu-objs += susfs/kallrecon/lib/anchor.o
+
+# fs/mount.h (struct mount, real_mount) is private, but everything it includes is public.
+ccflags-y += -I$(srctree)/fs
+ccflags-y += -DKSU_MERGE_SUSFS_LKM=1
+else
+$(error -- KernelSU: KSU_MERGE_SUSFS_LKM=1 but susfs/ is not staged, run scripts/prepare_susfs_lkm.py first)
+endif
+endif
+
 # preinit runner: a static nolibc binary embedded into kernelsu, see preinit/.
 # It is built against the installed UAPI headers of the target kernel
 # (CONFIG_HEADERS_INSTALL, enabled by gki_defconfig).

@@ -12,6 +12,11 @@ on:
         required: false
         default: '20260828'
         type: string
+      susfs:
+        description: 'Compile SUSFS into kernelsu.ko (arm64 only)'
+        required: false
+        default: false
+        type: boolean
       package_name:
         description: 'package name of manager'
         required: false
@@ -64,6 +69,13 @@ jobs:
         fi
         if [ "${{ github.event_name }}" = "pull_request" ]; then
           EXTRA_ARGS="$EXTRA_ARGS KSU_IS_PR_BUILD=1"
+        fi
+        if [ "${{ inputs.susfs }}" = "true" ]; then
+          # Stage third_party/susfs4ksu-lkm into kernel/susfs/ (kbuild cannot compile outside
+          # the module directory) and link it into kernelsu.ko. arm64 only: the staged hooks
+          # are written against the arm64 syscall table and its compat numbering.
+          python3 ../scripts/prepare_susfs_lkm.py
+          EXTRA_ARGS="$EXTRA_ARGS KSU_MERGE_SUSFS_LKM=1"
         fi
         CONFIG_KSU=m CC=clang make $EXTRA_ARGS
         

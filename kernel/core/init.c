@@ -33,6 +33,15 @@
 #include <linux/susfs.h>
 #endif
 
+#ifdef KSU_MERGE_SUSFS_LKM
+// The loadable-module build compiles SUSFS into this module (scripts/prepare_susfs_lkm.py
+// stages it under susfs/, kernel/Kbuild lists it). There is no CONFIG_KSU_SUSFS here: that
+// switch means "SUSFS is part of the kernel", and the symbols it refers to do not exist in a
+// stock kernel.
+int ksu_susfs_lkm_init(void);
+void ksu_susfs_lkm_exit(void);
+#endif
+
 #if defined(__x86_64__) && !defined(CONFIG_KSU_X86_PATCH_SYSCALL_DISPATCHER)
 #include <asm/cpufeature.h>
 #include <linux/version.h>
@@ -218,6 +227,17 @@ int __init kernelsu_init(void)
         ksu_file_wrapper_init();
     }
 
+#ifdef KSU_MERGE_SUSFS_LKM
+    // Last, and never fatal: SUSFS installs its own LSM entries and sys_call_table wrappers,
+    // and its control nodes ask KernelSU who may reach them, so everything it asks has to be
+    // up already. A device where SUSFS cannot arm is still a rooted device.
+    {
+        int susfs_ret = ksu_susfs_lkm_init();
+        if (susfs_ret)
+            pr_err("SUSFS init failed: %d, continuing without it\n", susfs_ret);
+    }
+#endif
+
 #ifdef MODULE
 #ifndef CONFIG_KSU_DEBUG
     kobject_del(&THIS_MODULE->mkobj.kobj);
@@ -228,6 +248,11 @@ int __init kernelsu_init(void)
 
 void __exit kernelsu_exit(void)
 {
+#ifdef KSU_MERGE_SUSFS_LKM
+    // First: its hooks point into this module, which is about to go away.
+    ksu_susfs_lkm_exit();
+#endif
+
     // Phase 1: Stop all hooks first to prevent new callbacks
     ksu_syscall_hook_manager_exit();
 

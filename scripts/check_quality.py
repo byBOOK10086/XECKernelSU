@@ -37,7 +37,8 @@ MAX_WORKFLOWS = 15       # 14 upstream + guards + build-susfs-gki (a GKI image c
 ALLOWED_LOCALES = {"values", "values-night", "values-zh-rCN"}
 SOURCE_SUFFIXES = {".kt", ".kts", ".java", ".rs", ".c", ".h", ".py", ".sh"}
 SKIP_DIRS = {".git", "build", "target", "node_modules", "third_party", "generated-images",
-             "builtin"  # ksud embeds whole module trees here (vendored payload, not our source)
+             "builtin",  # ksud embeds whole module trees here (vendored payload, not our source)
+             "susfs"  # kernel/susfs is staged from third_party by scripts/prepare_susfs_lkm.py
              }
 
 problems = []

@@ -17,7 +17,18 @@ on:
         required: false
         default: ''
         type: string
+      susfs:
+        description: 'Compile SUSFS into kernelsu.ko'
+        required: false
+        default: false
+        type: boolean
   workflow_dispatch:
+    inputs:
+      susfs:
+        description: 'Compile SUSFS into kernelsu.ko'
+        required: false
+        default: false
+        type: boolean
 jobs:
   build-lkm:
     strategy:
@@ -34,6 +45,7 @@ jobs:
     uses: ./.github/workflows/ddk-lkm.yml
     with:
       kmi: ${{ matrix.kmi }}
+      susfs: ${{ inputs.susfs || false }}
       package_name: ${{ inputs.package_name || '' }}
       expected_size: ${{ inputs.expected_size || '' }}
       expected_hash: ${{ inputs.expected_hash || '' }}

@@ -25,11 +25,13 @@ compdb:
 	python3 $(MDIR)/.vscode/generate_compdb.py -O $(ODIR) $(MDIR)
 clean:
 	$(MAKE) -C $(KDIR) $(KBUILD_ARGS) clean
-	rm check_symbol
+	rm -f check_symbol
+	rm -rf susfs
 check_symbol: tools/check_symbol.c
 	$(CC) tools/check_symbol.c -o check_symbol
 # preinit/runner/nolibc is vendored verbatim, keep it out of formatting
-FORMAT_FILES = find . -path ./preinit/runner/nolibc -prune -o \( -name "*.c" -o -name "*.h" \) -print0
+# susfs/ is generated from third_party/susfs4ksu-lkm by scripts/prepare_susfs_lkm.py
+FORMAT_FILES = find . -path ./preinit/runner/nolibc -prune -o -path ./susfs -prune -o \( -name "*.c" -o -name "*.h" \) -print0
 
 format:
 	$(FORMAT_FILES) | xargs -0 clang-format -i
