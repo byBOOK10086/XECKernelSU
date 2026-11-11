@@ -17,6 +17,11 @@ jobs:
     # than skipping the whole release because of one cancelled job.
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
+    # The default token is read-only here; publishing a release (and generating its notes)
+    # needs contents:write. The repository setting is already "write", this keeps the job
+    # correct even if it is flipped back.
+    permissions:
+      contents: write
     steps:
       - name: Download artifacts
         uses: actions/download-artifact@v7

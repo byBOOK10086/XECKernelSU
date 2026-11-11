@@ -18,7 +18,7 @@
 |---|:--:|---|
 | 🔑 可信密钥（TEE）| 🟢 构建成立 | 引擎与守护由源码现编进 APK；keybox 为上游最新 `Yurikey68` |
 | 🔒 回锁欺骗 | 🟢 链路完整 | 内置模块 `post-fs-data`/`post-mount` 脚本已接 |
-| 🥷 SUSFS | 🟡 双路线推进 | GKI 内置 **6/7 KMI 已绿**；LKM 改为「SUSFS 编进 `kernelsu.ko`」的自带路线（本批 CI 验证中）|
+| 🥷 SUSFS | 🟢 LKM 已随 v1 发布 | **v1.0.0-xec 的 `kernelsu.ko` 自带 SUSFS**（8/8 KMI）；GKI 内置路线 6/7 KMI 绿 |
 | 🛡 鸭子 / 春秋对抗 | 🟡 TEE 层已覆盖 | 引擎侧 11 个补丁已编入；隐藏面待 SUSFS 生效 |
 
 ```mermaid
@@ -112,7 +112,9 @@ gantt
 
 | 项 | 起点 | 现状 |
 |---|---|---|
-| LKM 自带 SUSFS | `6d734d91` / `d257d782` | 🟢 8/8 KMI 编译成功（run `43089461513`）：SUSFS 编进**同一个** `kernelsu.ko`；`android12-5.10` 从 416 KB → 1.3 MB（`llvm-strip -d` 后）；默认开关已翻正 |
+| **v1.0.0-xec 发布** | tag `v1.0.0-xec` @ `36d42ec1` | 🟢 已发布：APK 23,934,800 B（sha256 `e3e24401…`）+ 8 个 arm64 LKM（含 SUSFS）+ 8 个 x86_64 LKM + ksud ×8 + ksuinit ×3 |
+| LKM 自带 SUSFS | `6d734d91` / `d257d782` | 🟢 8/8 KMI 编译成功（run `43089461513`）：SUSFS 编进**同一个** `kernelsu.ko`；`android12-5.10` 从 416 KB → 1.3 MB（`llvm-strip -d` 后）|
+| APK 签名一致 | `36d42ec1` | 🟢 内核按 APK v2 证书识别管理器，实测下载发布包验证：**cert 1343 B (0x053f) / sha256 `8f983688…`，与 `kernel/Kbuild` 的 pin 一致** |
 | APK 首版 | `904b3e1` | 21,776,030 B 已产出并核对 `libksud.so` 10,874,496 B / `classes.dex` 6,520,488 B；旧图标已换 |
 | GKI 7/7 | — | 6/7 绿；`android16-6.12` 卡在内核镜像仓无该分支（见 §4 #2）|
 
@@ -162,6 +164,8 @@ gantt
 
 | 项 | 数值 |
 |---|---|
-| `ksud-aarch64` 产物 | 23.3 MB（zip，含两套内置引擎 + 内核模块）|
+| `ksud-aarch64` 产物 | 23.9 MB（zip，含两套内置引擎 + 内核模块）|
+| 发布 APK | 23,934,800 B · sha256 `e3e244011c4fc105f49e60ac71393e34677f948be3481fb517d066f64977b376` |
+| 管理器签名 pin | cert `0x053f` / sha256 `8f983688359382f2e75dd72cd59398d7a0c45ed22dd1410138b34b5321a05819`（与 `kernel/Kbuild` 一致，已实测发布包） |
 | SUSFS 代码 | 合并进 `kernelsu.ko`：`android12-5.10` 416 KB → 1.3 MB（`llvm-strip -d` 后，8 个 KMI 同量级）；独立 payload 实测 44.1 MB → strip 后 23.8 MB，**不进 APK** |
 | 仓库体积 | 1413 文件 / 16.9 MB |
