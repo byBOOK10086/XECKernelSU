@@ -1,0 +1,48 @@
+name: guards
+
+# Repository quality gates (see docs/QUALITY-GATES.md).
+#
+# One job, no matrix, no secrets: it runs the cheap structural checks that keep
+# this tree from drifting back into the shape the previous one had (oversized
+# files, locale sprawl, workflow sprawl, silently-succeeding shell).
+#
+# Deliberately separate from the build workflows so a red gate is unambiguous.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  gates:
+    name: structural gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: python
+        run: python3 --version
+
+      - name: quality gates
+        run: python3 scripts/check_quality.py
+
+      - name: shell syntax of the feature scripts
+        run: |
+          set -euo pipefail
+          find feature -name '*.sh' -print0 | xargs -0 -r -n1 sh -n
+          echo "shell syntax ok"
+
+      - name: feature offline tests
+        run: |
+          set -euo pipefail
+          for t in feature/*/test/run*.sh; do
+            [ -f "$t" ] || continue
+            echo "== $t"
+            bash "$t"
+          done
