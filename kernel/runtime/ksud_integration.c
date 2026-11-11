@@ -460,7 +460,7 @@ static void ksu_install_rc_hook(struct file *file)
     file->f_op = &fops_proxy;
 }
 
-static void ksu_handle_sys_read(unsigned int fd, char __user **buf_ptr, size_t *count_ptr)
+static void ksu_handle_sys_read_ex(unsigned int fd, char __user **buf_ptr, size_t *count_ptr)
 {
     struct file *file = fget(fd);
     if (!file) {
@@ -546,7 +546,7 @@ static void ksu_execve_hook_ksud_common(const char __user *filename_user, const 
 #ifdef CONFIG_KSU_SUSFS
 // SUSFS 模式的入口（50_add_susfs 提供的基线 hook）：
 //   - fs/read_write.c 的 SYSCALL_DEFINE3(read) 在 ksu_is_init_rc_hook_enabled
-//     开启时调用 ksu_handle_sys_read(fd)；
+//     开启时调用 ksu_handle_sys_read_ex(fd)；
 //   - fs/stat.c 的 vfs_fstat 在同一开关下调用 ksu_handle_vfs_fstat()。
 // 两个 static key 定义为默认开启（DEFINE_STATIC_KEY_TRUE）。
 DEFINE_STATIC_KEY_TRUE(ksu_is_init_rc_hook_enabled);
@@ -603,7 +603,7 @@ static long ksu_sys_read(const struct pt_regs *regs)
     char __user **buf_ptr = (char __user **)&PT_REGS_PARM2(regs);
     size_t *count_ptr = (size_t *)&PT_REGS_PARM3(regs);
 
-    ksu_handle_sys_read(fd, buf_ptr, count_ptr);
+    ksu_handle_sys_read_ex(fd, buf_ptr, count_ptr);
     return orig_sys_read(regs);
 }
 

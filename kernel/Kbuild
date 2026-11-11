@@ -39,6 +39,7 @@ kernelsu-objs += policy/feature.o
 
 kernelsu-objs += runtime/boot_event.o
 kernelsu-objs += runtime/ksud_integration.o
+kernelsu-objs += runtime/susfs_linkage.o
 
 kernelsu-objs += infra/btf_parser.o
 kernelsu-objs += selinux/inode.o
