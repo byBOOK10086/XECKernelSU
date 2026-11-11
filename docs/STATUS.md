@@ -18,7 +18,7 @@
 |---|:--:|---|
 | 🔑 可信密钥（TEE）| 🟢 构建成立 | 引擎与守护由源码现编进 APK；keybox 为上游最新 `Yurikey68` |
 | 🔒 回锁欺骗 | 🟢 链路完整 | 内置模块 `post-fs-data`/`post-mount` 脚本已接 |
-| 🥷 SUSFS | 🟡 主路线编译中 | GKI 内核路线已到链接阶段；LKM 兜底 8/8 全绿 |
+| 🥷 SUSFS | 🟡 双路线推进 | GKI 内置 **6/7 KMI 已绿**；LKM 改为「SUSFS 编进 `kernelsu.ko`」的自带路线（本批 CI 验证中）|
 | 🛡 鸭子 / 春秋对抗 | 🟡 TEE 层已覆盖 | 引擎侧 11 个补丁已编入；隐藏面待 SUSFS 生效 |
 
 ```mermaid
@@ -70,10 +70,11 @@ gantt
 
 | 路线 | 状态 | 细节 |
 |---|---|---|
-| GKI 内置（主）| 🟡 链接阶段 | 已过：补丁应用、`CONFIG_KSU_SUSFS=y`、编译、`-Werror`；已补 `susfs_linkage.c` 提供补丁引用的 3 个符号 |
-| LKM 兜底 | 🟢 | 8/8 KMI 编译 + 打包成功；`.ko` 3.1–7.8 MB/KMI，单 KMI 模块 zip 1.33 MB |
-| **用户态驱动** | 🔴 **缺失（首版阻塞）** | `ksud` 没有 `susfs` 子命令，内置脚本也不写 `/proc/susfs_*` → 内核具备能力但**规则下不下去** |
-| 已知缺口 | ⏳ | `android17-6.18` 上游无 GKI 分支 → 只能 LKM |
+| GKI 内置（主）| 🟢 6/7 KMI | `android12-5.10` / `13-5.10` / `13-5.15` / `14-5.15` / `14-6.1` / `15-6.6` 全绿；产物 `susfs-gki-android12-5.10` 33,362,264 B |
+| GKI 缺口 | 🔴 | `android16-6.12`：内核镜像仓没有该分支历史（只在上游 GitLab），补丁 hunk 对不上 |
+| LKM 自带（本次）| 🟡 编译中 | `scripts/prepare_susfs_lkm.py` 把 `third_party/susfs4ksu-lkm` 暂存进 `kernel/susfs/`，并把与 `kernelsu.ko` 重名的 12 个全局符号改名（299 处）；`KSU_MERGE_SUSFS_LKM=1` 时编进**同一个** `.ko` |
+| 用户态驱动 | 🟢 | `userspace/ksud/src/susfs.rs` 661 行、15 条 `reboot(2)` supercall、`provision_baseline()` 开机剥 `/data/adb` 等 |
+| 已知缺口 | ⏳ | `android17-6.18` 上游无 GKI 分支 → 只能走 LKM |
 
 
 </details>
@@ -98,7 +99,8 @@ gantt
 | 三棵上游 vendor | 🟢 | `third_party/{TEESimulator-RS,tricky-addon-enhanced,susfs4ksu-lkm}` + 各自 `UPSTREAM.md` |
 | 内置模块由源码现编 | 🟢 | CI 日志 `==> Built-in module artifacts:` 全列 |
 | 内置模块机制 | 🟢 | `builtin.rs` / `assets.rs` / `init_event.rs` |
-| SUSFS 用户态装载器 | 🟢 | `late_load.rs`：asset → 落盘 → `insmod` → 内存兜底 |
+| SUSFS 用户态装载器 | 🟢 | `late_load.rs`：asset → 落盘 → `insmod` → 内存兜底；`/proc/susfs_path` 已存在时直接跳过 |
+| SUSFS 合并构建 | 🟢 | `scripts/prepare_susfs_lkm.py`：暂存 + 12 个符号改名（299 处）+ 接管 `module_init/exit`，生成目录 `kernel/susfs/` 不进 git |
 | 质量门禁 | 🟢 | `guards` / `Clippy` / `Rustfmt` / `ShellCheck` / `ClangFormat`（18.1.8）|
 | 工作流上限 | 🟢 | 15 条（恢复 GKI 时删掉 `deploy-website.yml`）|
 | 文档 + 上游声明 | 🟢 | `README.md` + `docs/{UPSTREAMS,ARCHITECTURE,STATUS,ROADMAP,RED-LINES}.md` |
@@ -110,9 +112,9 @@ gantt
 
 | 项 | 起点 | 现状 |
 |---|---|---|
-| APK 首版 | `build-manager` @ `adb1b4a` | 运行中（内置引擎 + 内核模块 + 旧图标）|
-| GKI SUSFS（`android12-5.10`）| `63c3960` | 第 4 轮：已补链接兼容层，等待编译/链接结果 |
-| 其余 6 个 KMI | — | 待 12-5.10 通过后并行派发 |
+| LKM 自带 SUSFS | `6d734d91` | 8 KMI 编译已派发（`build-lkm.yml` 的 `susfs=true`），等结果 |
+| APK 首版 | `904b3e1` | 21,776,030 B 已产出并核对 `libksud.so` 10,874,496 B / `classes.dex` 6,520,488 B；旧图标已换 |
+| GKI 7/7 | — | 6/7 绿；`android16-6.12` 卡在内核镜像仓无该分支（见 §4 #2）|
 
 ---
 
@@ -120,13 +122,14 @@ gantt
 
 | # | 项 | 说明 |
 |:--:|---|---|
-| **0** | **`ksud susfs` 子命令 + 开机基线配置**（🔴 首版阻塞）| 把旧仓 `susfs.rs` 的命令面搬进来（`status/version/variant/features` + `set_uname`/`add_sus_path`/`add_sus_kstat`/`open_redirect`/`enable_log`），走 `reboot(2)` supercall 驱动 v2.3.0 命令集；并在 `init_event` 应用一份"隐藏 root 痕迹"的基线，让"刷完即生效"成立 |
-| 1 | GKI 内核 7 个 KMI 全绿 | 主路线当前验证到"链接"阶段 |
+| **0** | ✅ `ksud susfs` 子命令 + 开机基线（`9d61702` + `36488e1`）| 661 行 `susfs.rs`、15 条 reboot supercall、`provision_baseline()` 在 post-fs-data 剥 `/data/adb`/工作目录/模块目录/daemon + sus 挂载 |
+| 1 | GKI 内核 7 个 KMI 全绿 | 6/7 绿（见 §1）|
 | 2 | `android17-6.18` 的 SUSFS | 上游无分支；先 LKM |
 | 3 | 真机验证 | 无设备接入；T1/T2 与 `/proc/susfs_*` 未实测 |
 | 4 | 管理器 TEE / SUSFS 状态卡 | 目前只有脚本/CLI 层 |
 | 5 | 站点接入新仓 | 现有站点流水线只认旧仓 |
 | 6 | uapi 三副本守卫 | 旧仓 `check_uapi_mirror.py` 未搬 |
+| 7 | LKM 自带 SUSFS 的编译验证 | `6d734d91` 已落地（暂存 + 12 个符号改名 + `KSU_MERGE_SUSFS_LKM`）；8 KMI 结果未回；合并后 `kernelsu.ko` 预计每 KMI 涨 2.2–4.8 MB |
 
 
 <details>
@@ -160,5 +163,5 @@ gantt
 | 项 | 数值 |
 |---|---|
 | `ksud-aarch64` 产物 | 23.3 MB（zip，含两套内置引擎 + 内核模块）|
-| SUSFS `.ko` | 3.1–7.8 MB/KMI，**不进 APK** |
+| SUSFS 代码 | 合并进 `kernelsu.ko` 后每 KMI +2.2–4.8 MB；独立 payload 实测 44.1 MB（8 KMI），`strip` 掉 14.0 MB 后 23.8 MB，**不进 APK** |
 | 仓库体积 | 1413 文件 / 16.9 MB |

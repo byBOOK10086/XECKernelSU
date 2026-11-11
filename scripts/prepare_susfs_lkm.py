@@ -58,8 +58,12 @@ RENAMES = [
 ]
 
 BOILERPLATE = [
-    ("static int __init susfs_init(void)", "int ksu_susfs_lkm_init(void)"),
-    ("static void __exit susfs_exit(void)", "void ksu_susfs_lkm_exit(void)"),
+    # __init/__exit stay: the init path calls .init.text helpers (susfs_init_symbol_resolver
+    # and friends), and modpost rejects a .text caller of .init.text with "Section mismatches
+    # detected".  kernelsu_init()/kernelsu_exit() are __init/__exit themselves, so the calls
+    # stay inside their own sections.
+    ("static int __init susfs_init(void)", "int __init ksu_susfs_lkm_init(void)"),
+    ("static void __exit susfs_exit(void)", "void __exit ksu_susfs_lkm_exit(void)"),
     ("module_init(susfs_init);", ""),
     ("module_exit(susfs_exit);", ""),
     ('MODULE_LICENSE("GPL");', ""),
@@ -141,7 +145,7 @@ def stage() -> int:
 
     # The three edits that must land, or the merge silently links the wrong thing.
     main = (DST / "susfs_main.c").read_text(encoding="utf-8")
-    for needle in ("int ksu_susfs_lkm_init(void)", "void ksu_susfs_lkm_exit(void)"):
+    for needle in ("int __init ksu_susfs_lkm_init(void)", "void __exit ksu_susfs_lkm_exit(void)"):
         if needle not in main:
             print(f"error: {needle} missing from staged susfs_main.c", file=sys.stderr)
             return 1

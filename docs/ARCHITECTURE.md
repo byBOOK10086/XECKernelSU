@@ -119,20 +119,25 @@ sequenceDiagram
 
 ---
 
-## 6 · SUSFS 两条路线
+## 6 · SUSFS 三条路线
 
-| | **GKI 内置（主）** | **LKM 兜底** |
-|---|---|---|
-| 工作流 | `build-susfs-gki.yml` | `build-susfs-lkm.yml` |
-| 形态 | 编进 `Image.gz`，刷内核即生效 | 独立 `.ko`，由 ksud 落盘 / 装载 |
-| 覆盖 | 7 个 KMI | 8 个 KMI（含 `android17-6.18`）|
-| 前置 | 能刷内核 | 无需刷内核 |
-| 内核侧代码 | `CONFIG_KSU_SUSFS=y` → `kernel/` 集成层生效 | 集成层不参与编译 |
-| 用户态 | supercall 驱动 | `/proc/susfs_*` 驱动 |
+| | **GKI 内置（主）** | **LKM 自带（本次）** | **独立 LKM（兜底）** |
+|---|---|---|---|
+| 工作流 | `build-susfs-gki.yml` | `build-lkm.yml`（`susfs=true`）| `build-susfs-lkm.yml` |
+| 形态 | 编进 `Image.gz`，刷内核即生效 | **编进 `kernelsu.ko`**，刷一次 LKM 就有 | 独立 `.ko`，由 ksud 落盘 / 装载 |
+| 覆盖 | 7 个 KMI（现 6 绿）| 8 个 KMI | 8 个 KMI |
+| 前置 | 能刷内核 | 同 LKM | APK 里要带 payload |
+| 内核侧代码 | `CONFIG_KSU_SUSFS=y` → `kernel/` 集成层 | `KSU_MERGE_SUSFS_LKM=1` → `kernel/susfs/`（构建期暂存）| 不参与我们的编译 |
+| 用户态 | supercall 驱动 | supercall 驱动（`/proc/susfs_*` 也在）| `/proc/susfs_*` 驱动 |
+
+> `kernel/susfs/` 不进 git：每次构建前由 [`prepare_susfs_lkm.py`](../scripts/prepare_susfs_lkm.py)
+> 从 `third_party/susfs4ksu-lkm` 现生成（kbuild 只能编 `M=` 目录内的源码），并做三件事——
+> 12 个与 `kernelsu.ko` 重名的全局符号改名、接管 `module_init/exit`（一个 `.ko` 只能有一份）、
+> 把 SELinux 默认域改成这棵树实际用的 `u:r:su:s0`。
 
 > [!WARNING]
-> 两条路线的**用户态语义相同，内核 ABI 不同**，不能混用：GKI 用 `susfs4ksu` 的 pin，
-> LKM 用 `susfs4ksu-for-lkm` 的 ABI。
+> 三条路线的**用户态语义相同，内核 ABI 不同**：GKI 用 `susfs4ksu` 的 pin；两条 LKM 都用
+> `susfs4ksu-for-lkm` 的 ABI（v2.3.0 命令集）。
 
 ---
 
@@ -144,6 +149,7 @@ sequenceDiagram
 | su 兼容 | [`sucompat.c`](../kernel/feature/sucompat.c)、[`setuid_hook.c`](../kernel/hook/setuid_hook.c)、[`ksud_integration.c`](../kernel/runtime/ksud_integration.c) |
 | SELinux | [`selinux.c`](../kernel/selinux/selinux.c)、[`rules.c`](../kernel/selinux/rules.c)、[`selinux_hide.c`](../kernel/feature/selinux_hide.c) |
 | SUSFS 链接兼容 | [`susfs_linkage.c`](../kernel/runtime/susfs_linkage.c) |
+| SUSFS 合并进 LKM | [`prepare_susfs_lkm.py`](../scripts/prepare_susfs_lkm.py) |
 | 内置模块（用户态）| [`assets.rs`](../userspace/ksud/src/assets.rs)、[`builtin.rs`](../userspace/ksud/src/builtin.rs)、[`init_event.rs`](../userspace/ksud/src/init_event.rs) |
 | 软加载 / SUSFS 装载 | [`late_load.rs`](../userspace/ksud/src/late_load.rs) |
 | 启动补丁 | [`boot_patch.rs`](../userspace/ksud/src/boot_patch.rs) |
