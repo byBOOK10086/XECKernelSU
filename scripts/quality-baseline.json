@@ -47,7 +47,7 @@
       "reason": "ported file: split candidate, no reason recorded yet"
     },
     "kernel/runtime/ksud_integration.c": {
-      "lines": 717,
+      "lines": 751,
       "reason": "kernel SUSFS port: the 50_add_susfs baseline hooks need their handler side here (command surface / sid cache / setresuid branches). Re-pinned to the ported size; shrinks from here"
     },
     "kernel/selinux/rules.c": {

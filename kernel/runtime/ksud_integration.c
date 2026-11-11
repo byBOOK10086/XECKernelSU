@@ -543,6 +543,40 @@ static void ksu_execve_hook_ksud_common(const char __user *filename_user, const 
     ksu_handle_execveat_ksud(path, &argv);
 }
 
+#ifdef CONFIG_KSU_SUSFS
+// SUSFS 模式的入口（50_add_susfs 提供的基线 hook）：
+//   - fs/read_write.c 的 SYSCALL_DEFINE3(read) 在 ksu_is_init_rc_hook_enabled
+//     开启时调用 ksu_handle_sys_read(fd)；
+//   - fs/stat.c 的 vfs_fstat 在同一开关下调用 ksu_handle_vfs_fstat()。
+// 两个 static key 定义为默认开启（DEFINE_STATIC_KEY_TRUE）。
+DEFINE_STATIC_KEY_TRUE(ksu_is_init_rc_hook_enabled);
+DEFINE_STATIC_KEY_TRUE(ksu_is_input_hook_enabled);
+
+void ksu_handle_vfs_fstat(int fd, loff_t *kstat_size_ptr)
+{
+    loff_t orig_size = *kstat_size_ptr;
+    size_t extra = 0;
+    bool is_rc = false;
+    struct file *file = fget(fd);
+
+    if (file) {
+        if (is_init_rc(file)) {
+            pr_info("stat init.rc");
+            load_module_rc_once();
+            is_rc = true;
+        }
+        fput(file);
+    }
+
+    if (is_rc) {
+        extra = ksu_rc_len + module_rc_len;
+        *kstat_size_ptr = orig_size + extra;
+        pr_info("adding rc len: %lld -> %lld (static=%zu module=%zu)", orig_size, *kstat_size_ptr, ksu_rc_len,
+                module_rc_len);
+    }
+}
+#endif /* CONFIG_KSU_SUSFS */
+
 void ksu_execve_hook_ksud(const struct pt_regs *regs)
 {
     const char __user *filename_user = (const char __user *)PT_REGS_SYSCALL_PARM1(regs);
