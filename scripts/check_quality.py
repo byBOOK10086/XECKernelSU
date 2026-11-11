@@ -153,11 +153,31 @@ def check_swallowed_errors():
                                     % (key, i, why))
 
 
+def check_line_endings():
+    """Scripts must be LF and BOM-free.
+
+    Not cosmetic: CI caught a CRLF script failing `bash -n` with
+    `syntax error near unexpected token $'{\\r'`, and the same file would fail on
+    the device under Android's sh. A shebang line with CRLF is ignored silently,
+    which is worse than a loud failure.
+    """
+    for p in source_files():
+        if p.suffix != ".sh":
+            continue
+        key = rel(p)
+        data = p.read_bytes()
+        if data.startswith(b"\xef\xbb\xbf"):
+            problems.append("%s: starts with a UTF-8 BOM; the shebang stops working" % key)
+        if b"\r\n" in data:
+            problems.append("%s: CRLF line endings; `sh -n` fails and so does the device" % key)
+
+
 def main():
     check_file_sizes()
     check_locales()
     check_workflows()
     check_swallowed_errors()
+    check_line_endings()
     if problems:
         print("quality gates failed (%d):" % len(problems))
         for p in problems:
