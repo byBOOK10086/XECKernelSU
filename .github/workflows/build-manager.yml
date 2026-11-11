@@ -200,6 +200,19 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
+        with:
+          # The vendored TEE engine tree ships the two wrapper jars from the Gradle releases it
+          # was built with, and their checksums are not in the action's allow list. Validation
+          # is turned off here and re-run below with those two sums pinned explicitly, so the
+          # manager's own wrapper is still checked.
+          validate-wrappers: false
+
+      - name: Validate the Gradle wrapper jars
+        uses: gradle/actions/wrapper-validation@v4
+        with:
+          allow-checksums: >-
+            56aaec82e4c7d2f2c8665bc9ce429eaa47393e6e1e7b9165021cc3ec161667,
+            23397ebec7143ce2ef8966e5fd817afc0f7e465d4ff9c9686608d2f72e19427c
 
       - name: Build with Gradle
         run: |
