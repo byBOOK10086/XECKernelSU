@@ -8,6 +8,8 @@ use log::{LevelFilter, error, info};
 use crate::boot_patch::{BootPatchArgs, BootRestoreArgs};
 use crate::lkm_image::BootPatchV2Args;
 use crate::module::regenerate_preinit;
+#[cfg(all(target_arch = "aarch64", target_os = "android"))]
+use crate::susfs;
 use crate::{
     apk_sign, assets, builtin, debug, defs, init_event, ksu_uapi, ksucalls, module, module_config,
     sulog, utils,
@@ -158,6 +160,92 @@ enum Commands {
     Initrc {
         #[command(subcommand)]
         command: Initrc,
+    },
+
+    /// SUSFS - hide paths, mounts and properties (kernel-side integration)
+    #[cfg(all(target_arch = "aarch64", target_os = "android"))]
+    Susfs {
+        #[command(subcommand)]
+        command: Susfs,
+    },
+}
+
+// SUSFS control surface. Every command goes through the reboot(2) supercall that the
+// kernel side answers (CMD_SUSFS_*), so it works the same whether SUSFS came from the
+// GKI image or the loadable module.
+#[cfg(all(target_arch = "aarch64", target_os = "android"))]
+#[derive(clap::Subcommand, Debug)]
+enum Susfs {
+    /// Is SUSFS available on this kernel?
+    Status,
+    /// Print the SUSFS version
+    Version,
+    /// Print the SUSFS variant (GKI / NON-GKI / GKI-LKM)
+    Variant,
+    /// Print the enabled SUSFS features
+    Features,
+    /// Apply the baseline hiding rules (safe to run repeatedly)
+    Baseline,
+    /// Spoof uname release and version
+    SetUname {
+        /// release string, e.g. 5.10.101-android12-9-g1234567890ab
+        release: String,
+        /// version string
+        version: String,
+    },
+    /// Spoof /proc/bootconfig (GKI) or /proc/cmdline (non-GKI) from a file
+    SetCmdline {
+        /// path to the fake cmdline/bootconfig file (< 8 KiB)
+        path: String,
+    },
+    /// Enable or disable the SUSFS kernel log
+    EnableLog {
+        /// 0 to disable, 1 to enable
+        enabled: u32,
+    },
+    /// Enable or disable AVC log spoofing
+    EnableAvcLogSpoofing {
+        /// 0 to disable, 1 to enable
+        enabled: u32,
+    },
+    /// Hide SUS mounts from non-su processes
+    HideSusMnts {
+        /// 0 to disable, 1 to enable
+        enabled: u32,
+    },
+    /// Add a hidden path
+    AddSusPath {
+        /// path to hide
+        path: String,
+    },
+    /// Add a hidden path that follows mounts and namespaces
+    AddSusPathLoop {
+        /// path to hide
+        path: String,
+    },
+    /// Add a fake kstat for a path
+    AddSusKstat {
+        /// path to spoof
+        path: String,
+    },
+    /// Refresh the fake kstat of a path
+    UpdateSusKstat {
+        /// path to refresh
+        path: String,
+    },
+    /// Redirect opens of one path to another
+    AddOpenRedirect {
+        /// target path
+        target: String,
+        /// redirected path
+        redirected: String,
+        /// uid scheme
+        uid_scheme: u32,
+    },
+    /// Hide a memory mapping by library path
+    AddSusMap {
+        /// library path
+        path: String,
     },
 }
 
@@ -953,6 +1041,45 @@ pub fn run() -> Result<()> {
         },
         Commands::Initrc { command } => match command {
             Initrc::Refresh => regenerate_preinit(),
+        },
+
+        #[cfg(all(target_arch = "aarch64", target_os = "android"))]
+        Commands::Susfs { command } => match command {
+            Susfs::Status => {
+                println!("{}", susfs::get_susfs_status());
+                Ok(())
+            }
+            Susfs::Version => {
+                println!("{}", susfs::get_susfs_version());
+                Ok(())
+            }
+            Susfs::Variant => {
+                println!("{}", susfs::get_susfs_variant());
+                Ok(())
+            }
+            Susfs::Features => {
+                println!("{}", susfs::get_susfs_features());
+                Ok(())
+            }
+            Susfs::Baseline => {
+                susfs::provision_baseline();
+                Ok(())
+            }
+            Susfs::SetUname { release, version } => susfs::set_uname(&release, &version),
+            Susfs::SetCmdline { path } => susfs::set_cmdline_or_bootconfig(&path),
+            Susfs::EnableLog { enabled } => susfs::enable_log(enabled != 0),
+            Susfs::EnableAvcLogSpoofing { enabled } => susfs::enable_avc_log_spoofing(enabled != 0),
+            Susfs::HideSusMnts { enabled } => susfs::hide_sus_mnts_for_non_su_procs(enabled != 0),
+            Susfs::AddSusPath { path } => susfs::add_sus_path(&path),
+            Susfs::AddSusPathLoop { path } => susfs::add_sus_path_loop(&path),
+            Susfs::AddSusKstat { path } => susfs::add_sus_kstat(&path),
+            Susfs::UpdateSusKstat { path } => susfs::update_sus_kstat(&path),
+            Susfs::AddOpenRedirect {
+                target,
+                redirected,
+                uid_scheme,
+            } => susfs::add_open_redirect(&target, &redirected, uid_scheme),
+            Susfs::AddSusMap { path } => susfs::add_sus_map(&path),
         },
     };
 

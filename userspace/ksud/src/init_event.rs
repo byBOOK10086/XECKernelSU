@@ -109,6 +109,13 @@ pub fn on_post_fs_data() -> Result<()> {
     // already present (builtin kernel, or an earlier load) and never fails the boot.
     crate::late_load::load_susfs_lkm_for_current_kmi();
 
+    // With SUSFS up (in-kernel or the loadable module), apply the hiding baseline so
+    // the device actually hides something: /data/adb, the ksu working dir, the modules
+    // dir and the daemon from non-su processes, plus sus mounts. On a kernel without
+    // SUSFS this is a single log line.
+    #[cfg(all(target_arch = "aarch64", target_os = "android"))]
+    crate::susfs::provision_baseline();
+
     // load feature config
     if is_safe_mode() {
         warn!("safe mode, skip load feature config");

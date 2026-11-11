@@ -251,8 +251,8 @@
       "reason": "ported built-in module installer (stamp/version refresh + stage scripts); split candidate once the TEE payload lands"
     },
     "userspace/ksud/src/cli.rs": {
-      "lines": 963,
-      "reason": "upstream cli + the ported \builtin subcommand family (status/tee/install/start/force-boot)"
+      "lines": 1090,
+      "reason": "SUSFS command surface: `ksud susfs status|version|variant|features|baseline|set-uname|set-cmdline|enable-log|avc-spoof|hide-sus-mnts|add-sus-path|add-sus-path-loop|add-sus-kstat|update-sus-kstat|add-open-redirect|add-sus-map` lives next to the other subcommands; clap needs the enum and the dispatch in one file. Re-pinned to the ported size; shrinks from here."
     },
     "userspace/ksud/src/feature.rs": {
       "lines": 470,
@@ -301,6 +301,10 @@
     "userspace/ksuinit/src/lib.rs": {
       "lines": 550,
       "reason": "ported file: split candidate, no reason recorded yet"
+    },
+    "userspace/ksud/src/susfs.rs": {
+      "lines": 705,
+      "reason": "SUSFS reboot(2) supercall ABI: the CMD_* -> struct layout table is data, not logic, and splitting it would scatter one protocol across files. Ported from the previous tree where it was audited and run on device; re-pinned, shrinks from here."
     }
   },
   "locales": [
