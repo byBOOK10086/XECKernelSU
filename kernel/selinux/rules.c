@@ -165,6 +165,10 @@ void apply_kernelsu_rules()
     ksu_destroy_sepolicy(old_pol);
 
     reset_avc_cache(pol->latest_granting);
+#ifdef CONFIG_KSU_SUSFS
+    // 解析 susfs 侧需要的 sid 缓存（ksu/init/zygote/zygote_next/priv_app）
+    susfs_set_batch_sid();
+#endif
 out_unlock:
     mutex_unlock(&selinux_state.policy_mutex);
 }

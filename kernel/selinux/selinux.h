@@ -55,4 +55,24 @@ static inline int ksu_selinux_inode_init(void)
 
 extern u32 ksu_file_sid;
 
+#ifdef CONFIG_KSU_SUSFS
+// SUSFS 模式的 sid 缓存（selinux.c 末尾定义）。zygote/zygote_next 的 sid
+// 由 setuid_hook 的 susfs 分支使用；其余判断被 50_add_susfs 打进基线内核的
+// hook（fs/proc_namespace.c、fs/super.c 等）直接调用。
+bool susfs_is_sid_equal(const struct cred *cred, u32 sid2);
+u32 susfs_get_sid_from_name(const char *secctx_name);
+u32 susfs_get_current_sid(void);
+void susfs_set_batch_sid(void);
+bool susfs_is_current_zygote_domain(void);
+bool susfs_is_current_zygote_next_domain(void);
+bool susfs_is_current_ksu_domain(void);
+bool susfs_is_current_init_domain(void);
+
+extern u32 susfs_ksu_sid;
+extern u32 susfs_init_sid;
+extern u32 susfs_zygote_sid;
+extern u32 susfs_zygote_next_sid;
+extern u32 susfs_priv_app_sid;
+#endif
+
 #endif

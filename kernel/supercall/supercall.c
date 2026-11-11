@@ -113,6 +113,32 @@ static void ksu_install_fd_tw_func(struct callback_head *cb)
     kfree(tw);
 }
 
+#ifdef CONFIG_KSU_SUSFS
+/*
+ * SUSFS mode has no reboot kprobe: the 50_add_susfs hook in the kernel's
+ * kernel/reboot.c hands magic1/magic2/cmd to ksu_handle_sys_reboot() in
+ * supercall/dispatch.c, which calls back here for magic2 == KSU_INSTALL_MAGIC2.
+ * That path runs in syscall context, so the allocation below may sleep.
+ */
+int ksu_supercall_reboot_handler(void __user **arg)
+{
+    struct ksu_install_fd_tw *tw;
+
+    tw = kzalloc(sizeof(*tw), GFP_KERNEL);
+    if (!tw)
+        return 0;
+
+    tw->outp = (int __user *)(*arg);
+    tw->cb.func = ksu_install_fd_tw_func;
+
+    if (task_work_add(current, &tw->cb, TWA_RESUME)) {
+        kfree(tw);
+        pr_warn("install fd add task_work failed\n");
+    }
+
+    return 0;
+}
+#else
 static int reboot_handler_pre(struct kprobe *p, struct pt_regs *regs)
 {
     struct pt_regs *real_regs = PT_REAL_REGS(regs);
@@ -143,19 +169,22 @@ static struct kprobe reboot_kp = {
     .symbol_name = REBOOT_SYMBOL,
     .pre_handler = reboot_handler_pre,
 };
+#endif // CONFIG_KSU_SUSFS
 
 void __init ksu_supercalls_init(void)
 {
-    int rc;
-
     ksu_supercall_dump_commands();
 
-    rc = register_kprobe(&reboot_kp);
-    if (rc) {
-        pr_err("reboot kprobe failed: %d\n", rc);
-    } else {
-        pr_info("reboot kprobe registered successfully\n");
+#ifndef CONFIG_KSU_SUSFS
+    {
+        int rc = register_kprobe(&reboot_kp);
+        if (rc) {
+            pr_err("reboot kprobe failed: %d\n", rc);
+        } else {
+            pr_info("reboot kprobe registered successfully\n");
+        }
     }
+#endif // CONFIG_KSU_SUSFS
 }
 
 void __exit ksu_supercalls_exit(void)

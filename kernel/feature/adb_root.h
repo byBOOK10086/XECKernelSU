@@ -9,4 +9,8 @@ void ksu_adb_root_init(void);
 
 void ksu_adb_root_exit(void);
 
+#ifdef CONFIG_KSU_SUSFS
+long ksu_adb_root_handle_execveat_susfs(const char *filename, void ***envp);
+#endif
+
 #endif

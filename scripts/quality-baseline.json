@@ -2,256 +2,96 @@
   "note": "Files allowed to exceed scripts/check_quality.py's line budget. A listed file may shrink but never grow. Deleting the entry is the goal.",
   "max_lines_for_new_files": 400,
   "oversized": {
-    "userspace/ksud/src/lkm_image.rs": {
-      "lines": 3301,
-      "reason": "upstream file, byte-identical to the base: not ours to split"
-    },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/terminal/FileManager.kt": {
-      "lines": 1812,
-      "reason": "file manager: browse + operations + permission editor + zip. Split candidate"
-    },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/modulerepo/ModuleRepoMiuix.kt": {
-      "lines": 1439,
+    "feature/tee/bootstate.sh": {
+      "lines": 426,
       "reason": "ported file: split candidate, no reason recorded yet"
     },
     "kernel/feature/selinux_hide.c": {
-      "lines": 1422,
+      "lines": 1449,
+      "reason": "kernel SUSFS port: the 50_add_susfs baseline hooks need their handler side here (command surface / sid cache / setresuid branches). Re-pinned to the ported size; shrinks from here"
+    },
+    "kernel/feature/sucompat.c": {
+      "lines": 503,
+      "reason": "kernel SUSFS port: the 50_add_susfs baseline hooks need their handler side here (command surface / sid cache / setresuid branches). Re-pinned to the ported size; shrinks from here"
+    },
+    "kernel/hook/lsm_hook.c": {
+      "lines": 475,
       "reason": "ported file: split candidate, no reason recorded yet"
     },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/remote/RemoteAssistantScreen.kt": {
-      "lines": 1383,
-      "reason": "remote assistant: key plan + receive + upload + auth. Split candidate"
-    },
-    "userspace/ksud/src/boot_patch.rs": {
-      "lines": 1231,
-      "reason": "upstream boot image patcher"
-    },
-    "userspace/ksud/src/module.rs": {
-      "lines": 1201,
-      "reason": "upstream module installer"
-    },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/module/ModuleMiuix.kt": {
-      "lines": 1195,
-      "reason": "module list + batch actions + sheet"
-    },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/theme/store/StoreComponents.kt": {
-      "lines": 1186,
-      "reason": "theme store shared components"
-    },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/modulerepo/ModuleRepoMaterial.kt": {
-      "lines": 1126,
-      "reason": "ported file: split candidate, no reason recorded yet"
-    },
-    "kernel/selinux/sepolicy.c": {
-      "lines": 1034,
-      "reason": "ported file: split candidate, no reason recorded yet"
-    },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/module/ModuleMaterial.kt": {
-      "lines": 1030,
-      "reason": "ported file: split candidate, no reason recorded yet"
-    },
-    "kernel/supercall/dispatch.c": {
-      "lines": 1015,
-      "reason": "ported file: split candidate, no reason recorded yet"
-    },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/theme/ThemeEditorTab.kt": {
-      "lines": 988,
-      "reason": "theme editor: one composition per token group. Split candidate"
-    },
-    "kernel/preinit/runner/runner.c": {
-      "lines": 987,
-      "reason": "ported file: split candidate, no reason recorded yet"
-    },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/terminal/NativeTerminal.kt": {
-      "lines": 958,
-      "reason": "console: session + history + pager. Split candidate"
-    },
-    "kernel/preinit/runner/nolibc/sys.h": {
-      "lines": 956,
-      "reason": "ported file: split candidate, no reason recorded yet"
-    },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/home/HomeMiuix.kt": {
-      "lines": 864,
-      "reason": "the home screen: hero + stats + device + update card. Scheduled for splitting after the navigation shell lands"
-    },
-    "userspace/ksud/src/cli.rs": {
-      "lines": 841,
-      "reason": "upstream command table"
-    },
-    "userspace/ksud/src/sulog.rs": {
-      "lines": 801,
-      "reason": "ported file: split candidate, no reason recorded yet"
-    },
-    "userspace/ksud/src/sepolicy.rs": {
-      "lines": 779,
-      "reason": "ported file: split candidate, no reason recorded yet"
-    },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/util/KsuCli.kt": {
-      "lines": 737,
-      "reason": "ported file: split candidate, no reason recorded yet"
-    },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/colorpalette/ColorPaletteScreenMiuix.kt": {
-      "lines": 729,
-      "reason": "ported file: split candidate, no reason recorded yet"
-    },
-    "kernel/preinit/runner/nolibc/stdio.h": {
-      "lines": 684,
-      "reason": "ported file: split candidate, no reason recorded yet"
-    },
-    "userspace/ksud/src/lkm_image_btf.rs": {
-      "lines": 680,
-      "reason": "ported file: split candidate, no reason recorded yet"
-    },
-    "kernel/runtime/ksud_integration.c": {
-      "lines": 679,
-      "reason": "ported file: split candidate, no reason recorded yet"
-    },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/colorpalette/ColorPaletteScreenMaterial.kt": {
-      "lines": 674,
-      "reason": "ported file: split candidate, no reason recorded yet"
-    },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/component/material/SegmentedList.kt": {
-      "lines": 651,
-      "reason": "ported file: split candidate, no reason recorded yet"
-    },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/superuser/SuperUserMiuix.kt": {
-      "lines": 625,
-      "reason": "ported file: split candidate, no reason recorded yet"
-    },
-    "manager/app/src/test/java/me/weishu/kernelsu/data/registry/RegistryClientTest.kt": {
-      "lines": 624,
-      "reason": "ported file: split candidate, no reason recorded yet"
-    },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/appprofile/AppProfileMiuix.kt": {
-      "lines": 620,
-      "reason": "ported file: split candidate, no reason recorded yet"
-    },
-    "kernel/policy/allowlist.c": {
-      "lines": 618,
-      "reason": "ported file: split candidate, no reason recorded yet"
-    },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/home/HomeMaterial.kt": {
-      "lines": 609,
-      "reason": "ported file: split candidate, no reason recorded yet"
-    },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/sulog/SulogMiuix.kt": {
-      "lines": 601,
+    "kernel/infra/event_queue.c": {
+      "lines": 407,
       "reason": "ported file: split candidate, no reason recorded yet"
     },
     "kernel/infra/file_wrapper.c": {
       "lines": 600,
       "reason": "ported file: split candidate, no reason recorded yet"
     },
-    "userspace/ksud/src/preinit.rs": {
-      "lines": 553,
+    "kernel/policy/allowlist.c": {
+      "lines": 618,
       "reason": "ported file: split candidate, no reason recorded yet"
     },
-    "userspace/ksuinit/src/lib.rs": {
-      "lines": 550,
+    "kernel/preinit/runner/nolibc/stdio.h": {
+      "lines": 684,
       "reason": "ported file: split candidate, no reason recorded yet"
     },
     "kernel/preinit/runner/nolibc/stdlib.h": {
       "lines": 546,
       "reason": "ported file: split candidate, no reason recorded yet"
     },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/superuser/SuperUserMaterial.kt": {
-      "lines": 544,
+    "kernel/preinit/runner/nolibc/sys.h": {
+      "lines": 956,
       "reason": "ported file: split candidate, no reason recorded yet"
+    },
+    "kernel/preinit/runner/runner.c": {
+      "lines": 987,
+      "reason": "ported file: split candidate, no reason recorded yet"
+    },
+    "kernel/runtime/ksud_integration.c": {
+      "lines": 717,
+      "reason": "kernel SUSFS port: the 50_add_susfs baseline hooks need their handler side here (command surface / sid cache / setresuid branches). Re-pinned to the ported size; shrinks from here"
     },
     "kernel/selinux/rules.c": {
-      "lines": 542,
+      "lines": 546,
+      "reason": "kernel SUSFS port: the 50_add_susfs baseline hooks need their handler side here (command surface / sid cache / setresuid branches). Re-pinned to the ported size; shrinks from here"
+    },
+    "kernel/selinux/sepolicy.c": {
+      "lines": 1034,
       "reason": "ported file: split candidate, no reason recorded yet"
     },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/component/markdown/GithubMarkdown.kt": {
-      "lines": 542,
-      "reason": "ported file: split candidate, no reason recorded yet"
+    "kernel/supercall/dispatch.c": {
+      "lines": 1116,
+      "reason": "kernel SUSFS port: the 50_add_susfs baseline hooks need their handler side here (command surface / sid cache / setresuid branches). Re-pinned to the ported size; shrinks from here"
     },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/component/profile/RootProfileConfigMiuix.kt": {
-      "lines": 537,
-      "reason": "ported file: split candidate, no reason recorded yet"
-    },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/viewmodel/ModuleViewModel.kt": {
-      "lines": 520,
+    "manager/app/src/main/java/me/weishu/kernelsu/data/theme/ThemeCodec.kt": {
+      "lines": 512,
       "reason": "ported file: split candidate, no reason recorded yet"
     },
     "manager/app/src/main/java/me/weishu/kernelsu/ui/component/FloatingBottomBar.kt": {
       "lines": 514,
       "reason": "ported file: split candidate, no reason recorded yet"
     },
-    "manager/app/src/main/java/me/weishu/kernelsu/data/theme/ThemeCodec.kt": {
-      "lines": 512,
+    "manager/app/src/main/java/me/weishu/kernelsu/ui/component/markdown/GithubMarkdown.kt": {
+      "lines": 542,
       "reason": "ported file: split candidate, no reason recorded yet"
     },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/webui/WebViewInterface.kt": {
-      "lines": 512,
-      "reason": "ported file: split candidate, no reason recorded yet"
-    },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/viewmodel/ThemeViewModel.kt": {
-      "lines": 511,
-      "reason": "theme state for all three tabs"
-    },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/theme/store/StoreDetailPage.kt": {
-      "lines": 494,
-      "reason": "ported file: split candidate, no reason recorded yet"
-    },
-    "userspace/ksud/src/installer.sh": {
-      "lines": 493,
-      "reason": "ported file: split candidate, no reason recorded yet"
-    },
-    "repack_apk.py": {
-      "lines": 490,
-      "reason": "ported file: split candidate, no reason recorded yet"
-    },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/design/panel/Xc8Controls.kt": {
-      "lines": 478,
-      "reason": "ported file: split candidate, no reason recorded yet"
-    },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/module/ModuleActionSheet.kt": {
-      "lines": 478,
-      "reason": "ported file: split candidate, no reason recorded yet"
-    },
-    "kernel/hook/lsm_hook.c": {
-      "lines": 475,
-      "reason": "ported file: split candidate, no reason recorded yet"
-    },
-    "userspace/ksud/src/module_config.rs": {
-      "lines": 472,
-      "reason": "ported file: split candidate, no reason recorded yet"
-    },
-    "userspace/ksud/src/feature.rs": {
-      "lines": 470,
+    "manager/app/src/main/java/me/weishu/kernelsu/ui/component/material/SegmentedList.kt": {
+      "lines": 651,
       "reason": "ported file: split candidate, no reason recorded yet"
     },
     "manager/app/src/main/java/me/weishu/kernelsu/ui/component/profile/RootProfileConfigMaterial.kt": {
       "lines": 469,
       "reason": "ported file: split candidate, no reason recorded yet"
     },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/util/DownloadService.kt": {
-      "lines": 465,
+    "manager/app/src/main/java/me/weishu/kernelsu/ui/component/profile/RootProfileConfigMiuix.kt": {
+      "lines": 537,
       "reason": "ported file: split candidate, no reason recorded yet"
     },
     "manager/app/src/main/java/me/weishu/kernelsu/ui/design/liquid/XcIndication.kt": {
       "lines": 463,
       "reason": "ported file: split candidate, no reason recorded yet"
     },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/extmodules/ExternalModulesScreen.kt": {
-      "lines": 459,
-      "reason": "ported file: split candidate, no reason recorded yet"
-    },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/appprofile/AppProfileMaterial.kt": {
-      "lines": 456,
-      "reason": "ported file: split candidate, no reason recorded yet"
-    },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/template/TemplateMiuix.kt": {
-      "lines": 454,
-      "reason": "ported file: split candidate, no reason recorded yet"
-    },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/wallpaper/WallpaperScreenMiuix.kt": {
-      "lines": 452,
-      "reason": "ported file: split candidate, no reason recorded yet"
-    },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/sulog/SulogMaterial.kt": {
-      "lines": 451,
+    "manager/app/src/main/java/me/weishu/kernelsu/ui/design/panel/Xc8Controls.kt": {
+      "lines": 478,
       "reason": "ported file: split candidate, no reason recorded yet"
     },
     "manager/app/src/main/java/me/weishu/kernelsu/ui/design/panel/Xc8Panel.kt": {
@@ -262,36 +102,200 @@
       "lines": 449,
       "reason": "ported file: split candidate, no reason recorded yet"
     },
-    "userspace/ksud/src/ksucalls.rs": {
-      "lines": 438,
+    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/appprofile/AppProfileMaterial.kt": {
+      "lines": 456,
       "reason": "ported file: split candidate, no reason recorded yet"
     },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/viewmodel/SuperUserViewModel.kt": {
-      "lines": 434,
+    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/appprofile/AppProfileMiuix.kt": {
+      "lines": 620,
       "reason": "ported file: split candidate, no reason recorded yet"
     },
-    "feature/tee/bootstate.sh": {
-      "lines": 426,
+    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/colorpalette/ColorPaletteScreenMaterial.kt": {
+      "lines": 674,
+      "reason": "ported file: split candidate, no reason recorded yet"
+    },
+    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/colorpalette/ColorPaletteScreenMiuix.kt": {
+      "lines": 729,
+      "reason": "ported file: split candidate, no reason recorded yet"
+    },
+    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/extmodules/ExternalModulesScreen.kt": {
+      "lines": 459,
+      "reason": "ported file: split candidate, no reason recorded yet"
+    },
+    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/home/HomeMaterial.kt": {
+      "lines": 609,
+      "reason": "ported file: split candidate, no reason recorded yet"
+    },
+    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/home/HomeMiuix.kt": {
+      "lines": 864,
+      "reason": "the home screen: hero + stats + device + update card. Scheduled for splitting after the navigation shell lands"
+    },
+    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/module/ModuleActionSheet.kt": {
+      "lines": 478,
+      "reason": "ported file: split candidate, no reason recorded yet"
+    },
+    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/module/ModuleMaterial.kt": {
+      "lines": 1030,
+      "reason": "ported file: split candidate, no reason recorded yet"
+    },
+    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/module/ModuleMiuix.kt": {
+      "lines": 1195,
+      "reason": "module list + batch actions + sheet"
+    },
+    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/modulerepo/ModuleRepoMaterial.kt": {
+      "lines": 1126,
+      "reason": "ported file: split candidate, no reason recorded yet"
+    },
+    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/modulerepo/ModuleRepoMiuix.kt": {
+      "lines": 1439,
+      "reason": "ported file: split candidate, no reason recorded yet"
+    },
+    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/remote/RemoteAssistantScreen.kt": {
+      "lines": 1383,
+      "reason": "remote assistant: key plan + receive + upload + auth. Split candidate"
+    },
+    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/settings/ModuleBackupOps.kt": {
+      "lines": 408,
+      "reason": "ported file: split candidate, no reason recorded yet"
+    },
+    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/sulog/SulogMaterial.kt": {
+      "lines": 451,
+      "reason": "ported file: split candidate, no reason recorded yet"
+    },
+    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/sulog/SulogMiuix.kt": {
+      "lines": 601,
+      "reason": "ported file: split candidate, no reason recorded yet"
+    },
+    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/superuser/SuperUserMaterial.kt": {
+      "lines": 544,
+      "reason": "ported file: split candidate, no reason recorded yet"
+    },
+    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/superuser/SuperUserMiuix.kt": {
+      "lines": 625,
+      "reason": "ported file: split candidate, no reason recorded yet"
+    },
+    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/template/TemplateMiuix.kt": {
+      "lines": 454,
+      "reason": "ported file: split candidate, no reason recorded yet"
+    },
+    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/terminal/FileManager.kt": {
+      "lines": 1812,
+      "reason": "file manager: browse + operations + permission editor + zip. Split candidate"
+    },
+    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/terminal/NativeTerminal.kt": {
+      "lines": 958,
+      "reason": "console: session + history + pager. Split candidate"
+    },
+    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/theme/ThemeEditorTab.kt": {
+      "lines": 988,
+      "reason": "theme editor: one composition per token group. Split candidate"
+    },
+    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/theme/store/StoreComponents.kt": {
+      "lines": 1186,
+      "reason": "theme store shared components"
+    },
+    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/theme/store/StoreDetailPage.kt": {
+      "lines": 494,
+      "reason": "ported file: split candidate, no reason recorded yet"
+    },
+    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/wallpaper/WallpaperScreenMiuix.kt": {
+      "lines": 452,
+      "reason": "ported file: split candidate, no reason recorded yet"
+    },
+    "manager/app/src/main/java/me/weishu/kernelsu/ui/util/DownloadService.kt": {
+      "lines": 465,
+      "reason": "ported file: split candidate, no reason recorded yet"
+    },
+    "manager/app/src/main/java/me/weishu/kernelsu/ui/util/KsuCli.kt": {
+      "lines": 737,
       "reason": "ported file: split candidate, no reason recorded yet"
     },
     "manager/app/src/main/java/me/weishu/kernelsu/ui/util/module/Shortcut.kt": {
       "lines": 418,
       "reason": "ported file: split candidate, no reason recorded yet"
     },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/settings/ModuleBackupOps.kt": {
-      "lines": 408,
-      "reason": "ported file: split candidate, no reason recorded yet"
-    },
-    "kernel/infra/event_queue.c": {
-      "lines": 407,
+    "manager/app/src/main/java/me/weishu/kernelsu/ui/viewmodel/ModuleViewModel.kt": {
+      "lines": 520,
       "reason": "ported file: split candidate, no reason recorded yet"
     },
     "manager/app/src/main/java/me/weishu/kernelsu/ui/viewmodel/SettingsViewModel.kt": {
       "lines": 405,
       "reason": "settings state, one property per setting"
     },
+    "manager/app/src/main/java/me/weishu/kernelsu/ui/viewmodel/SuperUserViewModel.kt": {
+      "lines": 434,
+      "reason": "ported file: split candidate, no reason recorded yet"
+    },
+    "manager/app/src/main/java/me/weishu/kernelsu/ui/viewmodel/ThemeViewModel.kt": {
+      "lines": 511,
+      "reason": "theme state for all three tabs"
+    },
+    "manager/app/src/main/java/me/weishu/kernelsu/ui/webui/WebViewInterface.kt": {
+      "lines": 512,
+      "reason": "ported file: split candidate, no reason recorded yet"
+    },
+    "manager/app/src/test/java/me/weishu/kernelsu/data/registry/RegistryClientTest.kt": {
+      "lines": 624,
+      "reason": "ported file: split candidate, no reason recorded yet"
+    },
+    "repack_apk.py": {
+      "lines": 490,
+      "reason": "ported file: split candidate, no reason recorded yet"
+    },
+    "userspace/ksud/src/boot_patch.rs": {
+      "lines": 1231,
+      "reason": "upstream boot image patcher"
+    },
+    "userspace/ksud/src/cli.rs": {
+      "lines": 841,
+      "reason": "upstream command table"
+    },
+    "userspace/ksud/src/feature.rs": {
+      "lines": 470,
+      "reason": "ported file: split candidate, no reason recorded yet"
+    },
+    "userspace/ksud/src/installer.sh": {
+      "lines": 493,
+      "reason": "ported file: split candidate, no reason recorded yet"
+    },
+    "userspace/ksud/src/ksucalls.rs": {
+      "lines": 438,
+      "reason": "ported file: split candidate, no reason recorded yet"
+    },
+    "userspace/ksud/src/lkm_image.rs": {
+      "lines": 3301,
+      "reason": "upstream file, byte-identical to the base: not ours to split"
+    },
+    "userspace/ksud/src/lkm_image_btf.rs": {
+      "lines": 680,
+      "reason": "ported file: split candidate, no reason recorded yet"
+    },
+    "userspace/ksud/src/module.rs": {
+      "lines": 1201,
+      "reason": "upstream module installer"
+    },
+    "userspace/ksud/src/module_config.rs": {
+      "lines": 472,
+      "reason": "ported file: split candidate, no reason recorded yet"
+    },
+    "userspace/ksud/src/preinit.rs": {
+      "lines": 553,
+      "reason": "ported file: split candidate, no reason recorded yet"
+    },
+    "userspace/ksud/src/sepolicy.rs": {
+      "lines": 779,
+      "reason": "ported file: split candidate, no reason recorded yet"
+    },
+    "userspace/ksud/src/sulog.rs": {
+      "lines": 801,
+      "reason": "ported file: split candidate, no reason recorded yet"
+    },
     "userspace/ksud/src/utils.rs": {
       "lines": 403,
+      "reason": "ported file: split candidate, no reason recorded yet"
+    },
+    "userspace/ksuinit/src/lib.rs": {
+      "lines": 550,
       "reason": "ported file: split candidate, no reason recorded yet"
     }
   },

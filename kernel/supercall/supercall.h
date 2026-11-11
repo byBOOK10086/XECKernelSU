@@ -24,6 +24,16 @@ int ksu_install_fd(void);
 int ksu_install_su_fd(void);
 bool ksu_is_su_session_fd(const struct file *filp);
 
+#ifdef CONFIG_KSU_SUSFS
+/*
+ * Install-fd entry used by the SUSFS-mode reboot path: the 50_add_susfs hook in the
+ * baseline kernel's kernel/reboot.c calls ksu_handle_sys_reboot() (supercall/dispatch.c)
+ * for both the ksud (magic2 == KSU_INSTALL_MAGIC2) and susfs client (magic2 ==
+ * SUSFS_MAGIC) command paths.
+ */
+int ksu_supercall_reboot_handler(void __user **arg);
+#endif // CONFIG_KSU_SUSFS
+
 void ksu_supercalls_init(void);
 void ksu_supercalls_exit(void);
 #endif // __KSU_H_SUPERCALL

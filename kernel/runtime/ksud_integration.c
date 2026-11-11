@@ -24,6 +24,9 @@
 #include "klog.h" // IWYU pragma: keep
 #include "ksu.h"
 #include "runtime/ksud.h"
+#ifdef CONFIG_KSU_SUSFS
+#include <linux/jump_label.h>
+#endif
 #include "runtime/ksud_boot.h"
 #include "policy/feature.h"
 #include "selinux/selinux.h"
@@ -57,19 +60,9 @@ static void stop_execve_hook();
 static struct work_struct stop_input_hook_work;
 
 #define MAX_ARG_STRINGS 0x7FFFFFFF
-struct user_arg_ptr {
-#ifdef CONFIG_COMPAT
-    bool is_compat;
-#endif
-    union {
-        const char __user *const __user *native;
-#ifdef CONFIG_COMPAT
-        const compat_uptr_t __user *compat;
-#endif
-    } ptr;
-};
+// struct user_arg_ptr moved to runtime/ksud.h (the SUSFS handlers need it).
 
-static const char __user *get_user_arg_ptr(struct user_arg_ptr argv, int nr)
+const char __user *get_user_arg_ptr(struct user_arg_ptr argv, int nr)
 {
     const char __user *native;
 
@@ -566,6 +559,9 @@ void ksu_execveat_hook_ksud(const struct pt_regs *regs)
     ksu_execve_hook_ksud_common(filename_user, argv_user);
 }
 
+#ifndef CONFIG_KSU_SUSFS
+// SUSFS mode: read/fstat are handled by the baseline kernel hooks, so the pt_regs
+// proxies are LKM-only (they also patch the syscall table on init).
 static long (*orig_sys_read)(const struct pt_regs *regs);
 static long ksu_sys_read(const struct pt_regs *regs)
 {
@@ -616,6 +612,47 @@ static long ksu_sys_fstat(const struct pt_regs *regs)
 
     return ret;
 }
+
+#endif /* !CONFIG_KSU_SUSFS */
+
+#ifdef CONFIG_KSU_SUSFS
+static void stop_init_rc_hook(void)
+{
+    if (static_key_enabled(&ksu_is_init_rc_hook_enabled)) {
+        static_branch_disable(&ksu_is_init_rc_hook_enabled);
+        pr_info("ksu_init_rc_hook is disabled\n");
+    }
+}
+
+// SUSFS 模式：入口 hook 由基线内核提供（static key 默认开启），停止方式是
+// 关 static key 而不是注销 kprobe。
+void ksu_stop_input_hook_runtime(void)
+{
+    static bool input_hook_stopped = false;
+    if (input_hook_stopped) {
+        return;
+    }
+    input_hook_stopped = true;
+    if (static_key_enabled(&ksu_is_input_hook_enabled)) {
+        static_branch_disable(&ksu_is_input_hook_enabled);
+        pr_info("ksu_input_hook is disabled\n");
+    }
+}
+
+// ksud: module support
+void __init ksu_ksud_init()
+{
+    // SUSFS 模式下不再挂 read/fstat 系统调用表补丁与 input kprobe，
+    // 否则会与 50_add_susfs 的源码级 hook 双重触发。
+}
+
+void __exit ksu_ksud_exit()
+{
+    if (module_rc_buf) {
+        free_module_rc();
+    }
+}
+#else /* !CONFIG_KSU_SUSFS */
 
 static int input_handle_event_handler_pre(struct kprobe *p, struct pt_regs *regs)
 {
@@ -677,3 +714,4 @@ void __exit ksu_ksud_exit()
         free_module_rc();
     }
 }
+#endif /* CONFIG_KSU_SUSFS */

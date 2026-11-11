@@ -29,6 +29,9 @@
 #include "feature/shell_su_adb_only.h"
 #include "infra/symbol_resolver.h"
 #include "preinit/preinit.h"
+#ifdef CONFIG_KSU_SUSFS
+#include <linux/susfs.h>
+#endif
 
 #if defined(__x86_64__) && !defined(CONFIG_KSU_X86_PATCH_SYSCALL_DISPATCHER)
 #include <asm/cpufeature.h>
@@ -136,6 +139,14 @@ int __init kernelsu_init(void)
         pr_err("prepare cred failed!\n");
         return -ENOSYS;
     }
+
+#ifdef CONFIG_KSU_SUSFS
+    // SUSFS 模式：初始化基线内核 fs/susfs.c 的数据结构（sus_path/sus_kstat
+    // 表、uname/cmdline 缓存、extra works 等）。exec/stat/read/reboot 等入口
+    // 由 50_add_susfs 打进基线内核的源码级 hook 提供，本模块自身的系统调用
+    // dispatcher 只保留 prctl 超级调用（见 syscall_hook_manager.c）。
+    susfs_init();
+#endif
 
     pr_info("initializing symbol resolver\n");
     ksu_init_symbol_resolver();

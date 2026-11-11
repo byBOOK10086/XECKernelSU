@@ -136,11 +136,15 @@ void __init ksu_syscall_hook_manager_init(void)
 #endif
 
     // Register syscall hooks via dispatcher
+#ifndef CONFIG_KSU_SUSFS
+    // SUSFS mode: these entries come from the baseline kernel's source-level hooks;
+    // registering the pt_regs dispatcher too would handle every call twice.
     ksu_register_syscall_hook(__NR_setresuid, ksu_hook_setresuid);
     ksu_register_syscall_hook(__NR_execve, ksu_hook_execve);
     ksu_register_syscall_hook(__NR_execveat, ksu_hook_execveat);
     ksu_register_syscall_hook(__NR_newfstatat, ksu_hook_newfstatat);
     ksu_register_syscall_hook(__NR_faccessat, ksu_hook_faccessat);
+#endif /* !CONFIG_KSU_SUSFS */
 
 #ifdef CONFIG_HAVE_SYSCALL_TRACEPOINTS
     ret = register_trace_prio_sys_enter(ksu_sys_enter_handler, NULL, INT_MIN);
@@ -172,11 +176,13 @@ void __exit ksu_syscall_hook_manager_exit(void)
     destroy_kretprobe(&syscall_unregfunc_rp);
 #endif
 
+#ifndef CONFIG_KSU_SUSFS
     ksu_unregister_syscall_hook(__NR_setresuid);
     ksu_unregister_syscall_hook(__NR_execve);
     ksu_unregister_syscall_hook(__NR_execveat);
     ksu_unregister_syscall_hook(__NR_newfstatat);
     ksu_unregister_syscall_hook(__NR_faccessat);
+#endif /* !CONFIG_KSU_SUSFS */
 
     ksu_syscall_hook_exit();
 

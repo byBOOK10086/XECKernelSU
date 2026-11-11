@@ -13,4 +13,9 @@ void escape_to_root_for_init(void);
 
 void __init ksu_app_profile_init(void);
 
+#ifdef CONFIG_KSU_SUSFS
+// setuid_hook 的 SUSFS 分支（zygote fork 出的 manager/允许应用）直接调用
+void disable_seccomp(void);
+#endif
+
 #endif

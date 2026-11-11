@@ -21,6 +21,9 @@
 #include "feature/adb_root.h"
 #include "preinit/preinit.h"
 
+#ifndef CONFIG_KSU_SUSFS
+// SUSFS mode: the baseline kernel's fs/exec.c and fs/stat.c hooks provide these
+// entry points, so the pt_regs versions are LKM-only.
 static int ksu_handle_init_mark_tracker(const char __user **filename_user)
 {
     char path[64];
@@ -63,7 +66,7 @@ long __nocfi ksu_hook_faccessat(int orig_nr, const struct pt_regs *regs)
 
     return ksu_handle_faccessat_sucompat(orig_nr, (struct pt_regs *)regs);
 }
-
+#endif /* !CONFIG_KSU_SUSFS */
 DEFINE_STATIC_KEY_TRUE(ksud_execve_key);
 
 void ksu_stop_ksud_execve_hook()
@@ -71,6 +74,9 @@ void ksu_stop_ksud_execve_hook()
     static_branch_disable(&ksud_execve_key);
 }
 
+#ifndef CONFIG_KSU_SUSFS
+// SUSFS mode: exec/execveat/setresuid are handled by the baseline hooks;
+// the LKM dispatcher entries below must not be compiled in that mode.
 static long __nocfi ksu_hook_execve_common(int orig_nr, const struct pt_regs *regs, bool execveat)
 {
     const char __user **filename_user =
@@ -141,3 +147,4 @@ long __nocfi ksu_hook_setresuid(int orig_nr, const struct pt_regs *regs)
     ksu_handle_setresuid(old_uid, current_uid().val);
     return ret;
 }
+#endif /* !CONFIG_KSU_SUSFS */

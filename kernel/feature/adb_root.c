@@ -231,3 +231,40 @@ void __exit ksu_adb_root_exit(void)
 {
     ksu_unregister_feature_handler(KSU_FEATURE_ADB_ROOT);
 }
+
+#ifdef CONFIG_KSU_SUSFS
+// SUSFS 模式（50_add_susfs 的 fs/exec.c hook）：filename 是内核态字符串，
+// envp 指向 do_execveat_common 里 envp->ptr.native 的地址，写回的新 env
+// 数组地址会被随后的 bprm_execve 直接使用。栈指针取 current_pt_regs()，
+// 与系统调用入口的 pt_regs 是同一份。
+long ksu_adb_root_handle_execveat_susfs(const char *filename, void ***envp)
+{
+    static const char kAdbd[] = "/adbd";
+    static const size_t kAdbdLen = sizeof(kAdbd) - 1;
+    size_t len;
+
+    if (!static_branch_unlikely(&ksu_adb_root))
+        return 0;
+
+    if (unlikely(!filename || !envp))
+        return 0;
+
+    len = strlen(filename);
+    if (len < kAdbdLen || memcmp(filename + len - kAdbdLen, kAdbd, kAdbdLen + 1) != 0)
+        return 0;
+
+    if (unlikely(is_libadbroot_ok() != 1))
+        return 0;
+
+    {
+        long ret = setup_ld_preload(current_pt_regs(), (unsigned long *)envp);
+        if (ret) {
+            return ret;
+        }
+    }
+
+    pr_info("escape to root for adb\n");
+    escape_to_root_for_adb_root();
+    return 0;
+}
+#endif

@@ -77,7 +77,8 @@ void seccomp_filter_release(struct task_struct *tsk);
 static bool has_call_to_spin_lock = false;
 #endif
 
-static void disable_seccomp(void)
+/* Non-static because the SUSFS setresuid branch in hook/setuid_hook.c calls it. */
+void disable_seccomp(void)
 {
     struct task_struct *fake;
 

@@ -60,6 +60,15 @@ bash feature/tee/test/run.sh && bash feature/tee/test/run-bootstate.sh
 字符串转义、资源引用缺失、manifest 合并错误都只在资源这一步（或更后面的 release 打包）暴露，
 而 CI 上的 `build-manager` 才是第一个跑到那里的任务 —— 本地漏跑就等于让 CI 替你发现问题。
 
+## 一次性的、有记录的预算重钉
+
+内核 SUSFS 移植（21 个文件、约 1,567 行）是唯一一次"允许变大"的批次：`selinux_hide.c`、
+`sucompat.c`、`ksud_integration.c`、`rules.c`、`dispatch.c` 的预算被重新钉到移植后的大小，
+理由写在 `scripts/quality-baseline.json` 的每一项里。之后棘轮照常只降不升。
+其余被改的文件（`selinux.c`、`setuid_hook.c`、`syscall_event_bridge.c`、
+`syscall_hook_manager.c`、`core/init.c`、`adb_root.*`、`sucompat.h`、`setuid_hook.h`、
+`ksud.h`）仍在 400 行以内，没有进预算表。
+
 ## 当前状态
 
 ```
