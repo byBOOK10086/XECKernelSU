@@ -86,10 +86,6 @@ static void (*context_struct_compute_av_fn)(struct policydb *policydb, struct co
                                             struct context *tcontext, u16 tclass, struct av_decision *avd,
                                             struct extended_perms *xperms) = NULL;
 
-static void (*context_struct_compute_av_fn)(struct policydb *policydb, struct context *scontext,
-                                            struct context *tcontext, u16 tclass, struct av_decision *avd,
-                                            struct extended_perms *xperms) = NULL;
-
 #if LINUX_VERSION_CODE < KERNEL_VERSION(6, 6, 0)
 /* SUSFS 模式下老 KMI（<6.6）的 50_add_susfs selinux hunk 会以
      * `extern struct selinux_state fake_state;` 从基线内核对象引用它，
