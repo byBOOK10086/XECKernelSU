@@ -26,4 +26,8 @@ jobs:
         uses: ludeeus/action-shellcheck@2.0.0
         with:
           ignore_names: gradlew
-          ignore_paths: ./userspace/ksud/src/installer.sh ./.github/scripts/setup-rust-build.sh ./userspace/ksud/builtin
+          ignore_paths: ./userspace/ksud/src/installer.sh ./.github/scripts/setup-rust-build.sh
+          # Scan only the directories we maintain. The whole-repository default also walks
+          # the module trees embedded in ksud (userspace/ksud/builtin/**), which are vendored
+          # payload: `ignore_paths` does not exclude them (measured: 20 files still flagged).
+          scandir: './feature ./scripts ./.github/scripts ./userspace/ksud/src'
