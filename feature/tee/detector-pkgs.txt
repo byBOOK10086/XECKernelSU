@@ -1,0 +1,24 @@
+# Checker / verifier packages (tier D).
+#
+# These are the tools that decide whether the device looks rooted or unlocked.
+# target-gen.sh only writes them into target.txt when keybox-health.sh says the
+# keybox can prove itself (chain reaches Google, leaf has >= 7 days left), and
+# then writes them with `!` (force GENERATE) so they are served a chain we
+# signed instead of a half-patched one. When the keybox cannot prove itself the
+# whole list is left out on purpose: an uncvouched chain produces exactly the
+# "unknown certificate / tampered attestation key" red item we are trying to
+# avoid, so those tools must fall through to the real TEE instead.
+#
+# One package per line, no comments after the name.
+
+com.eltavine.duckdetector
+com.chunqiunativecheck
+io.github.vvb2060.keyattestation
+io.github.vvb2060.mahoshojo
+io.github.qwq233.keyattestation
+com.reveny.nativecheck
+com.zhenxi.hunter
+io.liankong.riskdetector
+luna.safe.luna
+icu.nullptr.nativetest
+com.android.nativetest

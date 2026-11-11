@@ -1,0 +1,24 @@
+# XEC TEE baseline coverage (tier C).
+#
+# Merged into the generated block of /data/adb/tricky_store/target.txt by
+# target-gen.sh. These packages must always be covered: they are the ones that
+# read the attestation result, so a missing entry here does not mean "not
+# spoofed", it means "reports the real unlocked state".
+#
+# Syntax (see target-gen.sh header): bare = AUTO, `!` = GENERATE, `?` = PATCH,
+# `[file.xml]` = use another keybox. Do not add comments after an entry.
+
+# The verifier route used by the engine's own chain test.
+wu.keyChain.test
+
+# vvb2060's key attestation app: the reference tool for "is the chain trusted".
+io.github.vvb2060.keyattestation
+
+# Play Integrity checkers: without coverage they report the real verdict.
+gr.nikolasspyr.integritycheck
+com.henrikherzig.playintegritychecker
+krypton.tbsafetychecker
+
+# AOSP / GMS attestation plumbing.
+com.google.android.gsf
+com.android.keyattestation
