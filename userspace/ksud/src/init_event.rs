@@ -68,6 +68,15 @@ pub fn on_post_fs_data() -> Result<()> {
         warn!("prune modules failed: {e}");
     }
 
+    // Materialise the module trees bundled into this ksud binary (the TEE engine and the
+    // TA-enhancement tree) before the module set is enumerated below, so sepolicy, preinit
+    // and the post-fs-data scripts all see them on the very boot they were installed. A
+    // failure is logged and must never abort the boot.
+    match crate::builtin::install_builtin_modules() {
+        Ok(()) => info!("built-in modules ready"),
+        Err(e) => warn!("install built-in modules failed: {e:#}"),
+    }
+
     // Refresh /metadata/watchdog/ksu/{modules.rc,preinit/} so the next boot's kernel hook sees the
     // current module set. Acts as a safety net when state was changed outside
     // of ksud's normal mutation commands.
@@ -82,6 +91,10 @@ pub fn on_post_fs_data() -> Result<()> {
     // load sepolicy.rule
     if crate::module::load_sepolicy_rule().is_err() {
         warn!("load sepolicy.rule failed");
+    }
+
+    if let Err(e) = crate::builtin::load_sepolicy_rules() {
+        warn!("load built-in sepolicy rules failed: {e}");
     }
 
     if let Err(e) = crate::profile::apply_sepolies() {
@@ -105,6 +118,12 @@ pub fn on_post_fs_data() -> Result<()> {
     // exec modules post-fs-data scripts
     if let Err(e) = crate::module::exec_stage_script("post-fs-data", wait) {
         warn!("exec post-fs-data scripts failed: {e}");
+    }
+
+    // The bundled trees are not modules any more: their stage scripts run from
+    // /data/adb/ksu/builtin after the user modules, which is where they used to run.
+    if let Err(e) = crate::builtin::exec_stage_script("post-fs-data", wait) {
+        warn!("exec built-in post-fs-data scripts failed: {e}");
     }
 
     // load system.prop
@@ -149,6 +168,10 @@ pub fn run_stage(stage: &str, wait: ScriptWait) {
     // execute regular modules stage scripts
     if let Err(e) = crate::module::exec_stage_script(stage, wait) {
         warn!("Failed to exec {stage} scripts: {e}");
+    }
+
+    if let Err(e) = crate::builtin::exec_stage_script(stage, wait) {
+        warn!("Failed to exec built-in {stage} scripts: {e}");
     }
 }
 
