@@ -67,6 +67,32 @@ pub fn get_asset(name: &str) -> Result<Box<dyn AsRef<[u8]>>> {
     Ok(Box::new(asset.data))
 }
 
+/// The module trees under `builtin/` that ship inside ksud itself.
+///
+/// Every Android ABI embeds the same tree on purpose: CI materialises the payload for
+/// aarch64 only, and an x86_64 emulator build must still find it. Host builds skip the
+/// embed entirely (it is only used on the device boot path).
+#[cfg(target_os = "android")]
+#[derive(RustEmbed)]
+#[folder = "builtin/"]
+pub struct BuiltinAsset;
+
+#[cfg(target_os = "android")]
+pub fn list_builtin_assets() -> std::vec::Vec<std::string::String> {
+    let mut list = Vec::new();
+    for file in BuiltinAsset::iter() {
+        list.push(file.into_owned());
+    }
+    list
+}
+
+#[cfg(target_os = "android")]
+pub fn get_builtin_asset(name: &str) -> Result<std::vec::Vec<u8>> {
+    let asset = BuiltinAsset::get(name)
+        .ok_or_else(|| anyhow::anyhow!("builtin asset not found: {name}"))?;
+    Ok(asset.data.into_owned())
+}
+
 pub fn list_supported_kmi() -> std::vec::Vec<std::string::String> {
     let mut list = Vec::new();
     for file in Asset::iter() {

@@ -13,6 +13,7 @@
 
 mod apk_sign;
 mod assets;
+mod builtin;
 mod boot_patch;
 #[cfg(target_os = "android")]
 mod cli;

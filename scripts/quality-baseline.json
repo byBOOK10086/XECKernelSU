@@ -246,6 +246,10 @@
       "lines": 1231,
       "reason": "upstream boot image patcher"
     },
+    "userspace/ksud/src/builtin.rs": {
+      "lines": 967,
+      "reason": "ported built-in module installer (stamp/version refresh + stage scripts); split candidate once the TEE payload lands"
+    },
     "userspace/ksud/src/cli.rs": {
       "lines": 841,
       "reason": "upstream command table"

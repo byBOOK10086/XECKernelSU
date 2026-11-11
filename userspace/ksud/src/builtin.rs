@@ -1,0 +1,967 @@
+//! Modules bundled inside the ksud binary itself.
+//!
+//! `userspace/ksud/builtin/` is embedded at compile time (`assets::BuiltinAsset`).
+//! On the kernel-state boot path the trees are materialised into
+//! `/data/adb/modules/<id>/` before the module set is enumerated, so the normal
+//! pipeline in `init_event.rs` (sepolicy rules, preinit rc, `post-fs-data.sh`)
+//! runs them from the very first boot after an ksud update.
+//!
+//! This is deliberately *not* the removed encrypted store: no blob under
+//! `/data/adb/ksu/cfg` and no repair/status JSON. `/dev/.ksud_hidden` is not used
+//! for the module trees either — note that the TA_enhanced payload still keeps a
+//! live `/dev/.ksud_hidden/bootparams` overlay of its own (see `bootstate.rs`),
+//! which is unrelated to how the module gets installed. The installed module is a
+//! plain module directory the user can inspect, disable or edit like any other
+//! module.
+
+use anyhow::{Context, Result, anyhow, ensure};
+use log::{debug, info, warn};
+use std::{
+    collections::BTreeMap,
+    ffi::OsString,
+    fs::{self, File, Permissions},
+    io::Write,
+    os::unix::{fs::PermissionsExt, process::CommandExt},
+    path::{Component, Path, PathBuf},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+};
+
+use crate::{assets, defs, module, utils};
+
+/// Stamp file written into every module this installer owns.
+///
+/// Its presence and body are the only ownership marker: the manager never
+/// writes it, so a stamp mismatch (or a missing stamp on a freshly flashed
+/// external module with the same id) is the update path.
+const STAMP_FILE_NAME: &str = ".ksud_builtin_stamp";
+
+/// Layout version of the stamp body and the materialisation rules.
+///
+/// Bump it when the file layout or the permission rules change so an installed
+/// copy is refreshed once even if `VERSION_CODE` happens to be identical.
+const STAMP_VERSION: u32 = 1;
+
+/// One file embedded under `builtin/`, split into its module id and the path
+/// relative to the module root.
+struct BuiltinFile {
+    /// Full embedded name, e.g. `tricky_store/bin/arm64-v8a/daemon`.
+    asset: String,
+    /// Module-relative path, e.g. `bin/arm64-v8a/daemon`.
+    relative: PathBuf,
+}
+
+/// Install or refresh every module embedded under `builtin/`.
+///
+/// The common path is a no-op: each module directory carries a stamp file and
+/// only a mismatching stamp (first boot after an ksud update, or a module that
+/// was never installed) rewrites files.
+///
+/// # Errors
+///
+/// Returns the first per-module failure after trying every module. Callers must
+/// log it and continue booting: bundled modules are auxiliary and an install
+/// failure must never take the boot down.
+/// Where the bundled trees live. **Not** a module directory: ksud runs their
+/// stage scripts and applies their sepolicy rules itself, so nothing of ours
+/// appears under /data/adb/modules and there is no module for a user to delete,
+/// disable or have resurrected after a reboot.
+pub const ROOT: &str = "/data/adb/ksu/builtin";
+
+/// 内置 TEE/TS 引擎的总开关（文件存在 = 下一轮开机不注入）。
+///
+/// 引擎是纯用户态注入（`tricky_store` 的 daemon + `TA_enhanced` 的阶段脚本），
+/// **不是**内核模块，所以关掉它不影响 root：LKM 照常加载，su、模块、隐藏全部照常，
+/// 只是 keystore2 里那条伪造的证明链不再出现，设备回到真实硬件证明。
+///
+/// 只在开机路径上读，所以改完必须重启才生效。
+pub const TEE_ENGINE_SWITCH: &str = ".tee_engine_off";
+
+/// 「重启后强制自启」开关（文件存在 = 开机 service 阶段即使命中闸门也要把引擎拉起来）。
+///
+/// 和 [`TEE_ENGINE_SWITCH`] 是两件事：那个是"要不要引擎"，这个是"闸门挡着时要不要
+/// 破例"。用户在管理器里点过强制修复就等于明确表态"我要它起来"，所以这个开关只是
+/// 把那句话记到下一次开机。
+pub const FORCE_BOOT_FLAG: &str = ".tee_engine_force_boot";
+
+/// 唯一作用就是伪造证明链的两棵内置树；关开关时它们既不安装也不执行。
+pub const TEE_ENGINE_MODULES: [&str; 2] = ["tricky_store", "TA_enhanced"];
+
+fn tee_engine_switch_path() -> PathBuf {
+    Path::new(defs::WORKING_DIR).join(TEE_ENGINE_SWITCH)
+}
+
+pub fn tee_engine_enabled() -> bool {
+    !tee_engine_switch_path().exists()
+}
+
+/// 开机 service 阶段要不要无视闸门强起引擎。
+pub fn force_boot_enabled() -> bool {
+    Path::new(defs::WORKING_DIR).join(FORCE_BOOT_FLAG).exists()
+}
+
+/// 打开/关闭「重启后强制自启」，返回生效后的状态。
+pub fn set_force_boot(enabled: bool) -> Result<bool> {
+    let flag = Path::new(defs::WORKING_DIR).join(FORCE_BOOT_FLAG);
+    if enabled {
+        if let Some(parent) = flag.parent() {
+            fs::create_dir_all(parent).with_context(|| format!("创建 {}", parent.display()))?;
+        }
+        fs::write(&flag, b"1\n").with_context(|| format!("写入 {}", flag.display()))?;
+        return Ok(true);
+    }
+    match fs::remove_file(&flag) {
+        Ok(()) => info!("force-boot switch off"),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error).with_context(|| format!("删除 {}", flag.display())),
+    }
+    Ok(false)
+}
+
+/// 打开/关闭内置 TEE/TS 引擎，返回生效后的状态。
+///
+/// 关闭时顺手把已经落地的树删掉：只写开关文件的话磁盘上那份还在，任何"直接跑树里
+/// 脚本"的路径都会让开关形同虚设（阶段脚本、sepolicy 规则、TA 的 webroot 都在树里）。
+pub fn set_tee_engine_enabled(enabled: bool) -> Result<bool> {
+    let flag = tee_engine_switch_path();
+    if enabled {
+        match fs::remove_file(&flag) {
+            Ok(()) => info!("built-in TEE/TS engine enabled"),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(error).with_context(|| format!("删除 {}", flag.display()));
+            }
+        }
+        return Ok(true);
+    }
+
+    if let Some(parent) = flag.parent() {
+        fs::create_dir_all(parent).with_context(|| format!("创建 {}", parent.display()))?;
+    }
+    fs::write(&flag, b"1\n").with_context(|| format!("写入 {}", flag.display()))?;
+    for id in TEE_ENGINE_MODULES {
+        let tree = Path::new(ROOT).join(id);
+        if !tree.exists() {
+            continue;
+        }
+        match fs::remove_dir_all(&tree) {
+            Ok(()) => info!("removed built-in tree {}", tree.display()),
+            Err(error) => warn!("failed to remove {}: {error:#}", tree.display()),
+        }
+    }
+    // 内置引擎关了，轮到外部：把被我们压住的第三方模块原样放回。
+    release_external_engines();
+    Ok(false)
+}
+
+/// 关掉开关时把某棵树清掉（安装/执行两条路径都要能自愈）。
+fn remove_tree_if_tee_disabled(module_id: &str) {
+    if tee_engine_enabled() || !TEE_ENGINE_MODULES.contains(&module_id) {
+        return;
+    }
+    let tree = Path::new(ROOT).join(module_id);
+    if !tree.exists() {
+        return;
+    }
+    match fs::remove_dir_all(&tree) {
+        Ok(()) => info!("built-in TEE/TS engine off, removed {}", tree.display()),
+        Err(error) => warn!("failed to remove {}: {error:#}", tree.display()),
+    }
+}
+
+/// What one install pass did.
+#[derive(Debug, Default)]
+pub struct InstallReport {
+    /// Bundled module trees found inside this ksud build.
+    pub modules: usize,
+    /// Trees that were actually (re)written. A matching stamp with every file
+    /// still present is a no-op, so this is 0 on an untouched device.
+    pub rewritten: usize,
+}
+
+/// Stage of the bundled engine that [`start_tee_engine`] launched.
+#[derive(Debug)]
+pub struct ScriptRun {
+    /// Module id the script belongs to, e.g. `tricky_store`.
+    pub module: String,
+    /// Stage name without the `.sh` suffix, e.g. `post-fs-data`.
+    pub stage: String,
+    /// Whether the script was spawned. A non-zero exit *inside* the script is
+    /// not visible here; the manager reads the engine state afterwards.
+    pub spawned: bool,
+}
+
+/// Result of [`start_tee_engine`]; the CLI prints it as `key=value` lines.
+#[derive(Debug)]
+pub struct StartReport {
+    /// Runtime tree that holds the engine payload.
+    pub engine_dir: String,
+    /// What the install pass did before the scripts ran.
+    pub install: InstallReport,
+    /// Scripts launched, in the order they were launched.
+    pub scripts: Vec<ScriptRun>,
+    /// `TEESimulator` pid after the bounded wait; 0 when it never showed up.
+    pub engine_pid: i32,
+    /// Whether keystore2's maps already contain the injected library.
+    pub injected: bool,
+    /// External engine copies this run made yield (moved away or suppressed).
+    ///
+    /// Surfaced so the manager can show *why* an engine that used to be quiet now
+    /// starts: the built-in engine owns the injection surface.
+    pub yielded: Vec<String>,
+}
+
+/// How long one stage script may take before `builtin start` moves on.
+///
+/// Every bundled script backgrounds its long-running work (daemon, watchdogs,
+/// 45s probe), so this budget only covers the foreground part of the script.
+const SCRIPT_BUDGET: Duration = Duration::from_secs(45);
+
+/// How long [`start_tee_engine`] waits for the engine process / injection.
+// 2026-11-11: 15s 在真机上不够。实测 `builtin start` 返回 engine_pid=0、
+// injected=0，而几秒后的 ps 里两个 TEESimulator 已经跑着。引擎启动前要先解析
+// keybox、起 certgen，冷启动慢于 15s 是常态 —— 于是状态被误报成"没跑"。
+// 看门狗应当是"真死了"才报，不是"刚启动"。
+const ENGINE_WAIT: Duration = Duration::from_secs(30);
+
+/// How long a previously running engine gets to disappear.
+const STOP_BUDGET: Duration = Duration::from_secs(8);
+
+/// Poll interval for the `/proc` probes below.
+const POLL_STEP_MS: u64 = 250;
+
+pub fn install_builtin_modules() -> Result<()> {
+    install_builtin_modules_impl(false).map(|_| ())
+}
+
+/// Install the bundled trees even where the boot path would have skipped them.
+///
+/// The mount-state and safe-mode gates only mean "never populate the module set
+/// behind the user's back at boot"; an explicit `ksud builtin install` from the
+/// manager is the opposite situation, so it bypasses both.
+///
+/// # Errors
+///
+/// Returns the first per-module failure after trying every module.
+pub fn install_builtin_modules_forced() -> Result<InstallReport> {
+    install_builtin_modules_impl(true)
+}
+
+fn install_builtin_modules_impl(forced: bool) -> Result<InstallReport> {
+    // Safe mode exists precisely so a broken device boots without modules;
+    // installing bundled modules behind the user's back would defeat it.
+    if !forced && utils::is_safe_mode() {
+        warn!("safe mode, skip built-in modules");
+        return Ok(InstallReport::default());
+    }
+
+    let modules = group_builtin_assets()?;
+    if modules.is_empty() {
+        info!("no built-in modules bundled");
+        return Ok(InstallReport::default());
+    }
+
+    // 产品策略：内置引擎优先。开机路径也要先把外部引擎压下去，否则它会跟内置树
+    // 各自 stand down（见 `yield_external_engines` 的注释）。
+    if tee_engine_enabled() {
+        let yielded = yield_external_engines();
+        if !yielded.is_empty() {
+            info!(
+                "external engines yielded at install time: {}",
+                yielded.join(", ")
+            );
+        }
+    }
+
+    let mut report = InstallReport {
+        modules: modules.len(),
+        rewritten: 0,
+    };
+    let mut first_error: Option<anyhow::Error> = None;
+    for (module_id, files) in &modules {
+        // 用户关掉了内置 TEE/TS 引擎：这两棵树既不安装，存量也要清掉，
+        // 否则"磁盘上还在"就等于开关没生效。其它内置树照常安装。
+        if !tee_engine_enabled() && TEE_ENGINE_MODULES.contains(&module_id.as_str()) {
+            remove_tree_if_tee_disabled(module_id);
+            continue;
+        }
+        match install_module(module_id, files) {
+            Ok(true) => report.rewritten += 1,
+            Ok(false) => {}
+            Err(error) => {
+                warn!("install built-in module {module_id} failed: {error:#}");
+                first_error
+                    .get_or_insert_with(|| error.context(format!("built-in module {module_id}")));
+            }
+        }
+    }
+
+    first_error.map_or(Ok(report), Err)
+}
+
+/// Group the embedded files by their first path component, the module id.
+///
+/// Top-level files such as `builtin/README.md` have no module component and are
+/// skipped: they document the directory, they are not part of any module.
+fn group_builtin_assets() -> Result<BTreeMap<String, Vec<BuiltinFile>>> {
+    let mut modules: BTreeMap<String, Vec<BuiltinFile>> = BTreeMap::new();
+
+    for asset in assets::list_builtin_assets() {
+        let Some((module_id, relative)) = asset.split_once('/') else {
+            continue;
+        };
+
+        module::validate_module_id(module_id)
+            .with_context(|| format!("invalid module id in built-in asset '{asset}'"))?;
+        let relative = relative_module_path(relative)
+            .with_context(|| format!("unsafe path in built-in asset '{asset}'"))?;
+
+        modules
+            .entry(module_id.to_string())
+            .or_default()
+            .push(BuiltinFile { asset, relative });
+    }
+
+    Ok(modules)
+}
+
+/// Install one embedded module tree into `/data/adb/ksu/builtin/<id>/`.
+///
+/// Returns whether the tree was (re)written. A stamp alone is not enough to skip
+/// the write: a cleaner that deletes files but leaves the stamp would otherwise
+/// make the tree permanently "installed but broken" - exactly the state where
+/// the engine script fails while every check claims it is up to date.
+fn install_module(module_id: &str, files: &[BuiltinFile]) -> Result<bool> {
+    let module_dir = Path::new(ROOT).join(module_id);
+
+    // Migration: builds that shipped this tree as a module left it under
+    // /data/adb/modules/<id>. Remove **only** copies this installer owns: a
+    // user-installed module with the same id (even a disabled one) is theirs,
+    // and deleting it here would throw away their own target.txt/keybox edits.
+    let legacy = Path::new(defs::MODULE_DIR).join(module_id);
+    if legacy.join(STAMP_FILE_NAME).is_file() {
+        match fs::remove_dir_all(&legacy) {
+            Ok(()) => info!("removed the module-era copy at {}", legacy.display()),
+            Err(error) => warn!("failed to remove {}: {error}", legacy.display()),
+        }
+    }
+
+    let stamp_body = builtin_stamp(files.len());
+    let stamp_path = module_dir.join(STAMP_FILE_NAME);
+
+    // Common path: a small stamp read plus one stat per embedded file. A matching
+    // stamp with every file present means this build already wrote the whole
+    // tree, so user edits made afterwards are intentionally left untouched until
+    // the next update.
+    let stamp_ok = fs::read_to_string(&stamp_path).is_ok_and(|stamp| stamp.trim() == stamp_body);
+    if stamp_ok
+        && files
+            .iter()
+            .all(|file| module_dir.join(&file.relative).is_file())
+    {
+        debug!("built-in module {module_id} is up to date");
+        return Ok(false);
+    }
+
+    // Update path: missing stamp, missing file or a different ksud build. Every
+    // embedded file is (re)written, which overwrites local edits inside the
+    // module; that is the bundled-update contract. Nothing is ever deleted: files
+    // the user added, and files an older build shipped but this one no longer
+    // does, stay.
+    info!(
+        "installing built-in module {module_id} ({} files) into {}",
+        files.len(),
+        module_dir.display()
+    );
+    for file in files {
+        let destination = module_dir.join(&file.relative);
+        // Components were validated at grouping time; assert again because this
+        // is the join that turns them into a path on disk.
+        ensure!(
+            destination.starts_with(&module_dir),
+            "built-in asset '{}' would escape {}",
+            file.asset,
+            module_dir.display()
+        );
+        let data = assets::get_builtin_asset(&file.asset)?;
+        write_atomic(&destination, &data, builtin_file_mode(&file.relative))?;
+    }
+
+    // The stamp is the commit point: if anything above fails (or the process
+    // dies), the stamp stays absent/stale and the next boot retries the whole
+    // module instead of treating a half-written tree as installed.
+    write_atomic(&stamp_path, stamp_body.as_bytes(), 0o644)?;
+    info!("built-in module {module_id} installed");
+    Ok(true)
+}
+
+/// Stamp body identifying the embedded tree of this build.
+///
+/// `VERSION_CODE` is the git commit count baked in at build time, so it moves
+/// whenever the committed `builtin/` tree changes. The file count makes a
+/// hand-edited stamp look different too, and costs nothing because the grouped
+/// list is already in memory.
+fn builtin_stamp(file_count: usize) -> String {
+    format!("v{STAMP_VERSION} {} {file_count}", defs::VERSION_CODE)
+}
+
+/// Validate one module-relative embedded path and turn it into a `PathBuf`.
+///
+/// The embedded list is a compile-time constant, but the destination is joined
+/// at runtime, so traversal (`..`), absolute paths and Windows prefixes are
+/// rejected explicitly instead of trusted.
+fn relative_module_path(relative: &str) -> Result<PathBuf> {
+    ensure!(!relative.is_empty(), "empty built-in asset path");
+    let path = Path::new(relative);
+    ensure!(
+        path.components()
+            .all(|component| matches!(component, Component::Normal(_))),
+        "built-in asset path '{relative}' must stay inside its module directory"
+    );
+    Ok(path.to_path_buf())
+}
+
+/// POSIX mode for one module-relative file.
+///
+/// Mirrors the executable bits the upstream module zips carry: shell scripts,
+/// everything under `bin/` / `lib/`, and extensionless files in the module root
+/// (`daemon`, `inject`, `supervisor`).
+fn builtin_file_mode(relative: &Path) -> u32 {
+    let shell_script = relative
+        .extension()
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("sh"));
+    let native_payload = relative.starts_with("bin") || relative.starts_with("lib");
+    let root_program = relative.components().count() == 1 && relative.extension().is_none();
+
+    if shell_script || native_payload || root_program {
+        0o755
+    } else {
+        0o644
+    }
+}
+
+/// Write `contents` to a hidden temp file next to `dest`, then rename it into
+/// place, so a crash can never leave a truncated file at the real path.
+fn write_atomic(dest: &Path, contents: &[u8], mode: u32) -> Result<()> {
+    let parent = dest
+        .parent()
+        .ok_or_else(|| anyhow!("built-in asset path has no parent: {}", dest.display()))?;
+    fs::create_dir_all(parent).with_context(|| format!("Failed to create {}", parent.display()))?;
+
+    let file_name = dest
+        .file_name()
+        .ok_or_else(|| anyhow!("built-in asset path has no file name: {}", dest.display()))?;
+    // OsString::push keeps this a path component, not string concatenation.
+    let mut temp_name = OsString::from(".");
+    temp_name.push(file_name);
+    temp_name.push(".ksud.tmp");
+    let temp_path = dest.with_file_name(temp_name);
+
+    {
+        let mut file = File::create(&temp_path)
+            .with_context(|| format!("Failed to create {}", temp_path.display()))?;
+        file.write_all(contents)
+            .with_context(|| format!("Failed to write {}", temp_path.display()))?;
+        file.sync_all()
+            .with_context(|| format!("Failed to sync {}", temp_path.display()))?;
+        file.set_permissions(Permissions::from_mode(mode))
+            .with_context(|| format!("Failed to chmod {}", temp_path.display()))?;
+    }
+
+    fs::rename(&temp_path, dest).with_context(|| {
+        format!(
+            "Failed to rename {} -> {}",
+            temp_path.display(),
+            dest.display()
+        )
+    })?;
+    Ok(())
+}
+
+/// `builtin start`: materialise the bundled engine and start it **now**.
+///
+/// This is what the manager's one-click repair calls. It deliberately does not
+/// go through `init_event::run_stage`: that path only exists at boot and is
+/// gated on mount state / Magisk / safe mode, while this one is an explicit
+/// request from the user and has to work in the running session, without a
+/// reboot and without a matching kernel.
+///
+/// # Errors
+///
+/// Fails when the engine switch is off or the payload is not embedded. An external
+/// engine module no longer fails this call: the built-in engine has priority and
+/// makes the external one yield (see [`yield_external_engines`]).
+///
+/// `wait_for_engine` 只影响最后的回读：管理器要立刻告诉用户结果，所以等；
+/// 开机钩子不在乎这一两秒，先返回，引擎自己会起来。
+pub fn start_tee_engine(wait_for_engine: bool) -> Result<StartReport> {
+    ensure!(
+        tee_engine_enabled(),
+        "内置 TEE/TS 引擎总开关是关的：先执行 `ksud builtin tee on`，再修复"
+    );
+
+    // 产品策略（2026-11-11 用户裁定）：内置引擎优先，外部一律让位。
+    // 这里不能再"看到外部就 bail"——真机上内置树和模块版会互相 stand down，
+    // 结果 keystore2 谁都没接管，bootloader 一直显示未锁定。
+    let yielded = yield_external_engines();
+    if !yielded.is_empty() {
+        info!(
+            "external engines yielded to the built-in one: {}",
+            yielded.join(", ")
+        );
+    }
+
+    let install = install_builtin_modules_forced().context("materialise built-in modules")?;
+
+    let engine_dir = Path::new(ROOT).join("tricky_store");
+    ensure!(
+        engine_dir.join("service.sh").is_file(),
+        "内置引擎没有落盘（{} 不存在）：这个 ksud 构建里没有编进内置载荷",
+        engine_dir.display()
+    );
+
+    // 重入安全：先把上一次拉起来的一切收掉。脚本会 fork 出一堆后台循环
+    // （5 分钟看护 / 15 秒对账 / TA 的 keybox 守护），只杀 supervisor 的话它们会在
+    // 下一次修复后继续跑，几轮下来就是多份看护一起重拉 supervisor。
+    stop_previous_run();
+
+    // 尽力而为：内核不是本项目时这条一定失败，但引擎本身不依赖它
+    // （KernelSU 域的 su 是 permissive + allow-all，注入走的是 ptrace 而不是这些规则）。
+    if let Err(error) = load_sepolicy_rules() {
+        warn!("apply built-in sepolicy failed (engine still starts): {error:#}");
+    }
+
+    let mut scripts = Vec::new();
+    for (module, stage) in [
+        // 顺序与开机**故意不同**：TA 的 post-fs-data/service 都要读
+        // /data/adb/tricky_store（keybox 兼容副本、target.txt），而那个目录要等
+        // tricky_store 的 service.sh 才建出来；新设备上按开机顺序跑会白跑一轮。
+        ("tricky_store", "service"),
+        ("TA_enhanced", "post-fs-data"),
+        ("TA_enhanced", "service"),
+    ] {
+        let script = Path::new(ROOT).join(module).join(format!("{stage}.sh"));
+        let spawned = if script.is_file() {
+            match spawn_stage_script(&script, module, Instant::now() + SCRIPT_BUDGET) {
+                Ok(()) => true,
+                Err(error) => {
+                    warn!("built-in {module}/{stage} failed to launch: {error:#}");
+                    false
+                }
+            }
+        } else {
+            warn!("built-in script missing: {}", script.display());
+            false
+        };
+        info!("built-in {module}/{stage} spawned={spawned}");
+        scripts.push(ScriptRun {
+            module: module.to_string(),
+            stage: stage.to_string(),
+            spawned,
+        });
+    }
+
+    let (engine_pid, injected) = if wait_for_engine {
+        (
+            wait_for_comm("TEESimulator", ENGINE_WAIT).unwrap_or(0),
+            wait_for_injection(ENGINE_WAIT),
+        )
+    } else {
+        (
+            pid_by_comm("TEESimulator").unwrap_or(0),
+            injection_present(),
+        )
+    };
+
+    Ok(StartReport {
+        engine_dir: engine_dir.display().to_string(),
+        install,
+        scripts,
+        engine_pid,
+        injected,
+        yielded,
+    })
+}
+
+/// Spawn one bundled stage script and wait for its foreground part.
+///
+/// `module::exec_script` always launches our own busybox, which only lands on disk
+/// after `post-fs-data` extracted the bin assets. A device whose boot pipeline
+/// bailed at an early gate (Magisk leftover / safe mode) has no
+/// `/data/adb/ksu/bin/busybox`, so going through it would mean "repair installs
+/// the engine and then starts nothing". Fall back to the system shell there.
+fn spawn_stage_script(script: &Path, module_id: &str, deadline: Instant) -> Result<()> {
+    let busybox = crate::assets::BUSYBOX_PATH.to_string();
+    if Path::new(&busybox).is_file() {
+        return crate::module::exec_script(script, crate::module::ScriptWait::Until(deadline));
+    }
+
+    info!(
+        "busybox missing at {busybox}, spawning {} with /system/bin/sh",
+        script.display()
+    );
+    let mut command = std::process::Command::new("/system/bin/sh");
+    command
+        .arg(script)
+        .current_dir(script.parent().unwrap_or_else(|| Path::new("/")))
+        .envs(crate::module::get_common_script_envs(Some(module_id)))
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+    // SAFETY: 子进程里只做两件异步信号安全的事 —— 脱离进程组（su 退出时不连带 HUP）
+    // 和写 cgroup 文件，与开机路径 `module::exec_script` 的 pre_exec 完全一致；
+    // 出错通过返回 io::Error 处理，不在子进程里分配或加锁。
+    unsafe {
+        command.pre_exec(|| {
+            crate::utils::detach_process_group(true);
+            crate::utils::switch_cgroups();
+            Ok(())
+        });
+    }
+    let mut child = command
+        .spawn()
+        .with_context(|| format!("spawn {}", script.display()))?;
+    while Instant::now() < deadline {
+        match child.try_wait() {
+            Ok(Some(_)) => return Ok(()),
+            Ok(None) => std::thread::sleep(Duration::from_millis(100)),
+            Err(error) => return Err(anyhow!("wait {}: {error}", script.display())),
+        }
+    }
+    debug!(
+        "stage script {} still running after its budget",
+        script.display()
+    );
+    Ok(())
+}
+
+/// Another root solution's engine module, if one owns the injection surface.
+///
+/// **2026-11-11 产品裁定（用户）：管理器内置引擎优先，外部一律让位、始终不运行；
+/// 只有用户关掉内置引擎（`builtin tee off`）时才轮到外部。** 因此这里不再"发现外部
+/// 就让位"——那会造成两份同源引擎互相 stand down、谁都不跑（真机事故：内置树 stand
+/// down + 模块版也 stand down，keystore2 没人接管，bootloader 一直显示未锁定）。
+const EXTERNAL_ENGINE_DIRS: [&str; 2] = ["tricky_store", ".tricky_store"];
+
+/// 我们自己那份引擎副本在 `module.prop` 里留下的指纹。
+///
+/// 打包时把 `name`/`description` 改成了中性中文（见
+/// `userspace/ksud/builtin/tricky_store/module.prop`），第三方 TrickyStore 不会用这套
+/// 文案；靠它区分"本产品的另一份副本"与"别人的模块"。
+const OWN_COPY_MARKERS: [&str; 2] = ["系统密钥组件", "密钥证明链的本机组件"];
+
+/// 被内置引擎压住的第三方模块会带上这个文件；用户关掉内置引擎时据此原样放回。
+const SUPPRESSED_MARKER: &str = ".ksud_suppressed_by_builtin";
+
+/// 我们自己的重复副本搬到哪儿（不删用户数据，方便回退）。
+const EXTERNAL_BACKUP_DIR: &str = "/data/adb/backup";
+
+fn module_prop_text(dir: &Path) -> Option<String> {
+    match fs::read_to_string(dir.join("module.prop")) {
+        Ok(text) => Some(text),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(error) => {
+            warn!("cannot read {}/module.prop: {error:#}", dir.display());
+            None
+        }
+    }
+}
+
+/// 这个目录是不是我们自己引擎的另一份副本（模块时代的布局，或本项目发的模块 zip）。
+fn is_own_engine_copy(dir: &Path) -> bool {
+    module_prop_text(dir)
+        .is_some_and(|text| OWN_COPY_MARKERS.iter().any(|marker| text.contains(marker)))
+}
+
+/// 让外部引擎让位（内置引擎优先），返回被处理掉的目录。
+///
+/// * 我们自己的另一份副本 → 搬到 [`EXTERNAL_BACKUP_DIR`]：两份同源代码并存只会互相
+///   让位，谁都不跑；
+/// * 第三方模块 → 写 `disable` + [`SUPPRESSED_MARKER`]，[`release_external_engines`]
+///   会在用户关掉内置引擎时把它原样放回。
+pub fn yield_external_engines() -> Vec<String> {
+    let mut handled = Vec::new();
+    for id in EXTERNAL_ENGINE_DIRS {
+        let dir = Path::new(defs::MODULE_DIR).join(id);
+        if !dir.is_dir() || module_prop_text(&dir).is_none() {
+            continue;
+        }
+        if is_own_engine_copy(&dir) {
+            let stamp = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_or(0, |elapsed| elapsed.as_secs());
+            let backup = Path::new(EXTERNAL_BACKUP_DIR).join(format!("{id}-{stamp}"));
+            if let Some(parent) = backup.parent()
+                && let Err(error) = fs::create_dir_all(parent)
+            {
+                warn!("cannot create {}: {error:#}", parent.display());
+                continue;
+            }
+            match fs::rename(&dir, &backup) {
+                Ok(()) => {
+                    info!(
+                        "our own engine copy at {} yields to the built-in one (moved to {})",
+                        dir.display(),
+                        backup.display()
+                    );
+                    handled.push(dir.display().to_string());
+                }
+                Err(error) => warn!("failed to move {}: {error:#}", dir.display()),
+            }
+            continue;
+        }
+        if dir.join("disable").exists() || dir.join(SUPPRESSED_MARKER).exists() {
+            continue;
+        }
+        match fs::write(dir.join("disable"), b"built-in TEE engine has priority\n")
+            .and_then(|()| fs::write(dir.join(SUPPRESSED_MARKER), b"1\n"))
+        {
+            Ok(()) => {
+                info!(
+                    "external engine module {} suppressed: the built-in engine has priority",
+                    dir.display()
+                );
+                handled.push(dir.display().to_string());
+            }
+            Err(error) => warn!("failed to suppress {}: {error:#}", dir.display()),
+        }
+    }
+    handled
+}
+
+/// 用户关掉内置引擎时调用：把被我们压住的第三方模块原样放回。
+pub fn release_external_engines() {
+    for id in EXTERNAL_ENGINE_DIRS {
+        let dir = Path::new(defs::MODULE_DIR).join(id);
+        let marker = dir.join(SUPPRESSED_MARKER);
+        if !marker.exists() {
+            continue;
+        }
+        let _ = fs::remove_file(dir.join("disable"));
+        let _ = fs::remove_file(&marker);
+        info!("released external engine module {}", dir.display());
+    }
+}
+
+/// 运行时目录里那条伪造证明链涉及的三个位置：内置树、引擎运行时、TA 增强。
+///
+/// 收进程时只认"命令行里出现这三个路径之一"的进程，**绝不按进程名**：`supervisor`
+/// 和 `TEESimulator` 这种名字任何应用都可能撞上，按名杀就是误伤。
+const ENGINE_MARKERS: [&str; 3] = [
+    "/data/adb/ksu/builtin",
+    "/data/adb/tricky_store",
+    "/data/adb/.ksud_secure/ta-enhanced",
+];
+
+/// Kill everything the previous run of the bundled scripts left behind.
+///
+/// Only processes whose argv carries one of [`ENGINE_MARKERS`] are touched. That
+/// covers every shape the engine takes: the stage scripts and the shells they
+/// fork (`.../builtin/tricky_store/service.sh`), the supervisor and the Java
+/// daemon (`./supervisor ./daemon /data/adb/tricky_store`), and TA's daemon
+/// (`.../ksud_secure/ta-enhanced/bin/ta-enhanced daemon`). Matching by process
+/// name alone would also hit unrelated users of `supervisor`/`TEESimulator`.
+///
+/// **Never kill by process group**: `detach_process_group(true)` puts the child
+/// into init's process group when the kernel call succeeds, so a group kill
+/// would take the whole system down.
+fn stop_previous_run() {
+    let me = std::process::id();
+    let mut targets = Vec::new();
+    for pid in proc_pids() {
+        if u32::try_from(pid).ok() == Some(me) {
+            continue;
+        }
+        // Two signals, because the engine has two shapes:
+        //
+        //  * stage scripts / shells / native supervisors keep their argv, so a
+        //    marker match on cmdline is enough;
+        //  * the Java daemon is started with `--nice-name=TEESimulator` and the
+        //    runtime overwrites its cmdline with just the process name, so
+        //    cmdline never contains a path marker. Its comm is the only stable
+        //    handle left. Without this check a second `start` leaves the old
+        //    daemon alive and the two fight over the keystore2 injection surface
+        //    - which is exactly the "two TEESimulator pids" a device shows.
+        let cmdline = fs::read_to_string(format!("/proc/{pid}/cmdline")).unwrap_or_default();
+        let comm = fs::read_to_string(format!("/proc/{pid}/comm")).unwrap_or_default();
+        if ENGINE_MARKERS.iter().any(|marker| cmdline.contains(marker))
+            || comm.trim() == "TEESimulator"
+        {
+            targets.push(pid);
+        }
+    }
+    if targets.is_empty() {
+        return;
+    }
+
+    debug!(
+        "stopping {} engine process(es) of the previous run",
+        targets.len()
+    );
+    for &pid in &targets {
+        signal(pid, libc::SIGTERM);
+    }
+    let deadline = Instant::now() + STOP_BUDGET;
+    while Instant::now() < deadline {
+        if targets.iter().all(|&pid| !proc_alive(pid)) {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(POLL_STEP_MS));
+    }
+    // 还有活的就强杀：留下旧 daemon 会和新 supervisor 抢同一个 keystore2。
+    for &pid in &targets {
+        if proc_alive(pid) {
+            signal(pid, libc::SIGKILL);
+        }
+    }
+}
+
+fn signal(pid: i32, sig: i32) {
+    // SAFETY: libc::kill 只接受两个整数，不解引用任何指针；pid 来自 /proc 扫描。
+    let _ = unsafe { libc::kill(pid, sig) };
+}
+
+fn proc_alive(pid: i32) -> bool {
+    Path::new(&format!("/proc/{pid}")).exists()
+}
+
+fn proc_pids() -> Vec<i32> {
+    let mut out = Vec::new();
+    let Ok(entries) = fs::read_dir("/proc") else {
+        return out;
+    };
+    for entry in entries.flatten() {
+        let file_name = entry.file_name();
+        if let Some(pid) = file_name.to_str().and_then(|text| text.parse::<i32>().ok()) {
+            out.push(pid);
+        }
+    }
+    out
+}
+
+fn comm_of(pid: i32) -> Option<String> {
+    fs::read_to_string(format!("/proc/{pid}/comm"))
+        .ok()
+        .map(|comm| comm.trim().to_string())
+}
+
+/// Every process whose `/proc/<pid>/comm` equals `name`.
+fn pids_by_comm(name: &str) -> Vec<i32> {
+    proc_pids()
+        .into_iter()
+        .filter(|&pid| comm_of(pid).is_some_and(|comm| comm == name))
+        .collect()
+}
+
+/// Find a process by the name in `/proc/<pid>/comm`.
+fn pid_by_comm(name: &str) -> Option<i32> {
+    pids_by_comm(name).into_iter().next()
+}
+
+fn wait_for_comm(name: &str, budget: Duration) -> Option<i32> {
+    let deadline = Instant::now() + budget;
+    loop {
+        if let Some(pid) = pid_by_comm(name) {
+            return Some(pid);
+        }
+        if Instant::now() >= deadline {
+            return None;
+        }
+        std::thread::sleep(Duration::from_millis(POLL_STEP_MS));
+    }
+}
+
+/// Whether keystore2's memory map already contains the injected engine library.
+///
+/// Counts **every** `keystore2` pid: during a restart there can be more than one
+/// briefly, and an engine that only injected into the first would be reported as
+/// healthy while the surviving instance still serves the real TEE.
+fn injection_present() -> bool {
+    pids_by_comm("keystore2").into_iter().any(|pid| {
+        fs::read_to_string(format!("/proc/{pid}/maps"))
+            .is_ok_and(|maps| maps.contains("libTEESimulator"))
+    })
+}
+
+fn wait_for_injection(budget: Duration) -> bool {
+    let deadline = Instant::now() + budget;
+    loop {
+        if injection_present() {
+            return true;
+        }
+        if Instant::now() >= deadline {
+            return false;
+        }
+        std::thread::sleep(Duration::from_millis(POLL_STEP_MS));
+    }
+}
+
+/// Run `<root>/<id>/<stage>.sh` for every staged built-in tree.
+///
+/// Same launcher the module scripts use (`module::exec_script`), so the shell,
+/// environment, cgroup and process-group handling stay identical; the only
+/// difference is where the tree lives.
+pub fn exec_stage_script(stage: &str, wait: crate::module::ScriptWait) -> Result<()> {
+    let root = Path::new(ROOT);
+    if !root.is_dir() {
+        return Ok(());
+    }
+    let mut ids: Vec<_> = fs::read_dir(root)?
+        .filter_map(Result::ok)
+        .filter(|entry| entry.path().is_dir())
+        .map(|entry| entry.path())
+        .collect();
+    ids.sort();
+
+    for dir in ids {
+        // 开关关掉后树应该已经被删了；这里再挡一层，防"删失败但仍然去跑"。
+        if let Some(id) = dir
+            .file_name()
+            .and_then(|name| name.to_str())
+            .filter(|id| !tee_engine_enabled() && TEE_ENGINE_MODULES.contains(id))
+        {
+            debug!("skip built-in stage script of disabled TEE/TS tree: {id}");
+            continue;
+        }
+        let script = dir.join(format!("{stage}.sh"));
+        if !script.is_file() {
+            continue;
+        }
+        info!("built-in stage script: {}", script.display());
+        if let Err(error) = crate::module::exec_script(&script, wait) {
+            warn!(
+                "built-in {stage} script failed ({}): {error:#}",
+                script.display()
+            );
+        }
+    }
+    Ok(())
+}
+
+/// Apply `<root>/<id>/sepolicy.rule` for every staged tree.
+pub fn load_sepolicy_rules() -> Result<()> {
+    let root = Path::new(ROOT);
+    if !root.is_dir() {
+        return Ok(());
+    }
+    for entry in fs::read_dir(root)?.filter_map(Result::ok) {
+        // 先取出 OsString 再借出 &str：`file_name().to_str()` 直接链在临时值上
+        // 会把借用挂到已经释放的 OsString 上（E0716）。
+        let file_name = entry.file_name();
+        if let Some(id) = file_name
+            .to_str()
+            .filter(|id| !tee_engine_enabled() && TEE_ENGINE_MODULES.contains(id))
+        {
+            debug!("skip built-in policy of disabled TEE/TS tree: {id}");
+            continue;
+        }
+        let rule = entry.path().join("sepolicy.rule");
+        if !rule.is_file() {
+            continue;
+        }
+        info!("load built-in policy: {}", rule.display());
+        if crate::sepolicy::apply_file(&rule).is_err() {
+            warn!("failed to apply {}", rule.display());
+        }
+    }
+    Ok(())
+}

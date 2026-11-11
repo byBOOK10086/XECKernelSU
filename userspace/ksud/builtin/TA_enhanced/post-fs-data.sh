@@ -1,0 +1,102 @@
+# 修改版（GPL-3.0 §5(a)）：本文件由 XECKernel Pro 修改，非上游原样；改动清单与日期见
+# 同目录 NOTICE.md「本地修改」。上游：Enginex0/tricky-addon-enhanced（GPL-3.0）。
+MODPATH=${0%/*}
+# 2026-11-05 本地修改：内置引擎改回随管理器分发，安装位置是正常的
+# /data/adb/ksu/builtin/tricky_store，不再是当年那个隐藏的 /dev/.xudc_hidden 布局。
+# 这个变量是下面判「TrickyStore 在不在」的唯一依据，指错就会在第 33 行把自己标记
+# 成 remove（下次开机被 prune 删掉），所以必须跟着新的安装位置走。
+TS="/data/adb/ksu/builtin/tricky_store"
+LOG_BASE_DIR="/data/adb/.xudc_secure/ta-enhanced/logs"
+BOOT_LOG="$LOG_BASE_DIR/boot.log"
+
+# Defensive logger -- /data may not be fully decrypted
+_pfd_log() {
+    local ts msg
+    ts=$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo "unknown")
+    msg="[$ts] [POST-FS-DATA] $1"
+    if [ -d "$LOG_BASE_DIR" ] && [ -w "$LOG_BASE_DIR" ]; then
+        echo "$msg" >> "$BOOT_LOG" 2>/dev/null && return 0
+    fi
+    echo "$msg" >&2
+}
+
+_pfd_log "post-fs-data started"
+
+# Wait for the TrickyStore module dir. It is installed by the manager itself
+# (ksud builtin installer) in the same boot, before this stage runs, so this
+# normally returns immediately; short cap just in case.
+_wait_count=0
+while [ ! -d "$TS" ]; do
+    _wait_count=$((_wait_count + 1))
+    [ "$_wait_count" -ge 10 ] && break
+    sleep 0.2
+done
+_pfd_log "TrickyStore engine dir ready (waited ${_wait_count} iterations)"
+
+# The engine tree has to be there: without it the rest of this script would be
+# writing to a directory that does not exist. This used to only log "marking self
+# for removal" and do nothing at all.
+if [ ! -d "$TS" ]; then
+    _pfd_log "ERROR TrickyStore tree missing at $TS - skipping the rest of post-fs-data"
+    exit 0
+fi
+
+# Root Manager Detection
+if [ -n "$APATCH" ]; then
+    MANAGER="APATCH"
+elif [ -n "$KSU" ]; then
+    MANAGER="KSU"
+else
+    MANAGER="MAGISK"
+fi
+
+# Persist manager for service.sh
+echo "MANAGER=$MANAGER" > "$MODPATH/common/manager.sh"
+chmod 755 "$MODPATH/common/manager.sh"
+_pfd_log "Root manager detected: $MANAGER"
+
+# ---------------------------------------------------------------------------
+# bootloader 回锁态：在**第一个能写属性的时机**就落笔
+# ---------------------------------------------------------------------------
+# 这是本阶段存在的唯一理由：LKM 模式下这些属性是 bootloader 原样上报的
+# （verifiedbootstate=orange / flash.locked=0），而检测方在开机后任意时刻都可能
+# 读它们。原实现放在 service 阶段、并且要先等 sys.boot_completed，等于把整个
+# 开机过程都暴露成"已解锁"。这里提前写一次，service 阶段（prop.sh）再写一次，
+# 之后由 service.sh 启动的看护循环持续兜底。
+if [ -f "$MODPATH/common/bootstate.sh" ]; then
+    MODDIR="$MODPATH"
+    mkdir -p "$LOG_BASE_DIR" 2>/dev/null
+    . "$MODPATH/common/common.sh"
+    . "$MODPATH/common/bootstate.sh"
+    _PROP_SPOOF_COUNT=0
+    _PROP_FAIL_COUNT=0
+    _pfd_log "boot-state spoof (early) starting"
+    bootstate_spoof_lock
+    # 0/0 有两种截然不同的含义：属性本来就已经正确（无事可做），或者这一轮被
+    # ZeroMount 的挂载窗口推迟了（推迟 ≠ 放弃：挂载结束后看护循环会补写并复核）。
+    # 后者必须显式写出来，否则这行日志会被读成"一切正常"。
+    if [ "$BOOTSTATE_DEFERRED" = "true" ]; then
+        _pfd_log "boot-state spoof (early) DEFERRED (ZeroMount mount window): $_PROP_SPOOF_COUNT spoofed, $_PROP_FAIL_COUNT failed — the watchdog re-writes and verifies these after the window closes"
+    else
+        _pfd_log "boot-state spoof (early) done: $_PROP_SPOOF_COUNT spoofed, $_PROP_FAIL_COUNT failed"
+    fi
+    _pfd_log "early boot-state: device_state=$(getprop ro.boot.vbmeta.device_state) verifiedboot=$(getprop ro.boot.verifiedbootstate) flash.locked=$(getprop ro.boot.flash.locked)"
+else
+    _pfd_log "common/bootstate.sh missing - early boot-state spoof skipped"
+fi
+
+# ---------------------------------------------------------------------------
+# 构建指纹伪装（Play Integrity DEVICE/STRONG 的前提）
+# ---------------------------------------------------------------------------
+# 越早越好：GMS 在开机后很早就读 build 属性。数据由管理器写成白名单表
+# （`/data/adb/.xudc_secure/pif/props.txt`），这里只做校验 + resetprop；
+# JSON 解析、机型 profile 选择、开关全在管理器侧（org.json），脚本里不碰 JSON。
+if [ -f "$MODPATH/pif.sh" ]; then
+    _pfd_log "pif: applying build fingerprint spoof"
+    sh "$MODPATH/pif.sh" apply 2>&1 | while IFS= read -r _line; do _pfd_log "pif| $_line"; done
+    _pfd_log "pif: fingerprint now $(getprop ro.build.fingerprint)"
+else
+    _pfd_log "pif.sh missing - build fingerprint spoof skipped"
+fi
+
+_pfd_log "post-fs-data completed"

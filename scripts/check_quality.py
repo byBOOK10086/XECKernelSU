@@ -36,7 +36,9 @@ MAX_LINES = 400          # soft limit for any new source file
 MAX_WORKFLOWS = 15       # 14 upstream + guards + build-susfs-gki (a GKI image cannot be produced by any LKM job)
 ALLOWED_LOCALES = {"values", "values-night", "values-zh-rCN"}
 SOURCE_SUFFIXES = {".kt", ".kts", ".java", ".rs", ".c", ".h", ".py", ".sh"}
-SKIP_DIRS = {".git", "build", "target", "node_modules", "third_party", "generated-images"}
+SKIP_DIRS = {".git", "build", "target", "node_modules", "third_party", "generated-images",
+             "builtin"  # ksud embeds whole module trees here (vendored payload, not our source)
+             }
 
 problems = []
 

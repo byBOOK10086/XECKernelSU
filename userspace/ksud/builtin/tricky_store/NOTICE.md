@@ -1,0 +1,90 @@
+# NOTICE
+
+本目录为 **TEESimulator-RS**（模块 id `tricky_store`），由 XECKernel Pro 管理器核心内嵌分发。
+
+- 上游：https://github.com/Enginex0/TEESimulator-RS
+- 作者：JingMatrix、Enginex0
+- 许可证：GPL-3.0（与本仓库根 LICENSE 同许可证）
+- 技术源自 5ec1cff 的 TrickyStore（GPL-3.0）：https://github.com/5ec1cff/TrickyStore
+
+## 源码合编译声明
+
+本目录**不包含任何预编译二进制**。引擎产物由 CI 从本仓库
+`third_party/TEESimulator-RS/`（上游 `v6.0.0-162`，commit `5267c9dd0092b69dee4a34eb0c8af8e617b2bc5d`
+的原样快照）源码构建，并在本目录中生成：
+
+- `classes.dex`、`libTEESimulator.so`、`libcertgen.so`、`inject`、`supervisor`
+  —— 构建方式与对应源码见 `third_party/TEESimulator-RS/UPSTREAM.md`。
+
+`daemon`、`service.sh`、`module.prop`、`sepolicy.rule`、`keybox.xml`、`target.txt`
+为本目录内可读源文件/配置（`service.sh` 为适配本仓库内置模块具体化机制的重写版）。
+
+内含第三方组件（随上游源码一并构建）：LSPlt（JingMatrix/LSPlt，LGPL-3.0）、
+AOSP libbinder/libutils 头文件子集（Apache-2.0）、Linux 内核 UAPI 头文件子集（GPL-2.0）。
+
+## 本地修改（GPL-3.0 §5(a) 要求的改动声明）
+
+**本目录下的 `service.sh` 是修改版，不是上游原样文件。** 上游对应用户态部分
+（`classes.dex`、`inject`、`supervisor`、`lib*.so`）由 CI 从 vendored 源码构建，
+本项目不改其源码；改动集中在"把引擎作为内置模块跑起来"的启动脚本上。
+改动者：**XECKernel Pro**。
+
+- **2026-10-07 起**：`service.sh` 重写为内置模块形态——引擎资产从模块目录
+  （`/dev/.xudc_hidden/tricky_store`）原子 staging 到运行目录 `/data/adb/tricky_store`，
+  版本标记 `.engine_version` 最后落盘（中途失败下次开机重试）、外部模块在位时主动让位、
+  DEX 里写死的上游兼容目录 `/data/adb/modules/tricky_store` 只放 `libcertgen.so`。
+- **2026-10-08**：`service.sh` 增加启动前密钥取证：记录实时 keybox 的 sha/年龄/权限，
+  识别"当前用的仍是模块自带出厂 keybox"，并在权限不是 644 时修正（读它的
+  `KeyBoxManager` 运行在 keystore2 进程里，0600 打不开）。
+- **2026-10-08（中国大陆可用性）**：`service.sh` 的 keybox 播种改为**自愈升级**——
+  记录"上一次内置副本的 sha"（`$RUNTIME/.keybox_shipped`），若实时副本恰好等于上一版
+  内置副本，而本版模块内置了不同的（构建时由 `.github/scripts/refresh-keybox.sh`
+  从上游刷新打进来的）副本，就换成本版的：**刷写/更新模块本身即一次密钥刷新**，
+  不需要设备端能连上 GitHub。反向保护同时具备：内置副本结构不合法、或级别/代次低于
+  实时副本时不替换（避免构建产物回退把可信箱子换掉）。另外**取消**了
+  `$DATA/keybox.xml`（TA 侧兼容副本）的自动回填：TA 的守护会把"兼容副本被外部改动"
+  当作用户意图（WebUI 粘贴自定义 keybox 走这条路），回填旧内置副本会造成降级。
+- **2026-10-08（诊断可见性）**：`service.sh` 的启动取证改为记录 `DeviceID`
+  （yurikey 代次，如 `Yurikey58`）、结构核验结论与"是否仍为构建时那份"，
+  便于把"密钥没传过来"定位到具体是哪一份、多旧。
+- **2026-10-08（拦截白名单：本次"刷入后依然不可信/解锁"的直接修复）**：新增
+  `engineconf.sh`（可离线单测的纯函数）与 `target.baseline.txt`，`service.sh` 改为
+  source 前者并在启动引擎前做四件事：
+  1. 缺失才播种（保留用户既有列表）；
+  2. 把 baseline 里缺失的包**只增不删**地追加进 `$RUNTIME/target.txt`；
+  3. 让 `$DATA/target.txt`、`$DATA/security_patch.txt`（管理器/WebUI 写入的路径）
+     与引擎实际读取的 `$RUNTIME/*` **双向对账**，并在启动后每 15s 复检一次；
+  4. 记录覆盖取证（条目数 + 内置验机工具是否在表内）。
+
+  根因：引擎的拦截是**穷举白名单**（`config/ConfigurationManager.kt` 的
+  `shouldSkipUid`：UID 不在表里直接跳过），而本模块内置的验机工具
+  `wu.keyChain.test` 从来不在默认 11 条里，管理器/WebUI 改的又是另一个路径——
+  于是验机工具拿到的是**真实 TEE 证明**，界面必然报"未知认证根证书 /
+  无效的信任根状态"。另外 `service.sh` 末尾那句无条件的
+  "supervisor started" 改为启动后回读（进程是否活着 + 引擎 logcat + 覆盖数），
+  不再把"命令没报错"当成"引擎已生效"。
+- **2026-10-08（GPL-3.0 §5(a) 文件级声明）**：新增文件 `engineconf.sh`、
+  `target.baseline.txt` 由本项目编写，非上游文件；`service.sh` 对应上述改动。
+
+- **2026-11-10（验机工具路由：从"一刀切摘除"改为"按 keybox 健康度"）**：
+  读完 OhMyKeymint 1.2.6 的源码后确认：它让检测工具闭嘴靠的是把工具的 keystore 调用整体
+  改投到一套能自证的实现，而不是更强的伪造；其 FAQ 也写明 keybox 过期时工具会看到
+  "证书已过期"。因此：
+  1. `engineconf.sh` 新增 `apply_detector_routing()`（纯函数，可离线单测）：读
+     `ta-enhanced keybox health` 的 `ok/days/root`，只有"完整校验通过 + Google/Google-RKP
+     根 + 叶子剩余 ≥ 7 天"时才把检测工具写进 `target.txt`，且必须带 `!`（强制 GENERATE；
+     裸名是 AUTO，TEE 可用时走 PATCH、拿到厂商根的真实链，工具照样报"未知根证书"）。
+     不满足时全部剥掉，让工具走真实 TEE。手工关闭：
+     `touch /data/adb/.xudc_secure/verifier_forge_off`。
+  2. `service.sh` 启动引擎前调用一次；常驻 15s 对账循环每 5 分钟复检（keybox 轮换/临期时
+     自动切换），判定写进 `$RUNTIME/.detector_route`，只在状态变化时记日志。
+  3. `target.txt`（出厂播种）不再内置检测工具条目：由上面的判定在运行时决定，避免
+     "装了旧版工具、链又坏了"时把最脏的证据递出去。
+  4. 新增离线单测 `_scratch/test_detector_routing.sh`（9 个场景：健康 / 临期 / AOSP 软件根 /
+     校验失败 / 手动关闭 / 旧写法归一化 / 引擎缺失 / 7 天边界 / 幂等）。
+
+许可证不由本项目改变：本模块整体仍按 **GPL-3.0** 分发，对应源码（含上述修改）随本仓库
+一同提供；完整对应源码获取方式见根目录 `THIRD_PARTY_NOTICES.md`。
+
+版权归原作者所有；许可证全文见上游仓库与 `third_party/TEESimulator-RS/LICENSE`。
+本项目按 GPL-3.0 分发本模块，未改变其许可条款；如你是权利人且不希望被分发，请提交 issue，我们会立即处理。
