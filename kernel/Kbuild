@@ -238,13 +238,18 @@ KSU_NEW_DCACHE_FLUSH := $(shell grep -q __flush_dcache_area $(srctree)/arch/arm6
 $(info -- KSU_NEW_DCACHE_FLUSH: $(KSU_NEW_DCACHE_FLUSH))
 
 KSU_IS_PR_BUILD ?= 0
-ifeq ($(KSU_IS_PR_BUILD),0)
-KSU_PACKAGE_NAME ?= me.weishu.kernelsu
-else
+ifneq ($(KSU_IS_PR_BUILD),0)
 KSU_PACKAGE_NAME ?= me.weishu.kernelsu.pr
+else
+KSU_PACKAGE_NAME ?= me.weishu.kernelsu
 endif
-KSU_EXPECTED_SIZE ?= 0x033b
-KSU_EXPECTED_HASH ?= c371061b19d8c7d7d6133c6a9bafe198fa944e50c1b31c9d8daa8d7f1fc2d2d6
+# The manager is recognised by the signing certificate of its APK (apk_sign.c hashes the
+# certificate out of the v2 signature block and compares it with these two values), so they
+# have to describe the key the release APK is signed with, not upstream's. Ours lives in the
+# repository's KEYSTORE secret; the DER certificate is 1343 bytes (0x053f) and its SHA-256 is
+# pinned below. Regenerate both - and rotate the secret - if the release key is ever replaced.
+KSU_EXPECTED_SIZE ?= 0x053f
+KSU_EXPECTED_HASH ?= 8f983688359382f2e75dd72cd59398d7a0c45ed22dd1410138b34b5321a05819
 
 $(info -- KernelSU Manager package name: $(KSU_PACKAGE_NAME))
 $(info -- KernelSU Manager signature size: $(KSU_EXPECTED_SIZE))
