@@ -195,7 +195,10 @@ fn load_susfs_lkm(kmi: &str) {
     // avc_su_ctx has to be our own superuser domain: the upstream default belongs to another
     // variant, and a wrong value makes the avc spoof fail with -EOPNOTSUPP because the module
     // resolves the string through security_secctx_to_secid.
-    let params = ["expose_proc=1".to_string(), "avc_su_ctx=u:r:su:s0".to_string()];
+    let params = [
+        "expose_proc=1".to_string(),
+        "avc_su_ctx=u:r:su:s0".to_string(),
+    ];
 
     // Primary path: write the .ko out and insmod it through ksud, whose loader resolves the
     // module's undefined symbols (KSU_IOCTL_LOOKUP_SYMBOLS, falling back to /proc/kallsyms).
