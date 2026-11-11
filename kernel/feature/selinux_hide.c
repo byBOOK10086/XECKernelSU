@@ -749,8 +749,9 @@ out:
     return rc;
 }
 
-KSU_SUSFS_LINKAGE int security_context_to_sid_with_policy(struct selinux_policy *policy, const char *scontext, u32 scontext_len,
-                                               u32 *sid, u32 def_sid, gfp_t gfp_flags, u32 *orig_sid_p, int *orig_rc_p)
+KSU_SUSFS_LINKAGE int security_context_to_sid_with_policy(struct selinux_policy *policy, const char *scontext,
+                                                          u32 scontext_len, u32 *sid, u32 def_sid, gfp_t gfp_flags,
+                                                          u32 *orig_sid_p, int *orig_rc_p)
 {
     struct selinux_policy *orig_policy;
     struct policydb *policydb, *orig_policydb;
@@ -1024,7 +1025,7 @@ static int sidtab_entry_to_string(struct policydb *p, struct sidtab *sidtab, str
 }
 
 KSU_SUSFS_LINKAGE int security_sid_to_context_with_policy(struct selinux_policy *policy, u32 sid, char **scontext,
-                                               u32 *scontext_len)
+                                                          u32 *scontext_len)
 {
     struct policydb *policydb;
     struct sidtab *sidtab;
@@ -1396,8 +1397,8 @@ static void context_struct_compute_av(struct policydb *policydb, struct context 
     type_attribute_bounds_av(policydb, scontext, tcontext, tclass, avd);
 }
 
-KSU_SUSFS_LINKAGE void __nocfi security_compute_av_user_with_policy(struct selinux_policy *policy, u32 ssid, u32 tsid, u16 tclass,
-                                                         struct av_decision *avd)
+KSU_SUSFS_LINKAGE void __nocfi security_compute_av_user_with_policy(struct selinux_policy *policy, u32 ssid, u32 tsid,
+                                                                    u16 tclass, struct av_decision *avd)
 {
     struct policydb *policydb;
     struct sidtab *sidtab;
