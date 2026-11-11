@@ -50,20 +50,21 @@ jobs:
           echo "shell syntax ok"
 
       - name: feature offline tests
+        # A harness lives next to the scripts it tests. If they are not on this
+        # ref (a feature branch was not merged yet), skip loudly instead of
+        # reporting a wall of failures that are really "missing file".
         run: |
           set -euo pipefail
+          found=0
           for t in feature/*/test/run*.sh; do
             [ -f "$t" ] || continue
+            dir=$(dirname "$t")
+            if [ ! -f "$dir/../target-gen.sh" ] && [ ! -f "$dir/../bootstate.sh" ]; then
+              echo "skip $t (feature scripts are not on this ref)"
+              continue
+            fi
             echo "== $t"
             bash "$t"
+            found=$((found + 1))
           done
-
-      - name: debug on failure
-        # Temporary: prints why a POSIX script behaves differently here than
-        # under the local bash. Removed once the difference is fixed.
-        if: failure()
-        run: |
-          set -x
-          readlink -f /bin/sh || true
-          sh -x feature/tee/bootstate.sh --dry-run 2>&1 | tail -60 || true
-          BS_PROCFS=/tmp/proc BS_STAGE_DIR=/tmp/stage sh -x feature/tee/bootstate.sh --dry-run 2>&1 | tail -40 || true
+          echo "test suites run: $found"
