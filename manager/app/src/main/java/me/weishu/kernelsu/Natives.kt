@@ -3,6 +3,7 @@ package me.weishu.kernelsu
 import android.os.Parcelable
 import androidx.annotation.Keep
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.mutableStateOf
 import kotlinx.parcelize.Parcelize
 import kotlinx.serialization.Serializable
 import me.weishu.kernelsu.Natives.Profile.RootProfileFlag
@@ -126,8 +127,25 @@ object Natives {
     val managerUAPIVersion: Int
         external get
 
+    /**
+     * Blocking: [rootAvailable] starts a root shell (`su`), so this must never be called from
+     * composition or from the main thread. Measured on a device where the manager had just
+     * been granted root: the window stayed white and stopped responding because this ran
+     * inside composition on every frame, several call sites per frame. Composition reads
+     * [fullFeatured] instead.
+     */
     fun isFullFeatured(): Boolean {
         return isManager && kernelUAPIVersion == managerUAPIVersion && rootAvailable()
+    }
+
+    private val _fullFeatured = mutableStateOf(false)
+
+    /** The cached, composition-safe answer. Updated by [publishFullFeatured]. */
+    val fullFeatured: Boolean
+        get() = _fullFeatured.value
+
+    fun publishFullFeatured(value: Boolean) {
+        _fullFeatured.value = value
     }
 
     @Keep

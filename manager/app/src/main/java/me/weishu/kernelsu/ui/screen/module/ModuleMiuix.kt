@@ -315,7 +315,7 @@ fun ModulePagerMiuix(
                     uiState.moduleList.size,
                     uiState.moduleList.count { it.enabled },
                 ),
-                statusActive = me.weishu.kernelsu.Natives.isFullFeatured(),
+                statusActive = me.weishu.kernelsu.Natives.fullFeatured,
             ) {
                 searchStatus.TopAppBarAnim(backgroundColor = Color.Transparent) {
                     TopAppBar(

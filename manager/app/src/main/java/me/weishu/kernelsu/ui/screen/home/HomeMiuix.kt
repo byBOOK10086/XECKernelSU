@@ -257,7 +257,7 @@ fun HomePagerMiuix(
 
                     Spacer(
                         Modifier.height(
-                            bottomInnerPadding + 12.dp + if (!Natives.isFullFeatured())
+                            bottomInnerPadding + 12.dp + if (!Natives.fullFeatured)
                                 WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() else 0.dp
                         )
                     )

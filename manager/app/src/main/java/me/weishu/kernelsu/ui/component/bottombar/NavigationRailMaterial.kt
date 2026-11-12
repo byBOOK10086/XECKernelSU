@@ -47,7 +47,7 @@ fun NavigationRailMaterial(
     navigationBadge: NavigationBadgeState,
     modifier: Modifier = Modifier,
 ) {
-    val fullFeatured = Natives.isFullFeatured()
+    val fullFeatured = Natives.fullFeatured
     if (!fullFeatured) return
 
     val mainPagerState = LocalMainPagerState.current

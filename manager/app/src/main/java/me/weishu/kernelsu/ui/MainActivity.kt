@@ -3,6 +3,8 @@ package me.weishu.kernelsu.ui
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -75,8 +77,10 @@ open class MainActivity : ComponentActivity() {
             !contentReady || SystemClock.uptimeMillis() - splashStartedAt < splashAnimationDurationMs
         }
 
-        val isManager = Natives.isManager
-        if (isManager && Natives.kernelUAPIVersion == Natives.managerUAPIVersion) install()
+        // The kernel/root handshake is blocking (it starts a `su` shell), so it runs on a
+        // worker and composition only reads the published value. It also has to run again on
+        // resume: the manager may be granted root while it is in the background.
+        probeKernelAsync()
 
         // Reconcile the "icon hidden" expectation with what the package manager reports, and
         // make sure the hidden-state entry exists. Cheap, idempotent, and it is what keeps the
@@ -196,8 +200,37 @@ open class MainActivity : ComponentActivity() {
         }
     }
 
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
+    override fun onResume() {
+        super.onResume()
+        probeKernelAsync()
+    }
+
+    /**
+     * One background probe of the kernel/root handshake.
+     *
+     * `Natives.isFullFeatured()` calls `rootAvailable()`, which starts a root shell: it blocks
+     * until `su` answers. Composition used to call it (several composables per frame), so on a
+     * device where this manager had just been granted root the window stayed white and stopped
+     * responding. The result is published to [Natives.fullFeatured] for composition to read.
+     */
+    private fun probeKernelAsync() {
+        Thread {
+            val fullFeatured = runCatching { Natives.isFullFeatured() }.getOrDefault(false)
+            Natives.publishFullFeatured(fullFeatured)
+            val isManager = runCatching { Natives.isManager }.getOrDefault(false)
+            val sameUapi = runCatching {
+                Natives.kernelUAPIVersion == Natives.managerUAPIVersion
+            }.getOrDefault(false)
+            if (isManager && sameUapi) {
+                Handler(Looper.getMainLooper()).post { install() }
+            }
+        }.apply {
+            name = "xec-kernel-probe"
+            isDaemon = true
+        }.start()
+    }
+
+    override fun onNewIntent(intent: Intent) {        super.onNewIntent(intent)
         setIntent(intent)
         intentChannel.trySend(intent)
     }

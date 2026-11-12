@@ -137,7 +137,7 @@ fun HomePagerMaterial(
             SupportLinks(onOpenUrl = actions.onOpenUrl)
             Spacer(
                 Modifier.height(
-                    bottomInnerPadding + if (!Natives.isFullFeatured())
+                    bottomInnerPadding + if (!Natives.fullFeatured)
                         WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() else 0.dp
                 )
             )

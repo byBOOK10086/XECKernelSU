@@ -47,7 +47,7 @@ fun BottomBarMiuix(
     navigationBadge: NavigationBadgeState,
     modifier: Modifier,
 ) {
-    val fullFeatured = Natives.isFullFeatured()
+    val fullFeatured = Natives.fullFeatured
     if (!fullFeatured) return
 
     val mainState = LocalMainPagerState.current

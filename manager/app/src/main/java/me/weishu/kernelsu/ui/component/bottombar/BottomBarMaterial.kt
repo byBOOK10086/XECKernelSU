@@ -32,7 +32,7 @@ import me.weishu.kernelsu.ui.LocalMainPagerState
 
 @Composable
 fun BottomBarMaterial(navigationBadge: NavigationBadgeState) {
-    val fullFeatured = Natives.isFullFeatured()
+    val fullFeatured = Natives.fullFeatured
     if (!fullFeatured) return
 
     val mainPagerState = LocalMainPagerState.current
