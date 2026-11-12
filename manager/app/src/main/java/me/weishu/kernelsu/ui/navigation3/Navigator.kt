@@ -125,6 +125,14 @@ class Navigator(
 @Composable
 fun rememberNavigator(startRoute: Route): Navigator {
     val backStack = rememberNavBackStack<Route>(startRoute)
+    // Restored state can come back empty (the saved stack is a plain list), and an empty stack
+    // renders nothing at all: the window shows the ComposeView with no entries, which is
+    // exactly the white screen measured on a device. Guarantee a start destination.
+    androidx.compose.runtime.LaunchedEffect(backStack) {
+        if (backStack.isEmpty()) {
+            backStack.add(startRoute)
+        }
+    }
     return androidx.compose.runtime.remember(backStack) { Navigator(backStack) }
 }
 

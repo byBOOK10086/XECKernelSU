@@ -111,6 +111,9 @@ open class MainActivity : ComponentActivity() {
             // the log) what the manager sees.
             var showSafe by remember { mutableStateOf(false) }
             LaunchedEffect(Unit) {
+                BootTrace.log("setContent composed")
+            }
+            LaunchedEffect(Unit) {
                 delay(3000)
                 val drawn = BootTrace.pagesDrawn.value
                 BootTrace.log("safe check pagesDrawn=$drawn")

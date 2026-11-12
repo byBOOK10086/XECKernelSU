@@ -53,6 +53,13 @@ fun KernelSuNavHost(
     // (and their swipeDismiss) when the builder lambda changes, so it must capture the value.
     val scriptRunSwipeDismiss = if (scriptRunBackEnabled) swipeDismiss else NavSwipeDirection.None
     val navDisplay = @Composable {
+        // If this number is 0 the window renders nothing at all - no pages, no crash, just a
+        // blank ComposeView. Logged so a blank screen can be diagnosed from xec-boot.log.
+        androidx.compose.runtime.LaunchedEffect(navigator.backStack.size) {
+            me.weishu.kernelsu.ui.util.BootTrace.log(
+                "navhost backStack=${navigator.backStack.size} current=${navigator.current()}"
+            )
+        }
         NavDisplay(
             backStack = navigator.backStack,
             effects = NavDisplayEffects(cornerClipRadius = rememberNavSystemCornerRadius()),
