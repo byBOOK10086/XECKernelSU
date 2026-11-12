@@ -13,6 +13,7 @@
 
 #include "uapi/supercall.h"
 #include "supercall/internal.h"
+#include "manager/throne_tracker.h"
 #include "arch.h"
 #include "util.h"
 #include "klog.h" // IWYU pragma: keep
@@ -37,6 +38,15 @@ static int anon_ksu_release(struct inode *inode, struct file *filp)
 
 static long anon_ksu_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
+    /*
+     * get_info is how the manager asks "is the driver alive"; if it arrives
+     * before the manager was ever crowned (APK installed after boot, or the
+     * package observer missed the change), retry the crowning here so profile
+     * writes are not rejected by the manager-only permission checks.
+     */
+    if (cmd == KSU_IOCTL_GET_INFO || cmd == KSU_IOCTL_GET_INFO_LEGACY)
+        ksu_recrown_manager_if_needed();
+
     return ksu_supercall_handle_ioctl(filp, cmd, (void __user *)arg);
 }
 
