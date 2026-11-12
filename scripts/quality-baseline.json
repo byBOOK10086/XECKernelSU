@@ -187,8 +187,8 @@
       "reason": "ported file: split candidate, no reason recorded yet"
     },
     "manager/app/src/main/java/me/weishu/kernelsu/ui/util/KsuCli.kt": {
-      "lines": 1252,
-      "reason": "boot image validation + root-safe exec + need-root copy (2026-11-12); may only shrink from here"
+      "lines": 1280,
+      "reason": "su client discovery across Magisk/KernelSU/APatch paths (2026-11-12); may only shrink from here"
     },
     "manager/app/src/main/java/me/weishu/kernelsu/ui/util/module/Shortcut.kt": {
       "lines": 418,
