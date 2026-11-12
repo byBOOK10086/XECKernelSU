@@ -134,7 +134,7 @@ static int ksu_patch_text_nosync(void *dst, void *src, size_t len, int flags)
         goto err;
     }
 
-    void *map = set_fixmap_offset(FIX_TEXT_POKE0, phy);
+    void *map = (void *)set_fixmap_offset(FIX_TEXT_POKE0, phy);
 
     ret = (int)copy_to_kernel_nofault(map, src, len);
 
@@ -144,7 +144,7 @@ static int ksu_patch_text_nosync(void *dst, void *src, size_t len, int flags)
         if (flags & KSU_PATCH_TEXT_FLUSH_ICACHE)
             ksu_flush_icache((uintptr_t)dst, (uintptr_t)dst + len);
         if (flags & KSU_PATCH_TEXT_FLUSH_DCACHE)
-            ksu_flush_dcache(dst, len);
+            ksu_flush_dcache((unsigned long)dst, len);
     }
 
 err:
