@@ -1002,8 +1002,11 @@ private fun rebootNow(reason: String) {
 }
 
 fun rootAvailable(): Boolean {
+    // libsu 偶尔会拿到「su 起来了但没 root」的壳（见 createRootShell 的注释）。
+    // 再直接问一次 su，两种判据任一为真就算有 root —— 否则安装页的「直接安装」
+    // 会因为一次失败的 shell build 一直灰着，哪怕用户已经授权。
     val shell = getRootShell()
-    return shell.isRoot
+    return shell.isRoot || directRootCheck()
 }
 
 /**
