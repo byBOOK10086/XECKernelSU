@@ -4,6 +4,7 @@
 #include "util.h"
 #include <linux/err.h>
 #include <linux/fs.h>
+#include <linux/jiffies.h>
 #include <linux/list.h>
 #include <linux/slab.h>
 #include <linux/string.h>
@@ -358,6 +359,21 @@ out:
 out_revert_cred:
     revert_creds(old_cred);
     mutex_unlock(&throne_tracker_mutex);
+}
+
+void ksu_recrown_manager_if_needed(void)
+{
+    static unsigned long last_track;
+    unsigned long now;
+
+    if (ksu_is_manager_appid_valid())
+        return;
+
+    now = jiffies;
+    if (last_track && !time_after(now, last_track + 5 * HZ))
+        return;
+    last_track = now;
+    track_throne(false);
 }
 
 void __init ksu_throne_tracker_init()
