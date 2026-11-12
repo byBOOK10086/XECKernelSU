@@ -52,6 +52,26 @@ data class FlashResult(val code: Int, val err: String, val showReboot: Boolean) 
     constructor(result: Shell.Result) : this(result, result.isSuccess)
 }
 
+/**
+ * 设备上可能存在的 su 客户端（绝对路径）。
+ *
+ * 不同 root 提供方放的位置不一样，而且**不一定**在 PATH 里：Magisk 在
+ * /debug_ramdisk、KernelSU 在 /data/adb/ksu/bin、APatch 在 /data/adb/apd/bin。
+ * 只按 `su` 这个名字找，遇到"授权了但 su 不在 PATH"的机器就会永远探不到 root，
+ * 于是所有需要 root 的操作都以 EACCES 收场（用户看到的就是
+ * /dev/block/by-name/xxx Permission denied）。
+ */
+private val SU_CLIENT_PATHS = listOf(
+    "su",
+    "/system/bin/su",
+    "/system/xbin/su",
+    "/sbin/su",
+    "/debug_ramdisk/su",
+    "/data/adb/ksu/bin/su",
+    "/data/adb/magisk/su",
+    "/data/adb/apd/bin/su",
+)
+
 private class RootShellSlot {
     var shell: Shell? = null
     var retryAtElapsedMs: Long = 0
@@ -431,18 +451,24 @@ fun Uri.getFileName(context: Context): String? {
  * libsu 的 shell build 在个别内核上会拿到"su 起了但没有 root"的壳；这条直接问
  * su 要结果，几毫秒就能分清"没授权"和"授权了但壳没搭好"。
  */
-fun directRootCheck(timeoutMs: Long = 4_000L): Boolean = runCatching {
-    val process = ProcessBuilder("/system/bin/su", "-c", "id -u")
-        .redirectErrorStream(true)
-        .start()
-    val finished = process.waitFor(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
-    if (!finished) {
-        process.destroyForcibly()
-        return@runCatching false
+fun directRootCheck(timeoutMs: Long = 4_000L): Boolean {
+    for (path in SU_CLIENT_PATHS) {
+        val ok = runCatching {
+            val process = ProcessBuilder(path, "-c", "id -u")
+                .redirectErrorStream(true)
+                .start()
+            val finished = process.waitFor(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+            if (!finished) {
+                process.destroyForcibly()
+                return@runCatching false
+            }
+            val out = process.inputStream.bufferedReader().readText().trim()
+            out.lineSequence().any { it.trim() == "0" }
+        }.getOrDefault(false)
+        if (ok) return true
     }
-    val out = process.inputStream.bufferedReader().readText().trim()
-    out.lineSequence().any { it.trim() == "0" }
-}.getOrDefault(false)
+    return false
+}
 
 fun createRootShell(globalMnt: Boolean = false): Shell {
     Shell.enableVerboseLogging = BuildConfig.DEBUG
@@ -458,8 +484,10 @@ fun createRootShell(globalMnt: Boolean = false): Shell {
     // 每次 build 都要等好几秒，探完早已超时 —— 表现就是"明明授权了却一直未就绪"，
     // 安装页的「直接安装」也跟着灰掉。
     val candidates = buildList {
-        add(if (globalMnt) listOf("su", "-mm") else listOf("su"))
-        add(listOf("/system/bin/su").let { if (globalMnt) it + "-mm" else it })
+        for (path in SU_CLIENT_PATHS) {
+            add(if (globalMnt) listOf(path, "-mm") else listOf(path))
+        }
+        // 我们自己的守护进程放最后：内核不是我们的时它必然失败，且慢。
         add(listOf(getKsuDaemonPath(), "debug", "su").let { if (globalMnt) it + "-g" else it })
     }
     for (argv in candidates) {
