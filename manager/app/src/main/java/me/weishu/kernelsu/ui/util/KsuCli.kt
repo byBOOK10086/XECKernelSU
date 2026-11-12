@@ -425,6 +425,25 @@ fun Uri.getFileName(context: Context): String? {
     return fileName
 }
 
+/**
+ * 不经过 libsu 的一次快速 root 判定：`/system/bin/su -c id -u` 是否为 0。
+ *
+ * libsu 的 shell build 在个别内核上会拿到"su 起了但没有 root"的壳；这条直接问
+ * su 要结果，几毫秒就能分清"没授权"和"授权了但壳没搭好"。
+ */
+fun directRootCheck(timeoutMs: Long = 4_000L): Boolean = runCatching {
+    val process = ProcessBuilder("/system/bin/su", "-c", "id -u")
+        .redirectErrorStream(true)
+        .start()
+    val finished = process.waitFor(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+    if (!finished) {
+        process.destroyForcibly()
+        return@runCatching false
+    }
+    val out = process.inputStream.bufferedReader().readText().trim()
+    out.lineSequence().any { it.trim() == "0" }
+}.getOrDefault(false)
+
 fun createRootShell(globalMnt: Boolean = false): Shell {
     Shell.enableVerboseLogging = BuildConfig.DEBUG
     // 2026-11-11: 这里原来靠 try/catch 判断"这个壳能不能用" —— 那是错的。
@@ -434,9 +453,14 @@ fun createRootShell(globalMnt: Boolean = false): Shell {
     // 继续跑，界面上表现为：引擎目录"不存在"、命令"没有任何输出"、退出码 -1。
     //
     // 现在建成之后就真的跑一条 `id -u` 验：拿到 0 才算 root 壳；不是就换下一个候选。
+    // 顺序（2026-11-12 修正）：先用系统的 `su`，再用我们自己的守护进程。
+    // 反过来时，内核不是我们的（例如装着别人的 KernelSU）那一步必然失败，而且
+    // 每次 build 都要等好几秒，探完早已超时 —— 表现就是"明明授权了却一直未就绪"，
+    // 安装页的「直接安装」也跟着灰掉。
     val candidates = buildList {
-        add(listOf(getKsuDaemonPath(), "debug", "su").let { if (globalMnt) it + "-g" else it })
         add(if (globalMnt) listOf("su", "-mm") else listOf("su"))
+        add(listOf("/system/bin/su").let { if (globalMnt) it + "-mm" else it })
+        add(listOf(getKsuDaemonPath(), "debug", "su").let { if (globalMnt) it + "-g" else it })
     }
     for (argv in candidates) {
         val shell = runCatching { Shell.Builder.create().build(*argv.toTypedArray()) }.getOrNull()
