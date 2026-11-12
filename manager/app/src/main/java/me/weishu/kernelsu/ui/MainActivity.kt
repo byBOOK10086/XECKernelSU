@@ -81,6 +81,11 @@ open class MainActivity : ComponentActivity() {
             // host, view models, the root shell - assumes a kernel it can talk to; on a real
             // Android 16 device that combination produced an empty window with no crash and
             // no text. Render one plain page instead of a themed tree that cannot work.
+            //
+            // contentReady has to be released here as well: the main content is what normally
+            // flips it, and without it the splash stays on screen forever (measured: the page
+            // was in the accessibility tree while the screenshot still showed the splash).
+            contentReady = true
             setContent { KernelMissingPage() }
             return
         }
