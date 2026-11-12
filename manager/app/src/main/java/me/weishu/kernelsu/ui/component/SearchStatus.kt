@@ -6,9 +6,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import me.weishu.kernelsu.ui.design.token.Xc
 import top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme
 
 @Stable
@@ -24,6 +26,7 @@ data class SearchStatus(
     fun shouldExpand() = current == Status.EXPANDED || current == Status.EXPANDING
     fun shouldCollapsed() = current == Status.COLLAPSED || current == Status.COLLAPSING
     fun isAnimatingExpand() = current == Status.EXPANDING
+    fun isAnimatingCollapse() = current == Status.COLLAPSING
 
     fun onAnimationComplete(): SearchStatus {
         return when (current) {
@@ -38,13 +41,14 @@ data class SearchStatus(
         modifier: Modifier = Modifier,
         visible: Boolean = shouldCollapsed(),
         backgroundColor: Color = colorScheme.surface,
+        shape: Shape = Xc.shapes.bar,
         content: @Composable () -> Unit
     ) {
         Box(modifier = modifier) {
             Box(
                 modifier = Modifier
                     .matchParentSize()
-                    .background(backgroundColor)
+                    .background(backgroundColor, shape)
             )
             Box(
                 modifier = Modifier

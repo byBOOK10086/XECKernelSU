@@ -24,7 +24,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import me.weishu.kernelsu.Natives
 import me.weishu.kernelsu.R
@@ -32,13 +31,14 @@ import me.weishu.kernelsu.profile.Capabilities
 import me.weishu.kernelsu.profile.Groups
 import me.weishu.kernelsu.toRawFlags
 import me.weishu.kernelsu.toRootProfileFlags
+import me.weishu.kernelsu.ui.component.dialog.XDialog
+import me.weishu.kernelsu.ui.component.dialog.XDialogTitle
 import me.weishu.kernelsu.ui.component.miuix.SuperEditArrow
 import me.weishu.kernelsu.ui.util.isSepolicyValid
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.TextFieldDefaults
-import top.yukonga.miuix.kmp.overlay.OverlayDialog
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.preference.CheckboxLocation
 import top.yukonga.miuix.kmp.preference.CheckboxPreference
@@ -174,62 +174,62 @@ private fun GroupsPanel(
 
     val currentSelection = remember(selected) { mutableStateOf(selected.toSet()) }
 
-    OverlayDialog(
+    XDialog(
         show = showDialog.value,
-        title = stringResource(R.string.profile_groups),
-        summary = "${currentSelection.value.size} / 32",
         onDismissRequest = { showDialog.value = false },
-        insideMargin = DpSize(0.dp, 24.dp),
-        content = {
-            Column(modifier = Modifier.heightIn(max = 500.dp)) {
-                LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
-                    items(groups) { group ->
-                        CheckboxPreference(
-                            title = group.display,
-                            summary = group.desc,
-                            insideMargin = PaddingValues(horizontal = 30.dp, vertical = 16.dp),
-                            checkboxLocation = CheckboxLocation.End,
-                            checked = currentSelection.value.contains(group),
-                            holdDownState = currentSelection.value.contains(group),
-                            onCheckedChange = { isChecked ->
-                                val newSelection = currentSelection.value.toMutableSet()
-                                if (isChecked) {
-                                    if (newSelection.size < 32) newSelection.add(group)
-                                } else {
-                                    newSelection.remove(group)
-                                }
-                                currentSelection.value = newSelection
+    ) {
+        XDialogTitle(
+            text = stringResource(R.string.profile_groups),
+            summary = "${currentSelection.value.size} / 32",
+        )
+        Column(modifier = Modifier.heightIn(max = 500.dp)) {
+            LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
+                items(groups) { group ->
+                    CheckboxPreference(
+                        title = group.display,
+                        summary = group.desc,
+                        insideMargin = PaddingValues(horizontal = 30.dp, vertical = 16.dp),
+                        checkboxLocation = CheckboxLocation.End,
+                        checked = currentSelection.value.contains(group),
+                        holdDownState = currentSelection.value.contains(group),
+                        onCheckedChange = { isChecked ->
+                            val newSelection = currentSelection.value.toMutableSet()
+                            if (isChecked) {
+                                if (newSelection.size < 32) newSelection.add(group)
+                            } else {
+                                newSelection.remove(group)
                             }
-                        )
-                    }
-                }
-                Spacer(Modifier.height(12.dp))
-                Row(
-                    modifier = Modifier.padding(horizontal = 24.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    TextButton(
-                        onClick = {
-                            currentSelection.value = selected.toSet()
-                            showDialog.value = false
-                        },
-                        text = stringResource(android.R.string.cancel),
-                        modifier = Modifier.weight(1f),
-                    )
-                    Spacer(modifier = Modifier.width(20.dp))
-                    TextButton(
-                        onClick = {
-                            closeSelection(currentSelection.value)
-                            showDialog.value = false
-                        },
-                        text = stringResource(R.string.confirm),
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.textButtonColorsPrimary()
+                            currentSelection.value = newSelection
+                        }
                     )
                 }
             }
+            Spacer(Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.padding(horizontal = 24.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                TextButton(
+                    onClick = {
+                        currentSelection.value = selected.toSet()
+                        showDialog.value = false
+                    },
+                    text = stringResource(android.R.string.cancel),
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(modifier = Modifier.width(20.dp))
+                TextButton(
+                    onClick = {
+                        closeSelection(currentSelection.value)
+                        showDialog.value = false
+                    },
+                    text = stringResource(R.string.confirm),
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.textButtonColorsPrimary()
+                )
+            }
         }
-    )
+    }
 
     val tag = if (selected.isEmpty()) {
         "None"
@@ -281,61 +281,59 @@ private fun RootProfileFlagPanel(
 
     val currentSelection = remember(selected) { mutableStateOf(selected.toSet()) }
 
-    OverlayDialog(
+    XDialog(
         show = showDialog.value,
-        title = stringResource(R.string.profile_flags),
         onDismissRequest = { showDialog.value = false },
-        insideMargin = DpSize(0.dp, 24.dp),
-        content = {
-            Column(modifier = Modifier.heightIn(max = 500.dp)) {
-                LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
-                    items(caps) { cap ->
-                        CheckboxPreference(
-                            title = cap.display,
-                            summary = stringResource(cap.desc),
-                            insideMargin = PaddingValues(horizontal = 30.dp, vertical = 16.dp),
-                            checkboxLocation = CheckboxLocation.End,
-                            checked = currentSelection.value.contains(cap),
-                            holdDownState = currentSelection.value.contains(cap),
-                            onCheckedChange = { isChecked ->
-                                val newSelection = currentSelection.value.toMutableSet()
-                                if (isChecked) {
-                                    newSelection.add(cap)
-                                } else {
-                                    newSelection.remove(cap)
-                                }
-                                currentSelection.value = newSelection
+    ) {
+        XDialogTitle(text = stringResource(R.string.profile_flags))
+        Column(modifier = Modifier.heightIn(max = 500.dp)) {
+            LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
+                items(caps) { cap ->
+                    CheckboxPreference(
+                        title = cap.display,
+                        summary = stringResource(cap.desc),
+                        insideMargin = PaddingValues(horizontal = 30.dp, vertical = 16.dp),
+                        checkboxLocation = CheckboxLocation.End,
+                        checked = currentSelection.value.contains(cap),
+                        holdDownState = currentSelection.value.contains(cap),
+                        onCheckedChange = { isChecked ->
+                            val newSelection = currentSelection.value.toMutableSet()
+                            if (isChecked) {
+                                newSelection.add(cap)
+                            } else {
+                                newSelection.remove(cap)
                             }
-                        )
-                    }
-                }
-                Spacer(Modifier.height(12.dp))
-                Row(
-                    modifier = Modifier.padding(horizontal = 24.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    TextButton(
-                        onClick = {
-                            showDialog.value = false
-                            currentSelection.value = selected.toSet()
-                        },
-                        text = stringResource(android.R.string.cancel),
-                        modifier = Modifier.weight(1f)
-                    )
-                    Spacer(modifier = Modifier.width(20.dp))
-                    TextButton(
-                        onClick = {
-                            closeSelection(currentSelection.value.toList())
-                            showDialog.value = false
-                        },
-                        text = stringResource(R.string.confirm),
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.textButtonColorsPrimary()
+                            currentSelection.value = newSelection
+                        }
                     )
                 }
             }
+            Spacer(Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.padding(horizontal = 24.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                TextButton(
+                    onClick = {
+                        showDialog.value = false
+                        currentSelection.value = selected.toSet()
+                    },
+                    text = stringResource(android.R.string.cancel),
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(modifier = Modifier.width(20.dp))
+                TextButton(
+                    onClick = {
+                        closeSelection(currentSelection.value.toList())
+                        showDialog.value = false
+                    },
+                    text = stringResource(R.string.confirm),
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.textButtonColorsPrimary()
+                )
+            }
         }
-    )
+    }
 
     val tag = if (selected.isEmpty()) {
         "None"
@@ -367,61 +365,59 @@ private fun CapsPanel(
 
     val currentSelection = remember(selected) { mutableStateOf(selected.toSet()) }
 
-    OverlayDialog(
+    XDialog(
         show = showDialog.value,
-        title = stringResource(R.string.profile_capabilities),
         onDismissRequest = { showDialog.value = false },
-        insideMargin = DpSize(0.dp, 24.dp),
-        content = {
-            Column(modifier = Modifier.heightIn(max = 500.dp)) {
-                LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
-                    items(caps) { cap ->
-                        CheckboxPreference(
-                            title = cap.display,
-                            summary = cap.desc,
-                            insideMargin = PaddingValues(horizontal = 30.dp, vertical = 16.dp),
-                            checkboxLocation = CheckboxLocation.End,
-                            checked = currentSelection.value.contains(cap),
-                            holdDownState = currentSelection.value.contains(cap),
-                            onCheckedChange = { isChecked ->
-                                val newSelection = currentSelection.value.toMutableSet()
-                                if (isChecked) {
-                                    newSelection.add(cap)
-                                } else {
-                                    newSelection.remove(cap)
-                                }
-                                currentSelection.value = newSelection
+    ) {
+        XDialogTitle(text = stringResource(R.string.profile_capabilities))
+        Column(modifier = Modifier.heightIn(max = 500.dp)) {
+            LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
+                items(caps) { cap ->
+                    CheckboxPreference(
+                        title = cap.display,
+                        summary = cap.desc,
+                        insideMargin = PaddingValues(horizontal = 30.dp, vertical = 16.dp),
+                        checkboxLocation = CheckboxLocation.End,
+                        checked = currentSelection.value.contains(cap),
+                        holdDownState = currentSelection.value.contains(cap),
+                        onCheckedChange = { isChecked ->
+                            val newSelection = currentSelection.value.toMutableSet()
+                            if (isChecked) {
+                                newSelection.add(cap)
+                            } else {
+                                newSelection.remove(cap)
                             }
-                        )
-                    }
-                }
-                Spacer(Modifier.height(12.dp))
-                Row(
-                    modifier = Modifier.padding(horizontal = 24.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    TextButton(
-                        onClick = {
-                            showDialog.value = false
-                            currentSelection.value = selected.toSet()
-                        },
-                        text = stringResource(android.R.string.cancel),
-                        modifier = Modifier.weight(1f)
-                    )
-                    Spacer(modifier = Modifier.width(20.dp))
-                    TextButton(
-                        onClick = {
-                            closeSelection(currentSelection.value)
-                            showDialog.value = false
-                        },
-                        text = stringResource(R.string.confirm),
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.textButtonColorsPrimary()
+                            currentSelection.value = newSelection
+                        }
                     )
                 }
             }
+            Spacer(Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.padding(horizontal = 24.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                TextButton(
+                    onClick = {
+                        showDialog.value = false
+                        currentSelection.value = selected.toSet()
+                    },
+                    text = stringResource(android.R.string.cancel),
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(modifier = Modifier.width(20.dp))
+                TextButton(
+                    onClick = {
+                        closeSelection(currentSelection.value)
+                        showDialog.value = false
+                    },
+                    text = stringResource(R.string.confirm),
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.textButtonColorsPrimary()
+                )
+            }
         }
-    )
+    }
 
     val tag = if (selected.isEmpty()) {
         "None"
@@ -456,77 +452,76 @@ private fun SELinuxPanel(
     }
     val isRulesValid = remember(rules) { isSepolicyValid(rules) }
 
-    OverlayDialog(
+    XDialog(
         show = showDialog.value,
-        title = stringResource(R.string.profile_selinux_context),
         onDismissRequest = { showDialog.value = false },
-        content = {
-            Column(modifier = Modifier.heightIn(max = 500.dp)) {
-                Column(modifier = Modifier.weight(1f, fill = false)) {
-                    TextField(
-                        value = domain,
-                        onValueChange = { domain = it },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        label = stringResource(id = R.string.profile_selinux_domain),
-                        colors = TextFieldDefaults.textFieldColors(
-                            borderColor = if (isDomainValid) {
-                                colorScheme.primary
-                            } else {
-                                Color.Red.copy(alpha = if (isSystemInDarkTheme()) 0.3f else 0.6f)
-                            },
-                        ),
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Ascii,
-                            imeAction = ImeAction.Next
-                        ),
-                        singleLine = true
-                    )
-                    TextField(
-                        value = rules,
-                        onValueChange = { rules = it },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        label = stringResource(id = R.string.profile_selinux_rules),
-                        colors = TextFieldDefaults.textFieldColors(
-                            borderColor = if (isRulesValid) {
-                                colorScheme.primary
-                            } else {
-                                Color.Red.copy(alpha = if (isSystemInDarkTheme()) 0.3f else 0.6f)
-                            },
-                        ),
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Ascii,
-                        ),
-                        singleLine = false
-                    )
-                }
-                Spacer(Modifier.height(12.dp))
-                Row(
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    TextButton(
-                        onClick = { showDialog.value = false },
-                        text = stringResource(android.R.string.cancel),
-                        modifier = Modifier.weight(1f)
-                    )
-                    Spacer(modifier = Modifier.width(20.dp))
-                    TextButton(
-                        onClick = {
-                            onSELinuxChange(domain, rules)
-                            showDialog.value = false
+    ) {
+        XDialogTitle(text = stringResource(R.string.profile_selinux_context))
+        Column(modifier = Modifier.heightIn(max = 500.dp)) {
+            Column(modifier = Modifier.weight(1f, fill = false)) {
+                TextField(
+                    value = domain,
+                    onValueChange = { domain = it },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    label = stringResource(id = R.string.profile_selinux_domain),
+                    colors = TextFieldDefaults.textFieldColors(
+                        borderColor = if (isDomainValid) {
+                            colorScheme.primary
+                        } else {
+                            Color.Red.copy(alpha = if (isSystemInDarkTheme()) 0.3f else 0.6f)
                         },
-                        text = stringResource(R.string.confirm),
-                        enabled = isDomainValid && isRulesValid,
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.textButtonColorsPrimary()
-                    )
-                }
+                    ),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Ascii,
+                        imeAction = ImeAction.Next
+                    ),
+                    singleLine = true
+                )
+                TextField(
+                    value = rules,
+                    onValueChange = { rules = it },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    label = stringResource(id = R.string.profile_selinux_rules),
+                    colors = TextFieldDefaults.textFieldColors(
+                        borderColor = if (isRulesValid) {
+                            colorScheme.primary
+                        } else {
+                            Color.Red.copy(alpha = if (isSystemInDarkTheme()) 0.3f else 0.6f)
+                        },
+                    ),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Ascii,
+                    ),
+                    singleLine = false
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+            Row(
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                TextButton(
+                    onClick = { showDialog.value = false },
+                    text = stringResource(android.R.string.cancel),
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(modifier = Modifier.width(20.dp))
+                TextButton(
+                    onClick = {
+                        onSELinuxChange(domain, rules)
+                        showDialog.value = false
+                    },
+                    text = stringResource(R.string.confirm),
+                    enabled = isDomainValid && isRulesValid,
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.textButtonColorsPrimary()
+                )
             }
         }
-    )
+    }
 
     ArrowPreference(
         enabled = enabled,

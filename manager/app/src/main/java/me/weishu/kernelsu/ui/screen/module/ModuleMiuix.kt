@@ -304,6 +304,15 @@ fun ModulePagerMiuix(
     // 这里只负责把 Module 和当时的动作闭包存进 ModuleSheetState。
     val navigator = LocalNavigator.current
 
+    val mainPagerState = LocalMainPagerState.current
+    DisposableEffect(ModuleSheetState.module != null) {
+        val locked = ModuleSheetState.module != null
+        if (locked) mainPagerState.lockPagerGestures()
+        onDispose {
+            if (locked) mainPagerState.unlockPagerGestures()
+        }
+    }
+
     Scaffold(
         containerColor = Color.Transparent,
         topBar = {
@@ -315,7 +324,7 @@ fun ModulePagerMiuix(
                     uiState.moduleList.size,
                     uiState.moduleList.count { it.enabled },
                 ),
-                statusActive = me.weishu.kernelsu.Natives.fullFeatured,
+                statusActive = me.weishu.kernelsu.Natives.isFullFeatured(),
             ) {
                 searchStatus.TopAppBarAnim(backgroundColor = Color.Transparent) {
                     TopAppBar(
@@ -528,22 +537,7 @@ fun ModulePagerMiuix(
         },
         contentWindowInsets = WindowInsets.systemBars.add(WindowInsets.displayCutout).only(WindowInsetsSides.Horizontal)
     ) { innerPadding ->
-        // 只有"内核态设备上另有真 Magisk"才算冲突（那时模块流水线让给 Magisk）；
-        // 5.10 以下的挂载态设备上 Magisk 就是这条路的 root 实现，列表照常显示。
-        if (uiState.magiskConflict) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(12.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    stringResource(R.string.module_magisk_conflict),
-                    textAlign = TextAlign.Center,
-                )
-            }
-            return@Scaffold
-        }
+
         val layoutDirection = LocalLayoutDirection.current
         searchStatus.SearchBox {
             val pullToRefreshState = rememberPullToRefreshState()
@@ -774,7 +768,6 @@ private fun ModuleList(
     actions: ModuleActions,
     onModuleAddShortcut: (Module, ShortcutType) -> Unit,
     onLongPressModule: (Module) -> Unit,
-    onOpenHidePack: () -> Unit = {},
     contentPadding: PaddingValues,
     listState: LazyListState = rememberLazyListState(),
 ) {
@@ -786,9 +779,6 @@ private fun ModuleList(
         contentPadding = contentPadding,
         overscrollEffect = null,
     ) {
-        item(key = "hide_pack_entry", contentType = "hide_pack") {
-            HidePackEntryCard(onClick = onOpenHidePack)
-        }
         items(
             items = modules,
             key = { it.id },
@@ -969,7 +959,7 @@ fun ModuleItem(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = module.name,
-                    fontSize = 18.sp,
+                    fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = neon.textMain,
                     textDecoration = textDecoration,
@@ -980,7 +970,7 @@ fun ModuleItem(
                 if (module.metamodule) {
                     Text(
                         text = "META",
-                        fontSize = 12.sp,
+                        fontSize = 13.sp,
                         color = neon.metaText,
                         fontWeight = FontWeight(750),
                         modifier = Modifier
@@ -1018,7 +1008,7 @@ fun ModuleItem(
 
             Text(
                 text = "${stringResource(R.string.module_version)}: ${module.version} · ${stringResource(R.string.module_author)}: ${module.author}",
-                fontSize = 14.sp,
+                fontSize = 13.sp,
                 modifier = Modifier.padding(top = 4.dp),
                 color = neon.textSub,
                 textDecoration = textDecoration,
@@ -1027,7 +1017,7 @@ fun ModuleItem(
             if (hasDescription) {
                 Text(
                     text = module.description,
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
                     modifier = Modifier.padding(top = 12.dp),
                     color = neon.textSub,
                     lineHeight = 22.sp,
@@ -1074,122 +1064,3 @@ fun ModuleItem(
         )
     }
 }
-
-/**
- * 「一键隐藏」入口卡：紫罗兰工具箱资源包的部署入口，固定在模块列表最上方。
- * 卡体语言与 [ModuleItem] 完全同款（同圆角/玻璃/描边/按压缩放/辉光投影），
- * 只是内容压缩成单行——视觉上就是列表里「没有开关的模块卡」。
- */
-@Composable
-private fun HidePackEntryCard(onClick: () -> Unit) {
-    ModuleEntryCard(
-        icon = Icons.Rounded.VisibilityOff,
-        title = stringResource(R.string.hide_one_tap_title),
-        subtitle = stringResource(R.string.hide_one_tap_subtitle),
-        onClick = onClick,
-    )
-}
-
-/**
- * 入口卡与模块卡的「同款语言」实现。逐项对齐 [ModuleItem]：
- * 外距 horizontal 16 / bottom 20、Xc.shapes.sm、双 dropShadow（常态卡影 +
- * 按压时霓虹辉光）、xGlassBody(neon.cardBg, rim=false)、1dp 动效描边、
- * 按压 0.98 缩放（150ms FastOutSlowIn）。差异只有两处：入口卡没有长按，
- * 所以没有按压进度条；箭头用图标而不是字形「›」。
- */
-@Composable
-private fun ModuleEntryCard(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    onClick: () -> Unit,
-) {
-    val neon = XcNeon.colors
-    val hapticFeedback = LocalHapticFeedback.current
-    val interaction = remember { MutableInteractionSource() }
-    val isPressed by interaction.collectIsPressedAsState()
-
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.98f else 1f,
-        animationSpec = tween(durationMillis = 150, easing = FastOutSlowInEasing),
-        label = "entryCardScale",
-    )
-    val borderColor by animateColorAsState(
-        targetValue = if (isPressed) neon.cardBorderPressed else neon.cardBorder,
-        animationSpec = tween(durationMillis = 150),
-        label = "entryCardBorder",
-    )
-    val glowColor by animateColorAsState(
-        targetValue = if (isPressed) neon.glow else Color.Transparent,
-        animationSpec = tween(durationMillis = 150),
-        label = "entryCardGlow",
-    )
-
-    Box(
-        modifier = Modifier
-            .padding(horizontal = 16.dp)
-            // 入口卡与模块卡在同一张列表里滚动，间距必须同档（8dp），否则节奏断掉。
-            .padding(bottom = 8.dp)
-            .scale(scale)
-            .dropShadow(
-                shape = Xc.shapes.sm,
-                shadow = Shadow(
-                    radius = 24.dp,
-                    color = neon.cardShadow,
-                    offset = DpOffset(0.dp, 4.dp),
-                ),
-            )
-            .dropShadow(
-                shape = Xc.shapes.sm,
-                shadow = Shadow(
-                    radius = 22.dp,
-                    color = glowColor,
-                ),
-            )
-            .xGlassBody(
-                backdrop = null,
-                shape = Xc.shapes.sm,
-                tint = neon.cardBg,
-                rim = false,
-            )
-            .border(width = 1.dp, color = borderColor, shape = Xc.shapes.sm)
-            .combinedClickable(
-                interactionSource = interaction,
-                indication = null,
-                onClick = {
-                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                    onClick()
-                },
-            )
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = neon.accentCyan,
-                modifier = Modifier.size(20.dp),
-            )
-            Column(modifier = Modifier.weight(1f).padding(start = 12.dp)) {
-                Text(
-                    text = title,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = neon.textMain,
-                )
-                Text(
-                    text = subtitle,
-                    fontSize = 11.sp,
-                    color = neon.textSub,
-                )
-            }
-            Icon(
-                imageVector = Icons.Rounded.ChevronRight,
-                contentDescription = null,
-                tint = neon.textSub,
-                modifier = Modifier.size(18.dp),
-            )
-        }
-    }
-}
-

@@ -14,6 +14,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.Dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.Dispatchers
@@ -21,14 +22,13 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.weishu.kernelsu.R
-import me.weishu.kernelsu.magica.MagicaService
-import me.weishu.kernelsu.ui.LocalUiMode
-import me.weishu.kernelsu.ui.UiMode
+import com.xecpro.kernel.XecMagicaService
 import me.weishu.kernelsu.ui.component.dialog.rememberLoadingDialog
 import me.weishu.kernelsu.ui.navigation3.Navigator
 import me.weishu.kernelsu.ui.navigation3.Route
-import me.weishu.kernelsu.ui.util.BootTrace
+import me.weishu.kernelsu.ui.LocalMainPagerState
 import me.weishu.kernelsu.ui.viewmodel.HomeViewModel
+import me.weishu.kernelsu.ui.viewmodel.MainPagerConfig
 import kotlin.time.Duration.Companion.milliseconds
 
 @Composable
@@ -41,18 +41,13 @@ fun HomePager(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val uriHandler = LocalUriHandler.current
     val context = LocalContext.current
+    val mainPagerState = LocalMainPagerState.current
     val loadingDialog = rememberLoadingDialog()
     val scope = rememberCoroutineScope()
     val latestIsCurrentPage by rememberUpdatedState(isCurrentPage)
     val initialResumeHandled = rememberSaveable { mutableStateOf(false) }
 
     var hasActivated by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        if (!BootTrace.pagesDrawn.value) {
-            BootTrace.pagesDrawn.value = true
-            BootTrace.log("home page composed (state.isRootAvailable=${uiState.isRootAvailable})")
-        }
-    }
     LaunchedEffect(isCurrentPage) {
         if (isCurrentPage && !hasActivated) {
             hasActivated = true
@@ -71,14 +66,9 @@ fun HomePager(
     val actions = HomeActions(
         onInstallClick = { navigator.push(Route.Install) },
         onOpenUrl = uriHandler::openUri,
-        // The header refresh button and pull-to-refresh both land here; the view
-        // model guards against a second pass while one is still running.
-        onRefresh = { viewModel.refresh() },
-        onOpenSuperuser = { navigator.push(Route.SuperUser) },
-        onOpenSulog = { navigator.push(Route.Sulog) },
         onJailbreakClick = {
             loadingDialog.showLoading()
-            context.startService(Intent(context, MagicaService::class.java))
+            context.startService(Intent(context, XecMagicaService::class.java))
             // Manager will be force-stopped and restarted by late-load on success.
             // If that doesn't happen within timeout, jailbreak likely failed.
             scope.launch(Dispatchers.IO) {
@@ -89,19 +79,16 @@ fun HomePager(
                 }
             }
         },
+        // 底栏第 0 页 → 第 1 页（超级用户）。用分页状态而不是 push 一条路由：
+        // 超级用户不是一个能"返回"的独立页面，它就是底栏那一页。
+        onOpenSuperuser = { mainPagerState.animateToPage(1) },
+        onOpenSulog = { navigator.push(Route.Sulog) },
+        onRefresh = { viewModel.refresh() },
     )
 
-    when (LocalUiMode.current) {
-        UiMode.Miuix -> HomePagerMiuix(
-            state = uiState,
-            actions = actions,
-            bottomInnerPadding = bottomInnerPadding,
-        )
-
-        UiMode.Material -> HomePagerMaterial(
-            state = uiState,
-            actions = actions,
-            bottomInnerPadding = bottomInnerPadding,
-        )
-    }
+    HomePagerMiuix(
+        state = uiState,
+        actions = actions,
+        bottomInnerPadding = bottomInnerPadding,
+    )
 }

@@ -34,7 +34,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -72,6 +71,9 @@ import me.weishu.kernelsu.ui.component.miuix.SearchBarFake
 import me.weishu.kernelsu.ui.component.miuix.SearchBox
 import me.weishu.kernelsu.ui.component.miuix.SearchPager
 import me.weishu.kernelsu.ui.component.statustag.StatusTag
+import me.weishu.kernelsu.ui.design.glass.xGlassBody
+import me.weishu.kernelsu.ui.design.island.IslandTopBar
+import me.weishu.kernelsu.ui.design.token.Xc
 import me.weishu.kernelsu.ui.theme.LocalEnableBlur
 import me.weishu.kernelsu.ui.theme.isInDarkTheme
 import me.weishu.kernelsu.ui.util.BlurredBar
@@ -80,6 +82,7 @@ import me.weishu.kernelsu.ui.util.rememberBlurBackdrop
 import me.weishu.kernelsu.ui.viewmodel.AppSortType
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.DropdownImpl
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Icon
@@ -92,6 +95,7 @@ import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.basic.rememberPullToRefreshState
+import top.yukonga.miuix.kmp.blur.LayerBackdrop
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.basic.ArrowRight
@@ -102,6 +106,7 @@ import top.yukonga.miuix.kmp.overlay.OverlayListPopup
 import top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
+import me.weishu.kernelsu.ui.design.token.XcRadius
 
 @Composable
 fun SuperUserPagerMiuix(
@@ -120,14 +125,23 @@ fun SuperUserPagerMiuix(
 
     val backdrop = rememberBlurBackdrop(enableBlur)
     val blurActive = backdrop != null
-    val barColor = if (blurActive) Color.Transparent else colorScheme.surface
+    val barColor = if (blurActive) Color.Transparent else colorScheme.surface.copy(alpha = 1f)
 
     Scaffold(
+        containerColor = Color.Transparent,
         topBar = {
-            BlurredBar(backdrop) {
-                searchStatus.TopAppBarAnim(backgroundColor = barColor) {
+            // 灵动岛：顶栏本身就是岛的展开态（无玻璃底）；上滑收缩成岛。
+            IslandTopBar(
+                islandTitle = stringResource(R.string.superuser),
+                islandLive = stringResource(
+                    R.string.island_granted,
+                    uiState.groupedApps.count { it.anyAllowSu },
+                ),
+                statusActive = me.weishu.kernelsu.Natives.isFullFeatured(),
+            ) {
+                searchStatus.TopAppBarAnim(backgroundColor = Color.Transparent) {
                     TopAppBar(
-                        color = barColor,
+                        color = Color.Transparent,
                         title = stringResource(R.string.superuser),
                         navigationIcon = {
                             IconButton(
@@ -459,7 +473,8 @@ fun SuperUserPagerMiuix(
                                             expandedUids.value =
                                                 if (expanded) expandedUids.value - group.uid else expandedUids.value + group.uid
                                         }
-                                    }
+                                    },
+                                    backdrop = backdrop,
                                 ) {
                                     actions.onOpenProfile(group)
                                 }
@@ -470,7 +485,7 @@ fun SuperUserPagerMiuix(
                                 ) {
                                     Column {
                                         group.apps.forEach { app ->
-                                            SimpleAppItem(app = app)
+                                            SimpleAppItem(app = app, backdrop = backdrop)
                                         }
                                         Spacer(Modifier.height(6.dp))
                                     }
@@ -491,6 +506,7 @@ fun SuperUserPagerMiuix(
 private fun SimpleAppItem(
     app: AppInfo,
     matched: Boolean = false,
+    backdrop: LayerBackdrop? = null,
 ) {
     Row {
         Box(
@@ -499,12 +515,14 @@ private fun SimpleAppItem(
                 .width(6.dp)
                 .height(24.dp)
                 .align(Alignment.CenterVertically)
-                .clip(RoundedCornerShape(16.dp))
+                .clip(Xc.shapes.md)
                 .background(if (matched) colorScheme.primary else colorScheme.primaryContainer)
         )
-        Card(
+        Card(cornerRadius = XcRadius.md, 
             modifier = Modifier
                 .padding(start = 6.dp, end = 12.dp, bottom = 6.dp)
+                .xGlassBody(backdrop = backdrop, shape = Xc.shapes.md),
+            colors = CardDefaults.defaultColors(color = Color.Transparent),
         ) {
             BasicComponent(
                 title = app.label,
@@ -528,6 +546,7 @@ private fun SimpleAppItem(
 private fun GroupItem(
     group: GroupedApps,
     onToggleExpand: () -> Unit,
+    backdrop: LayerBackdrop? = null,
     onClickPrimary: () -> Unit,
 ) {
     val isInDarkTheme = isInDarkTheme()
@@ -547,10 +566,12 @@ private fun GroupItem(
             if (userId != 0) add(StatusMeta("USER $userId", bg, fg))
         }
     }
-    Card(
+    Card(cornerRadius = XcRadius.md, 
         modifier = Modifier
             .padding(horizontal = 12.dp)
-            .padding(bottom = 12.dp),
+            .padding(bottom = 12.dp)
+            .xGlassBody(backdrop = backdrop, shape = Xc.shapes.md),
+        colors = CardDefaults.defaultColors(color = Color.Transparent),
         onClick = onClickPrimary,
         onLongPress = if (group.apps.size > 1) onToggleExpand else null,
         showIndication = true,
@@ -586,7 +607,7 @@ private fun GroupItem(
                     },
                     modifier = Modifier
                         .basicMarquee(),
-                    fontSize = 12.sp,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight(550),
                     color = colorScheme.onSurfaceVariantSummary,
                     maxLines = 1,

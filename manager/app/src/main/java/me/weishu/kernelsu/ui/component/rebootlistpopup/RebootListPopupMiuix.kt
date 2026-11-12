@@ -5,11 +5,11 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import me.weishu.kernelsu.R
 import me.weishu.kernelsu.ui.component.KsuIsValid
 import me.weishu.kernelsu.ui.component.ListPopupDefaults
-import me.weishu.kernelsu.ui.component.miuix.DropdownItem
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.ListPopupColumn
@@ -19,10 +19,15 @@ import top.yukonga.miuix.kmp.icon.extended.Close2
 import top.yukonga.miuix.kmp.overlay.OverlayListPopup
 import top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme
 
+/**
+ * @param iconTint 栏内那个图标按钮的颜色。默认跟着 miuix 的 `onBackground` 走，
+ *   挂在"白毛玻璃"顶栏上（首页）时必须由调用点换成深色，否则白底图标。
+ */
 @Composable
 fun RebootListPopupMiuix(
     modifier: Modifier = Modifier,
-    alignment: PopupPositionProvider.Align = PopupPositionProvider.Align.TopEnd
+    alignment: PopupPositionProvider.Align = PopupPositionProvider.Align.TopEnd,
+    iconTint: Color = colorScheme.onBackground,
 ) {
     val showTopPopup = remember { mutableStateOf(false) }
     KsuIsValid {
@@ -35,7 +40,7 @@ fun RebootListPopupMiuix(
             Icon(
                 imageVector = MiuixIcons.Close2,
                 contentDescription = stringResource(id = R.string.reboot),
-                tint = colorScheme.onBackground
+                tint = iconTint
             )
         }
         OverlayListPopup(
@@ -72,7 +77,7 @@ fun RebootDropdownItem(
     index: Int,
     onReboot: (String) -> Unit,
 ) {
-    DropdownItem(
+    me.weishu.kernelsu.ui.component.miuix.DropdownItem(
         text = stringResource(option.labelRes),
         optionSize = optionSize,
         onSelectedIndexChange = {

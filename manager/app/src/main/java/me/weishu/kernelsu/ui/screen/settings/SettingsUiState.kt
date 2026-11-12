@@ -3,11 +3,9 @@ package me.weishu.kernelsu.ui.screen.settings
 import androidx.compose.runtime.Immutable
 import com.materialkolor.PaletteStyle
 import com.materialkolor.dynamiccolor.ColorSpec
-import me.weishu.kernelsu.ui.UiMode
 
 @Immutable
 data class SettingsUiState(
-    val uiMode: String = UiMode.DEFAULT_VALUE,
     val checkUpdate: Boolean = true,
     val checkModuleUpdate: Boolean = true,
     val themeMode: Int = 0,
@@ -16,19 +14,22 @@ data class SettingsUiState(
     val colorStyle: String = PaletteStyle.TonalSpot.name,
     val colorSpec: String = ColorSpec.SpecVersion.SPEC_2025.name,
     val enablePredictiveBack: Boolean = false,
-    val enableSwipeDismiss: Boolean = true,
-    val pagerInterceptionMode: Int = 1,
     val enableBlur: Boolean = true,
     val enableFloatingBottomBar: Boolean = false,
     val enableFloatingBottomBarBlur: Boolean = false,
     val enableNavigationBadge: Boolean = true,
-    val pageScale: Float = 1.0f,
+
+    /** 组件透明：所有面板/行/按钮底色设为全透明，只留描边与文字。 */
     val componentTransparent: Boolean = false,
+    val pageScale: Float = 1.0f,
+    val enableWebDebugging: Boolean = false,
+
+    /** 自定义背景文件名，空串 = 使用内置随机池；纯色档是 `WallpaperStore.SOLID_*` 哨兵。 */
     val wallpaperLight: String = "",
     val wallpaperDark: String = "",
+
+    /** 背景模糊强度，百分比 0..100（0 = 关）。 */
     val wallpaperBlur: Int = 0,
-    val moduleDescriptionMaxLines: Int = 4,
-    val enableWebDebugging: Boolean = false,
 
     // Su Compat
     val suCompatStatus: String = "",
@@ -54,15 +55,14 @@ data class SettingsUiState(
     val adbRootStatus: String = "",
     val isAdbRootEnabled: Boolean = false,
 
-    // Shell SU ADB Only
-    val shellSuAdbOnlyStatus: String = "",
-    val isShellSuAdbOnlyEnabled: Boolean = false,
-
     val isLkmMode: Boolean = false,
     val isLateLoadMode: Boolean = false,
 
     // Auto Jailbreak
     val autoJailbreak: Boolean = false,
+
+    // 内置 TEE/TS 引擎总开关（关掉不影响 root，只关掉伪造的证明链）
+    val isTeeEngineEnabled: Boolean = true,
 
     // Soft Reboot
     val useSoftReboot: Boolean = false
@@ -71,24 +71,25 @@ data class SettingsUiState(
 @Immutable
 data class SettingsScreenActions(
     val onSetCheckUpdate: (Boolean) -> Unit,
+    /** 组件透明（所有面板/行底色 alpha 归零，只留 1px 描边与文字）。 */
+    val onSetComponentTransparent: (Boolean) -> Unit,
     val onSetCheckModuleUpdate: (Boolean) -> Unit,
     val onOpenTheme: () -> Unit,
-    /** Theme store / my themes / editor: whole skins, not just the current palette. */
+    /** 主题商城 / 我的主题 / 编辑器（换肤与分享）。 */
     val onOpenThemes: () -> Unit,
     val onOpenWallpaper: () -> Unit,
-    val onOpenTools: () -> Unit,
-    val onOpenRemoteAssistant: () -> Unit,
-    val onSetUiModeIndex: (Int) -> Unit,
     val onOpenProfileTemplate: () -> Unit,
+    val onOpenRemoteAssistant: () -> Unit,
+    val onOpenTools: () -> Unit,
     val onSetSuCompatMode: (Int) -> Unit,
     val onSetKernelUmountEnabled: (Boolean) -> Unit,
     val onSetSelinuxHideEnabled: (Boolean) -> Unit,
     val onSetSulogEnabled: (Boolean) -> Unit,
     val onSetAdbRootEnabled: (Boolean) -> Unit,
-    val onSetShellSuAdbOnlyEnabled: (Boolean) -> Unit,
     val onSetDefaultUmountModules: (Boolean) -> Unit,
     val onSetEnableWebDebugging: (Boolean) -> Unit,
     val onSetAutoJailbreak: (Boolean) -> Unit,
+    val onSetTeeEngineEnabled: (Boolean) -> Unit,
     val onSetUseSoftReboot: (Boolean) -> Unit,
     val onOpenAbout: () -> Unit,
 )

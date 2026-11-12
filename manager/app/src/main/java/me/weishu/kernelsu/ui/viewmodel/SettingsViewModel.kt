@@ -18,6 +18,9 @@ import me.weishu.kernelsu.data.repository.SettingsRepositoryImpl
 import me.weishu.kernelsu.ksuApp
 import me.weishu.kernelsu.ui.screen.settings.SettingsUiState
 import me.weishu.kernelsu.ui.theme.ColorMode
+import me.weishu.kernelsu.ui.util.applyTeeEngineSwitch
+import me.weishu.kernelsu.ui.util.rebootDevice
+import me.weishu.kernelsu.ui.util.teeEngineEnabled
 
 class SettingsViewModel(
     private val repo: SettingsRepository = SettingsRepositoryImpl()
@@ -25,6 +28,12 @@ class SettingsViewModel(
 
     private val _uiState = MutableStateFlow(SettingsUiState())
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
+
+    /**
+     * 守卫武装后，SET_FEATURE 一律要 fd 级认证；没有这一步，开关只会拿到
+     * -EACCES，界面还会乐观地把开关翻过去（用户看到的「错误: -13」）。
+     */
+    private fun ensureSuperkey(): Boolean = true
 
     init {
         refresh()
@@ -38,15 +47,16 @@ class SettingsViewModel(
             val miuixMonet = repo.miuixMonet
             val keyColor = repo.keyColor
             val enablePredictiveBack = repo.enablePredictiveBack
-            val enableSwipeDismiss = repo.enableSwipeDismiss
-            val pagerInterceptionMode = repo.pagerInterceptionMode
             val enableBlur = repo.enableBlur
             val enableFloatingBottomBar = repo.enableFloatingBottomBar
             val enableFloatingBottomBarBlur = repo.enableFloatingBottomBarBlur
             val enableNavigationBadge = repo.enableNavigationBadge
+            val componentTransparent = repo.componentTransparent
             val pageScale = repo.pageScale
-            val moduleDescriptionMaxLines = repo.moduleDescriptionMaxLines
             val enableWebDebugging = repo.enableWebDebugging
+            val wallpaperLight = repo.wallpaperLight
+            val wallpaperDark = repo.wallpaperDark
+            val wallpaperBlur = repo.wallpaperBlur
             val colorStyle = repo.colorStyle
             val colorSpec = repo.colorSpec
             val isLkmMode = repo.isLkmMode()
@@ -56,68 +66,41 @@ class SettingsViewModel(
             val suCompatPersistValue = repo.getSuCompatPersistValue()
             val isSuEnabled = repo.isSuEnabled()
 
-            // Forced features show the value in effect, the persisted one is ignored
-            val suCompatMode = when {
-                suCompatStatus == "forced" -> if (isSuEnabled) 0 else 2
-                suCompatPersistValue == 0L -> 2
-                !isSuEnabled -> 1
-                else -> 0
-            }
+            val suCompatMode = if (suCompatPersistValue == 0L) 2 else if (!isSuEnabled) 1 else 0
 
             val kernelUmountStatus = repo.getKernelUmountStatus()
             val isKernelUmountEnabled = repo.isKernelUmountEnabled()
             val selinuxHideStatus = repo.getSelinuxHideStatus()
             val isSelinuxHideEnabled = repo.isSelinuxHideEnabled()
             val sulogStatus = repo.getSulogStatus()
-            val isSulogEnabled = if (sulogStatus == "forced") {
-                repo.getSulogValue() == 1L
-            } else {
-                repo.getSulogPersistValue() == 1L
-            }
+            val isSulogEnabled = repo.getSulogPersistValue() == 1L
             val adbRootStatus = repo.getAdbRootStatus()
-            val isAdbRootEnabled = if (adbRootStatus == "forced") {
-                repo.getAdbRootValue() == 1L
-            } else {
-                repo.getAdbRootPersistValue() == 1L
-            }
-            val shellSuAdbOnlyStatus = repo.getShellSuAdbOnlyStatus()
-            val isShellSuAdbOnlyEnabled = if (shellSuAdbOnlyStatus == "forced") {
-                repo.getShellSuAdbOnlyValue() == 1L
-            } else {
-                repo.getShellSuAdbOnlyPersistValue() == 1L
-            }
+            val isAdbRootEnabled = repo.getAdbRootPersistValue() == 1L
             val isDefaultUmountModules = repo.isDefaultUmountModules()
-            val uiMode = repo.uiMode
-            val componentTransparent = repo.componentTransparent
-            val wallpaperLight = repo.wallpaperLight
-            val wallpaperDark = repo.wallpaperDark
-            val wallpaperBlur = repo.wallpaperBlur
             val autoJailbreak = repo.autoJailbreak
             val useSoftReboot = repo.useSoftReboot
             val isLateLoadMode = Natives.isLateLoadMode
+            // 走 root shell 查询，必须切到 IO；默认开着，查不到也不改变现状。
+            val isTeeEngineEnabled = withContext(Dispatchers.IO) { teeEngineEnabled() }
 
             _uiState.update {
                 it.copy(
-                    uiMode = uiMode,
                     checkUpdate = checkUpdate,
                     checkModuleUpdate = checkModuleUpdate,
                     themeMode = themeMode,
                     miuixMonet = miuixMonet,
                     keyColor = keyColor,
                     enablePredictiveBack = enablePredictiveBack,
-                    enableSwipeDismiss = enableSwipeDismiss,
-                    pagerInterceptionMode = pagerInterceptionMode,
                     enableBlur = enableBlur,
                     enableFloatingBottomBar = enableFloatingBottomBar,
                     enableFloatingBottomBarBlur = enableFloatingBottomBarBlur,
                     enableNavigationBadge = enableNavigationBadge,
-                    pageScale = pageScale,
                     componentTransparent = componentTransparent,
+                    pageScale = pageScale,
+                    enableWebDebugging = enableWebDebugging,
                     wallpaperLight = wallpaperLight,
                     wallpaperDark = wallpaperDark,
                     wallpaperBlur = wallpaperBlur,
-                    moduleDescriptionMaxLines = moduleDescriptionMaxLines,
-                    enableWebDebugging = enableWebDebugging,
                     colorStyle = colorStyle,
                     colorSpec = colorSpec,
                     suCompatStatus = suCompatStatus,
@@ -125,8 +108,6 @@ class SettingsViewModel(
                     isSuEnabled = isSuEnabled,
                     adbRootStatus = adbRootStatus,
                     isAdbRootEnabled = isAdbRootEnabled,
-                    shellSuAdbOnlyStatus = shellSuAdbOnlyStatus,
-                    isShellSuAdbOnlyEnabled = isShellSuAdbOnlyEnabled,
                     kernelUmountStatus = kernelUmountStatus,
                     isKernelUmountEnabled = isKernelUmountEnabled,
                     selinuxHideStatus = selinuxHideStatus,
@@ -138,6 +119,7 @@ class SettingsViewModel(
                     autoJailbreak = autoJailbreak,
                     useSoftReboot = useSoftReboot,
                     isLateLoadMode = isLateLoadMode,
+                    isTeeEngineEnabled = isTeeEngineEnabled,
                 )
             }
         }
@@ -148,44 +130,13 @@ class SettingsViewModel(
         _uiState.update { it.copy(checkUpdate = enabled) }
     }
 
-    fun setUiMode(mode: String) {
-        val oldMode = repo.uiMode
-        val currentThemeMode = repo.themeMode
-
-        val newThemeMode = when (oldMode) {
-            "material" if mode == "miuix" -> {
-                val colorMode = ColorMode.fromValue(currentThemeMode)
-                val baseMode = if (colorMode == ColorMode.DARK_AMOLED) 2 else currentThemeMode
-                if (repo.miuixMonet && !colorMode.isMonet) {
-                    ColorMode.fromValue(baseMode).toMonetMode()
-                } else if (!repo.miuixMonet && colorMode.isMonet) {
-                    ColorMode.fromValue(baseMode).toNonMonetMode()
-                } else baseMode
-            }
-
-            "miuix" if mode == "material" -> {
-                val colorMode = ColorMode.fromValue(currentThemeMode)
-                if (colorMode.isMonet) {
-                    colorMode.toNonMonetMode()
-                } else currentThemeMode
-            }
-
-            else -> currentThemeMode
-        }
-
-        repo.uiMode = mode
-        repo.themeMode = newThemeMode
-        _uiState.update { it.copy(uiMode = mode, themeMode = newThemeMode) }
-    }
-
     fun setCheckModuleUpdate(enabled: Boolean) {
         repo.checkModuleUpdate = enabled
         _uiState.update { it.copy(checkModuleUpdate = enabled) }
     }
 
     fun setThemeMode(mode: Int) {
-        val currentUiMode = repo.uiMode
-        val effectiveMode = if (currentUiMode == "miuix" && _uiState.value.miuixMonet) {
+        val effectiveMode = if (_uiState.value.miuixMonet) {
             mode + 3
         } else {
             mode
@@ -232,16 +183,6 @@ class SettingsViewModel(
         _uiState.update { it.copy(enablePredictiveBack = enabled) }
     }
 
-    fun setEnableSwipeDismiss(enabled: Boolean) {
-        repo.enableSwipeDismiss = enabled
-        _uiState.update { it.copy(enableSwipeDismiss = enabled) }
-    }
-
-    fun setPagerInterceptionMode(mode: Int) {
-        repo.pagerInterceptionMode = mode
-        _uiState.update { it.copy(pagerInterceptionMode = mode.coerceIn(0, 2)) }
-    }
-
     fun setEnableBlur(enabled: Boolean) {
         repo.enableBlur = enabled
         _uiState.update { it.copy(enableBlur = enabled) }
@@ -267,30 +208,9 @@ class SettingsViewModel(
         _uiState.update { it.copy(componentTransparent = enabled) }
     }
 
-    fun setWallpaperLight(path: String) {
-        repo.wallpaperLight = path
-        _uiState.update { it.copy(wallpaperLight = path) }
-    }
-
-    fun setWallpaperDark(path: String) {
-        repo.wallpaperDark = path
-        _uiState.update { it.copy(wallpaperDark = path) }
-    }
-
-    fun setWallpaperBlur(value: Int) {
-        val clamped = value.coerceIn(0, 100)
-        repo.wallpaperBlur = clamped
-        _uiState.update { it.copy(wallpaperBlur = clamped) }
-    }
-
     fun setPageScale(scale: Float) {
         repo.pageScale = scale
         _uiState.update { it.copy(pageScale = scale) }
-    }
-
-    fun setModuleDescriptionMaxLines(lines: Int) {
-        repo.moduleDescriptionMaxLines = lines
-        _uiState.update { it.copy(moduleDescriptionMaxLines = lines) }
     }
 
     fun setEnableWebDebugging(enabled: Boolean) {
@@ -298,7 +218,32 @@ class SettingsViewModel(
         _uiState.update { it.copy(enableWebDebugging = enabled) }
     }
 
+    /**
+     * 切到自定义背景（[name] 为 [WallpaperStore] 落盘后的文件名）。
+     *
+     * 传空串即"恢复内置随机池"。这里只改设置项，不动文件——文件的生命周期由
+     * [WallpaperStore] 负责（导入成功才写设置，清空时先改设置再删文件，任何一步
+     * 中断最坏结果都只是回落到内置池，不会出现"设置指向不存在的图"这种状态）。
+     */
+    fun setWallpaperLight(name: String) {
+        repo.wallpaperLight = name
+        _uiState.update { it.copy(wallpaperLight = name) }
+    }
+
+    fun setWallpaperDark(name: String) {
+        repo.wallpaperDark = name
+        _uiState.update { it.copy(wallpaperDark = name) }
+    }
+
+    /** 背景模糊强度（百分比 0..100）。拖动结束才落盘，拖动过程只改本地状态。 */
+    fun setWallpaperBlur(percent: Int) {
+        val clamped = percent.coerceIn(0, 100)
+        repo.wallpaperBlur = clamped
+        _uiState.update { it.copy(wallpaperBlur = clamped) }
+    }
+
     fun setSuCompatMode(mode: Int) {
+        if (!ensureSuperkey()) return
         viewModelScope.launch(Dispatchers.IO) {
             when (mode) {
                 0 -> if (repo.setSuEnabled(true)) {
@@ -327,6 +272,7 @@ class SettingsViewModel(
     }
 
     fun setKernelUmountEnabled(enabled: Boolean) {
+        if (!ensureSuperkey()) return
         viewModelScope.launch(Dispatchers.IO) {
             if (repo.setKernelUmountEnabled(enabled)) {
                 repo.execKsudFeatureSave()
@@ -336,10 +282,14 @@ class SettingsViewModel(
     }
 
     fun setSelinuxHideEnabled(enabled: Boolean) {
+        if (!ensureSuperkey()) return
         viewModelScope.launch(Dispatchers.IO) {
             val status = repo.setSelinuxHideEnabled(enabled)
-            repo.execKsudFeatureSave()
-            _uiState.update { it.copy(isSelinuxHideEnabled = enabled) }
+            // 只有真的成功（或"重启后生效"）才翻 UI；-EACCES 等失败必须保持原状。
+            if (status == 0 || status == -OsConstants.EAGAIN) {
+                repo.execKsudFeatureSave()
+                _uiState.update { it.copy(isSelinuxHideEnabled = enabled) }
+            }
             when (status) {
                 0 -> {}
                 -OsConstants.EAGAIN -> {
@@ -369,6 +319,7 @@ class SettingsViewModel(
     }
 
     fun setSulogEnabled(enabled: Boolean) {
+        if (!ensureSuperkey()) return
         viewModelScope.launch(Dispatchers.IO) {
             if (repo.setSulogEnabled(enabled)) {
                 repo.execKsudFeatureSave()
@@ -377,21 +328,37 @@ class SettingsViewModel(
         }
     }
 
-    fun setShellSuAdbOnlyEnabled(enabled: Boolean) {
-        viewModelScope.launch(Dispatchers.IO) {
-            if (repo.setShellSuAdbOnlyEnabled(enabled)) {
-                repo.execKsudFeatureSave()
-                _uiState.update { it.copy(isShellSuAdbOnlyEnabled = enabled) }
-            }
-        }
-    }
-
     fun setAdbRootEnabled(enabled: Boolean) {
+        if (!ensureSuperkey()) return
         viewModelScope.launch(Dispatchers.IO) {
             if (repo.setAdbRootEnabled(enabled)) {
                 repo.execKsudFeatureSave()
                 _uiState.update { it.copy(isAdbRootEnabled = enabled) }
             }
+        }
+    }
+
+    /**
+     * 内置 TEE/TS 引擎总开关。
+     *
+     * 引擎只在开机路径上注入，所以改完**立即重启**：不重启用户会看到开关变了、行为没变，
+     * 反而以为功能坏了。root 不受影响（引擎是纯用户态注入，不是内核模块）。
+     */
+    fun setTeeEngineEnabled(enabled: Boolean) {
+        if (!ensureSuperkey()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            if (!applyTeeEngineSwitch(enabled)) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(
+                        ksuApp,
+                        R.string.settings_tee_engine_failed,
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+                return@launch
+            }
+            _uiState.update { it.copy(isTeeEngineEnabled = enabled) }
+            rebootDevice()
         }
     }
 

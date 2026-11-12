@@ -39,9 +39,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+// RectangleShape 属于 ui.graphics，不在 foundation.shape ——
+// 写成 foundation.shape.RectangleShape 会直接编译不过（CI 已实测）。
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -58,13 +62,14 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.flow.onEach
 import me.weishu.kernelsu.R
 import me.weishu.kernelsu.ui.component.miuix.effect.BgEffectBackground
-import me.weishu.kernelsu.ui.component.miuix.effect.ColorBlendToken
+import me.weishu.kernelsu.ui.design.panel.Xc8Chevron
+import me.weishu.kernelsu.ui.design.panel.Xc8Panel
+import me.weishu.kernelsu.ui.design.panel.Xc8Row
+import me.weishu.kernelsu.ui.design.token.Xc
 import me.weishu.kernelsu.ui.theme.LocalEnableBlur
 import me.weishu.kernelsu.ui.theme.isInDarkTheme
 import me.weishu.kernelsu.ui.util.BlurredBar
 import me.weishu.kernelsu.ui.util.rememberBlurBackdrop
-import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
@@ -81,7 +86,6 @@ import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import top.yukonga.miuix.kmp.blur.textureBlur
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
-import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
@@ -114,10 +118,11 @@ fun AboutScreenMiuix(
     val barColor = if (blurActive) {
         Color.Transparent
     } else {
-        if (scrollProgress == 1f) colorScheme.surface else Color.Transparent
+        if (scrollProgress == 1f) colorScheme.surface.copy(alpha = 1f) else Color.Transparent
     }
 
     Scaffold(
+        containerColor = Color.Transparent,
         topBar = {
             BlurredBar(backdrop = barBlurBackdrop, blurActive = blurActive) {
                 SmallTopAppBar(
@@ -182,22 +187,22 @@ private fun AboutContent(
     val effectBackground =
         remember(enableBlur) { isRuntimeShaderSupported() && enableBlur && Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM }
 
-    val blendColors = remember(isInDark) {
-        if (isInDark) ColorBlendToken.Overlay_Thin_Light
-        else ColorBlendToken.Pured_Regular_Light
-    }
-    val logoBlend = remember(isInDark) {
+    // Logo 的模糊混色改用语义令牌：ColorDodge/ColorBurn 需要一深一浅两极灰，
+    // 取当前明暗档的 text/textSecondary 再保留原来的 alpha；绿色取 success。
+    // 故意不写死 ARGB——主题以后重开模糊时，这套混色要跟着明暗档和主题色走。
+    val colors = Xc.colors
+    val logoBlend = remember(isInDark, colors) {
         if (isInDark) {
             listOf(
-                BlendColorEntry(Color(0xe6a1a1a1), BlurBlendMode.ColorDodge),
-                BlendColorEntry(Color(0x4de6e6e6), BlurBlendMode.LinearLight),
-                BlendColorEntry(Color(0xff1af500), BlurBlendMode.Lab),
+                BlendColorEntry(colors.textSecondary.copy(alpha = 0.90f), BlurBlendMode.ColorDodge),
+                BlendColorEntry(colors.text.copy(alpha = 0.30f), BlurBlendMode.LinearLight),
+                BlendColorEntry(colors.success, BlurBlendMode.Lab),
             )
         } else {
             listOf(
-                BlendColorEntry(Color(0xcc4a4a4a), BlurBlendMode.ColorBurn),
-                BlendColorEntry(Color(0xff4f4f4f), BlurBlendMode.LinearLight),
-                BlendColorEntry(Color(0xff1af200), BlurBlendMode.Lab),
+                BlendColorEntry(colors.text.copy(alpha = 0.80f), BlurBlendMode.ColorBurn),
+                BlendColorEntry(colors.textSecondary, BlurBlendMode.LinearLight),
+                BlendColorEntry(colors.success, BlurBlendMode.Lab),
             )
         }
     }
@@ -294,14 +299,19 @@ private fun AboutContent(
                         iconY = y + size.height
                     },
             ) {
-                Image(
+                Box(
                     modifier = Modifier
                         .requiredSize(245.dp)
+                        .clip(RoundedCornerShape(percent = 26))
                         .then(
                             if (enableBlur) {
                                 Modifier.textureBlur(
                                     backdrop = backdrop,
-                                    shape = RoundedCornerShape(0.dp),
+                                    // 这里的 shape 是模糊的**取样区域**，不是容器的圆角：
+                                    // 结果还会按图标的 alpha 做 DstIn，所以取直角矩形才
+                                    // 不会把图标本身切掉一圈。设计里"不许直角"针对的是
+                                    // 可见容器，这类遮罩除外。
+                                    shape = RectangleShape,
                                     blurRadius = 150f,
                                     colors = BlurColors(blendColors = logoBlend),
                                     contentBlendMode = ComposeBlendMode.DstIn,
@@ -309,10 +319,22 @@ private fun AboutContent(
                                 )
                             } else Modifier
                         ),
-                    painter = painterResource(id = R.drawable.ic_launcher_foreground),
-                    colorFilter = ColorFilter.tint(colorScheme.onBackground),
-                    contentDescription = null,
-                )
+                    contentAlignment = Alignment.Center,
+                ) {
+                    // 2026-11-09：这里以前只画 `ic_launcher_foreground`（透明底的前景层）
+                    // 并用 onBackground 染色 —— 浅色档就是把整个字形涂成近黑，看起来是
+                    // 一块黑块。改成真正合成应用图标：向量渐变底 + 前景字形，不做染色。
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_launcher_bg),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    Image(
+                        painter = painterResource(id = R.drawable.ic_launcher_foreground),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
             }
             Text(
                 modifier = Modifier
@@ -332,7 +354,8 @@ private fun AboutContent(
                         if (enableBlur) {
                             Modifier.textureBlur(
                                 backdrop = backdrop,
-                                shape = RoundedCornerShape(0.dp),
+                                // 同上：取样区域取直角，否则标题文字的四角会被切掉。
+                                shape = RectangleShape,
                                 blurRadius = 150f,
                                 colors = BlurColors(blendColors = logoBlend),
                                 contentBlendMode = ComposeBlendMode.DstIn,
@@ -343,7 +366,7 @@ private fun AboutContent(
                 text = state.appName,
                 color = colorScheme.onBackground,
                 fontWeight = FontWeight.Bold,
-                fontSize = 35.sp,
+                fontSize = 28.sp,
             )
             Text(
                 modifier = Modifier
@@ -361,7 +384,7 @@ private fun AboutContent(
                     },
                 color = colorScheme.onSurfaceVariantSummary,
                 text = state.versionName,
-                fontSize = 14.sp,
+                fontSize = 15.sp,
                 textAlign = TextAlign.Center,
             )
         }
@@ -408,31 +431,12 @@ private fun AboutContent(
                         .fillParentMaxHeight()
                         .padding(bottom = innerPadding.calculateBottomPadding() + 12.dp),
                 ) {
-                    Card(
-                        modifier = Modifier
-                            .padding(horizontal = 12.dp)
-                            .then(
-                                if (enableBlur) {
-                                    Modifier.textureBlur(
-                                        backdrop = backdrop,
-                                        shape = RoundedCornerShape(16.dp),
-                                        blurRadius = 60f,
-                                        colors = BlurColors(blendColors = blendColors),
-                                        enabled = true,
-                                    )
-                                } else Modifier
-                            ),
-                        colors = CardDefaults.defaultColors(
-                            if (enableBlur) Color.Transparent else colorScheme.surfaceContainer,
-                            Color.Transparent,
-                        ),
-                    ) {
+                    Xc8Panel(modifier = Modifier.padding(horizontal = 12.dp)) {
                         state.links.forEach {
-                            ArrowPreference(
+                            Xc8Row(
                                 title = it.fullText,
-                                onClick = {
-                                    actions.onOpenLink(it.url)
-                                }
+                                onClick = { actions.onOpenLink(it.url) },
+                                trailing = { Xc8Chevron() },
                             )
                         }
                     }

@@ -4,38 +4,38 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 不再声明 RECEIVE_BOOT_COMPLETED / REQUEST_INSTALL_PACKAGES：
+         两者都会被春秋 4.6.2 的 risk_app_components 当作 [gpi,receiver] 特征。
+         安装 APK 走 root pm install；开机自举改用 USER_UNLOCKED（不需要该权限）。 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
-
-    <uses-permission
-        android:name="${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
-        tools:node="remove" />
-    <permission
-        android:name="${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
-        tools:node="remove" />
 
     <uses-sdk tools:overrideLibrary="top.yukonga.miuix.kmp.blur" />
 
     <application
-        android:name=".KernelSUApplication"
+        android:name="com.xecpro.kernel.XecApplication"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:directBootAware="true"
         android:fullBackupContent="@xml/backup_rules"
         android:hasFragileUserData="true"
         android:icon="@mipmap/ic_launcher"
-        android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
         android:networkSecurityConfig="@xml/network_security_config"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.KernelSU"
-        android:zygotePreloadName="me.weishu.kernelsu.magica.AppZygotePreload">
+        android:theme="@style/Theme.XecPro"
+        android:zygotePreloadName="com.xecpro.kernel.XecPreload">
         <activity
-            android:name=".ui.MainActivity"
+            android:name="me.weishu.kernelsu.ui.StealthLaunchActivity"
             android:exported="true"
-            android:theme="@style/Theme.KernelSU.Starting"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name="com.xecpro.kernel.XecMainActivity"
+            android:exported="true"
+            android:theme="@style/Theme.XecPro.Starting"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -47,93 +47,23 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
 
-                <data android:scheme="content" />
-                <data android:mimeType="application/zip" />
-                <data android:mimeType="application/x-zip-compressed" />
-                <data android:mimeType="application/x-zip" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-
-                <category android:name="android.intent.category.DEFAULT" />
-
                 <data
-                    android:host="action"
-                    android:scheme="ksu" />
+                    android:mimeType="application/zip"
+                    android:scheme="content" />
             </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-
-                <category android:name="android.intent.category.DEFAULT" />
-
-                <data
-                    android:host="webui"
-                    android:scheme="ksu" />
-            </intent-filter>
+            <!-- ksu:// 深链 filter 已摘除（2026-10-26）：春秋检测按 manifest 里的 root 管理器
+                 指纹（root_manager_intents）扫描 ksux 系 scheme；深链解析有独立 token 门禁，
+                 应用内也没有隐式 ksu:// 发送方，摘 filter 不影响功能。 -->
         </activity>
 
-        <!--
-            The always-enabled entry for the hidden-icon mode. It has no launcher filter, so it
-            adds nothing to the app drawer, and StealthEntrance never disables it: while the icon
-            is hidden MainActivity is disabled and a disabled component cannot be started, which
-            is why the way back in has to be a separate component. It carries the same VIEW
-            filters as MainActivity so that opening a module zip keeps working in that state.
-        -->
         <activity
-            android:name=".ui.StealthLaunchActivity"
-            android:exported="true"
-            android:theme="@style/Theme.KernelSU.Starting">
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-
-                <data android:scheme="content" />
-                <data android:mimeType="application/zip" />
-                <data android:mimeType="application/x-zip-compressed" />
-                <data android:mimeType="application/x-zip" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-
-                <category android:name="android.intent.category.DEFAULT" />
-
-                <data
-                    android:host="action"
-                    android:scheme="ksu" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-
-                <category android:name="android.intent.category.DEFAULT" />
-
-                <data
-                    android:host="webui"
-                    android:scheme="ksu" />
-            </intent-filter>
-        </activity>
-
-        <!-- Quick-settings tile: the entry that survives hiding the icon. -->
-        <service
-            android:name=".ui.StealthTileService"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher"
-            android:label="@string/stealth_tile_label"
-            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
-            <intent-filter>
-                <action android:name="android.service.quicksettings.action.QS_TILE" />
-            </intent-filter>
-        </service>
-
-        <activity
-            android:name=".ui.webui.WebUIActivity"
+            android:name="com.xecpro.kernel.XecWebUIActivity"
             android:autoRemoveFromRecents="true"
             android:configChanges="density|orientation|screenSize|screenLayout|smallestScreenSize|uiMode|locale|layoutDirection|fontScale|keyboard|keyboardHidden"
             android:documentLaunchMode="intoExisting"
             android:exported="false"
             android:taskAffinity="${applicationId}.webui"
-            android:theme="@style/Theme.KernelSU.WebUI" />
+            android:theme="@style/Theme.XecPro.WebUI" />
 
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -146,31 +76,55 @@
         </provider>
 
         <service
-            android:name=".magica.MagicaService"
+            android:name="com.xecpro.kernel.XecMagicaService"
             android:directBootAware="true"
             android:exported="false"
             android:isolatedProcess="true"
             android:useAppZygote="true" />
 
+
         <service
-            android:name=".ui.util.DownloadService"
+            android:name="com.xecpro.kernel.XecDownloadService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
+        <!-- 开机自举不再挂 BOOT_COMPLETED / RECEIVE_BOOT_COMPLETED（春秋会把
+             「声明了开机广播的 receiver」当作风险特征 receiver）。USER_UNLOCKED
+             在用户解锁后由系统直接投递，时序上比 BOOT_COMPLETED 更适合自动重放
+             （此时 zygote 与 /data 都已就绪），也无需任何权限。 -->
         <receiver
-            android:name=".magica.BootCompletedReceiver"
-            android:directBootAware="true"
-            android:enabled="false"
+            android:name="com.xecpro.kernel.XecBootReceiver"
             android:exported="false"
             android:process=":magica_boot">
             <intent-filter>
-                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.USER_UNLOCKED" />
             </intent-filter>
             <intent-filter>
                 <action android:name="me.weishu.kernelsu.magica.LAUNCH" />
             </intent-filter>
         </receiver>
+
+        <receiver
+            android:name="me.weishu.kernelsu.widget.XecScoreWidgetProvider"
+            android:exported="true"
+            android:label="@string/xec_widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/xec_score_widget_info" />
+        </receiver>
+
+        <service
+            android:name="me.weishu.kernelsu.widget.XecQuickTileService"
+            android:exported="true"
+            android:label="@string/xec_tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
     </application>
 
 </manifest>

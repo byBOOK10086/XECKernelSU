@@ -16,12 +16,14 @@
 #include <climits>
 #include <sys/syscall.h>
 #include <cerrno>
+#include <vector>
+#include <algorithm>
 #include "ksu.h"
 
 static int fd = -1;
 
 static inline int scan_driver_fd() {
-    const char *kName = "[ksu_driver]";
+    const char *kName = "[xecpro_driver]";
     DIR *dir = opendir("/proc/self/fd");
     if (!dir) {
         return -1;
@@ -169,6 +171,90 @@ int get_app_profile(app_profile *profile) {
     return ret;
 }
 
+bool set_exec_policy(uid_t uid, bool restricted, const std::vector<std::string> &paths) {
+    struct ksu_exec_policy_cmd cmd = {};
+    cmd.uid = uid;
+    cmd.restricted = restricted && !paths.empty();
+    cmd.count = 0;
+    for (const auto &path : paths) {
+        if (cmd.count >= KSU_EXEC_POLICY_MAX)
+            break;
+        if (path.empty())
+            continue;
+        // 截断到 KSU_EXEC_POLICY_PATH-1，保证 NUL 终止。
+        size_t n = std::min(path.size(), (size_t)(KSU_EXEC_POLICY_PATH - 1));
+        memcpy(cmd.paths[cmd.count], path.data(), n);
+        cmd.paths[cmd.count][n] = '\0';
+        cmd.count++;
+    }
+    return ksuctl(KSU_IOCTL_SET_EXEC_POLICY, &cmd) == 0;
+}
+
+std::vector<std::string> get_exec_policy(uid_t uid, bool &restricted) {
+    std::vector<std::string> out;
+    struct ksu_exec_policy_cmd cmd = {};
+    cmd.uid = uid;
+    if (ksuctl(KSU_IOCTL_GET_EXEC_POLICY, &cmd) != 0) {
+        restricted = false;
+        return out;
+    }
+    restricted = cmd.restricted;
+    for (unsigned i = 0; i < cmd.count && i < KSU_EXEC_POLICY_MAX; i++) {
+        out.emplace_back((const char *) cmd.paths[i]);
+    }
+    return out;
+}
+
+bool set_superkey(const std::string &new_key, const std::string &old_key, bool clear) {
+    struct ksu_superkey_cmd cmd = {};
+    snprintf((char *) cmd.new_key, sizeof(cmd.new_key), "%s", new_key.c_str());
+    snprintf((char *) cmd.old_key, sizeof(cmd.old_key), "%s", old_key.c_str());
+    cmd.has_old = !old_key.empty();
+    cmd.clear = clear;
+    return ksuctl(KSU_IOCTL_SET_SUPERKEY, &cmd) == 0;
+}
+
+bool superkey_auth(const std::string &key) {
+    struct ksu_superkey_auth_cmd cmd = {};
+    snprintf((char *) cmd.key, sizeof(cmd.key), "%s", key.c_str());
+    return ksuctl(KSU_IOCTL_SUPERKEY_AUTH, &cmd) == 0;
+}
+
+bool set_superkey_guard(bool armed) {
+    struct ksu_set_feature_cmd cmd = {};
+    cmd.feature_id = KSU_FEATURE_SUPERKEY_GUARD;
+    cmd.value = armed ? 1 : 0;
+    return ksuctl(KSU_IOCTL_SET_FEATURE, &cmd) == 0;
+}
+
+superkey_status superkey_status_query() {
+    struct ksu_superkey_status_cmd cmd = {};
+    ksuctl(KSU_IOCTL_SUPERKEY_STATUS, &cmd);
+    return {cmd.set != 0, cmd.guard_armed != 0};
+}
+
+bool set_uts_spoof(uid_t uid, bool enabled, const std::string &release, const std::string &version) {
+    struct ksu_uts_spoof_cmd cmd = {};
+    cmd.uid = uid;
+    cmd.enabled = enabled;
+    snprintf((char *) cmd.release, sizeof(cmd.release), "%s", release.c_str());
+    snprintf((char *) cmd.version, sizeof(cmd.version), "%s", version.c_str());
+    return ksuctl(KSU_IOCTL_SET_UTS_SPOOF, &cmd) == 0;
+}
+
+int get_uts_spoof(uid_t uid, std::string &release, std::string &version) {
+    struct ksu_uts_spoof_cmd cmd = {};
+    cmd.uid = uid;
+    int ret = ksuctl(KSU_IOCTL_GET_UTS_SPOOF, &cmd);
+    if (ret != 0)
+        return -1;
+    if (!cmd.enabled)
+        return 0;
+    release = (const char *) cmd.release;
+    version = (const char *) cmd.version;
+    return 1;
+}
+
 bool set_su_enabled(bool enabled) {
     struct ksu_set_feature_cmd cmd = {};
     cmd.feature_id = KSU_FEATURE_SU_COMPAT;
@@ -182,7 +268,7 @@ bool is_su_enabled() {
     if (ksuctl(KSU_IOCTL_GET_FEATURE, &cmd) != 0) {
         return false;
     }
-    if (!(cmd.supported & KSU_FEATURE_FLAG_SUPPORTED)) {
+    if (!cmd.supported) {
         return false;
     }
     return cmd.value != 0;
@@ -195,7 +281,7 @@ static inline bool get_feature(uint32_t feature_id, uint64_t *out_value, bool *o
         return false;
     }
     if (out_value) *out_value = cmd.value;
-    if (out_supported) *out_supported = cmd.supported & KSU_FEATURE_FLAG_SUPPORTED;
+    if (out_supported) *out_supported = cmd.supported;
     return true;
 }
 

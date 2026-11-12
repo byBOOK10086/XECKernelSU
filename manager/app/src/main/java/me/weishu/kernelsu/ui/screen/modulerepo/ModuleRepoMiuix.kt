@@ -3,13 +3,18 @@ package me.weishu.kernelsu.ui.screen.modulerepo
 import android.annotation.SuppressLint
 import android.content.Context
 import android.net.Uri
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,12 +37,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -47,7 +50,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,7 +66,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -72,30 +73,36 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import me.weishu.kernelsu.R
-import me.weishu.kernelsu.data.model.RepoModule
-import me.weishu.kernelsu.data.model.RepoRelease
 import me.weishu.kernelsu.ui.component.ListPopupDefaults
+import me.weishu.kernelsu.ui.component.PagerNavigationSpringSpec
 import me.weishu.kernelsu.ui.component.ScrollToTopOnChange
 import me.weishu.kernelsu.ui.component.SearchStatus
 import me.weishu.kernelsu.ui.component.dialog.ConfirmDialogHandle
+import android.widget.Toast
+import me.weishu.kernelsu.data.repository.ModuleRepoSettings
+import me.weishu.kernelsu.ui.component.dialog.XDialog
+import me.weishu.kernelsu.ui.component.dialog.XDialogTitle
 import me.weishu.kernelsu.ui.component.dialog.rememberConfirmDialog
 import me.weishu.kernelsu.ui.component.markdown.GithubMarkdown
 import me.weishu.kernelsu.ui.component.miuix.SearchBarFake
 import me.weishu.kernelsu.ui.component.miuix.SearchBox
 import me.weishu.kernelsu.ui.component.miuix.SearchPager
 import me.weishu.kernelsu.ui.component.miuix.deferredTopPadding
-import me.weishu.kernelsu.ui.screen.module.ExpandableDescriptionText
-import me.weishu.kernelsu.ui.screen.scriptrun.lastRunText
+import me.weishu.kernelsu.ui.design.glass.xGlassBody
+import me.weishu.kernelsu.ui.design.token.Xc
 import me.weishu.kernelsu.ui.theme.LocalEnableBlur
-import me.weishu.kernelsu.ui.theme.LocalModuleDescriptionMaxLines
 import me.weishu.kernelsu.ui.theme.isInDarkTheme
 import me.weishu.kernelsu.ui.util.BlurredBar
-import me.weishu.kernelsu.ui.util.isDownloadAvailable
+import me.weishu.kernelsu.ui.util.download
 import me.weishu.kernelsu.ui.util.rememberBlurBackdrop
 import me.weishu.kernelsu.ui.util.rememberContentReady
+import me.weishu.kernelsu.ui.util.sha256Of
 import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.DropdownImpl
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
@@ -114,6 +121,7 @@ import top.yukonga.miuix.kmp.basic.TabRow
 import top.yukonga.miuix.kmp.basic.TabRowDefaults
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.basic.rememberPullToRefreshState
 import top.yukonga.miuix.kmp.blur.LayerBackdrop
@@ -123,16 +131,15 @@ import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.FileDownloads
 import top.yukonga.miuix.kmp.icon.extended.HorizontalSplit
 import top.yukonga.miuix.kmp.icon.extended.Link
-import top.yukonga.miuix.kmp.icon.extended.Play
 import top.yukonga.miuix.kmp.icon.extended.Sort
 import top.yukonga.miuix.kmp.icon.extended.TopDownloads
+import top.yukonga.miuix.kmp.icon.extended.UploadCloud
 import top.yukonga.miuix.kmp.overlay.OverlayListPopup
 import top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme
-import top.yukonga.miuix.kmp.utils.PagerNavigationSpringSpec
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
-import java.text.NumberFormat
+import me.weishu.kernelsu.ui.design.token.XcRadius
 
 @SuppressLint("LocalContextGetResourceValueCall")
 @Composable
@@ -141,7 +148,17 @@ fun ModuleRepoScreenMiuix(
     actions: ModuleRepoActions,
 ) {
     val searchStatus = state.searchStatus
+    val context = LocalContext.current
+    var sourceDialog by remember { mutableStateOf(false) }
+    var sourceDraft by remember { mutableStateOf(state.repoUrl) }
+    val sourceHost = ModuleRepoSettings.labelOf(state.source ?: state.repoUrl)
+    // 实际生效的源 != 主源：自建仓库没拉到、已经回退官方源，界面必须说出来，
+    // 否则用户会以为列表里这些就是自己仓库里的模块。
+    val fellBack = state.source != null && state.source != ModuleRepoSettings.primaryUrl
+    LaunchedEffect(state.repoUrl) { if (!sourceDialog) sourceDraft = state.repoUrl }
     val density = LocalDensity.current
+    val metaBg = colorScheme.tertiaryContainer.copy(alpha = 0.6f)
+    val metaTint = colorScheme.onTertiaryContainer.copy(alpha = 0.8f)
 
     LaunchedEffect(searchStatus.searchText) {
         actions.onSearchTextChange(searchStatus.searchText)
@@ -155,9 +172,59 @@ fun ModuleRepoScreenMiuix(
     val enableBlur = LocalEnableBlur.current
     val backdrop = rememberBlurBackdrop(enableBlur)
     val blurActive = backdrop != null
-    val barColor = if (blurActive) Color.Transparent else colorScheme.surface
+    val barColor = if (blurActive) Color.Transparent else colorScheme.surface.copy(alpha = 1f)
+
+    // 仓库源设置：改 URL、切默认/官方、保存后立即重拉。放在 Scaffold 之前注册，
+    // XDialog 自己会挂到根层宿主，不参与这里的布局。
+    XDialog(show = sourceDialog, onDismissRequest = { sourceDialog = false }) {
+        XDialogTitle(
+            text = stringResource(R.string.module_repos_source),
+            summary = stringResource(R.string.module_repos_source_summary, sourceHost),
+        )
+        TextField(
+            value = sourceDraft,
+            onValueChange = { sourceDraft = it.trim() },
+            label = stringResource(R.string.module_repos_source_hint),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(10.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(
+                text = stringResource(R.string.module_repos_source_use_default),
+                onClick = { sourceDraft = ModuleRepoSettings.DEFAULT_URL },
+            )
+            TextButton(
+                text = stringResource(R.string.module_repos_source_official),
+                onClick = { sourceDraft = ModuleRepoSettings.OFFICIAL_URL },
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        Row(modifier = Modifier.fillMaxWidth()) {
+            Spacer(Modifier.weight(1f))
+            TextButton(
+                text = stringResource(R.string.module_repos_source_save),
+                onClick = {
+                    if (!sourceDraft.startsWith("http")) {
+                        Toast.makeText(
+                            context,
+                            context.getString(R.string.module_repos_source_bad_url),
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                    } else {
+                        actions.onSaveRepoUrl(sourceDraft)
+                        sourceDialog = false
+                    }
+                },
+            )
+        }
+    }
 
     Scaffold(
+        containerColor = Color.Transparent,
         topBar = {
             BlurredBar(backdrop) {
                 searchStatus.TopAppBarAnim(backgroundColor = barColor) {
@@ -175,6 +242,7 @@ fun ModuleRepoScreenMiuix(
                                     ListPopupColumn {
                                         val sortOptions = listOf(
                                             RepoSort.UPDATED to R.string.module_repos_sort_updated,
+                                            RepoSort.CREATED to R.string.module_repos_sort_created,
                                             RepoSort.NAME to R.string.module_repos_sort_name,
                                             RepoSort.STARS to R.string.module_repos_sort_stars,
                                         )
@@ -192,6 +260,16 @@ fun ModuleRepoScreenMiuix(
                                         }
                                     }
                                 })
+                            IconButton(
+                                onClick = { sourceDialog = true },
+                                holdDownState = sourceDialog
+                            ) {
+                                Icon(
+                                    imageVector = MiuixIcons.UploadCloud,
+                                    tint = colorScheme.onSurface,
+                                    contentDescription = stringResource(R.string.module_repos_source),
+                                )
+                            }
                             IconButton(
                                 onClick = { showSortPopup.value = true },
                                 holdDownState = showSortPopup.value
@@ -262,11 +340,13 @@ fun ModuleRepoScreenMiuix(
                         Spacer(Modifier.height(6.dp))
                     }
                     items(state.searchResults, key = { it.moduleId }, contentType = { "module" }) { module ->
-                        Card(
+                        Card(cornerRadius = XcRadius.md, 
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 12.dp)
-                                .padding(bottom = 12.dp),
+                                .padding(bottom = 12.dp)
+                                .xGlassBody(backdrop = backdrop, shape = Xc.shapes.md),
+                            colors = CardDefaults.defaultColors(color = Color.Transparent),
                             insideMargin = PaddingValues(16.dp),
                             showIndication = true,
                             pressFeedbackType = PressFeedbackType.Sink,
@@ -277,47 +357,69 @@ fun ModuleRepoScreenMiuix(
                             Column {
                                 if (module.moduleName.isNotEmpty()) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                        RepoModuleIcon(module.iconUrl, Modifier.padding(end = 8.dp))
-                                        Row(
-                                            modifier = Modifier.weight(1f),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                        ) {
+                                        Text(
+                                            text = module.moduleName,
+                                            fontSize = 15.sp,
+                                            fontWeight = FontWeight(550),
+                                            color = colorScheme.onSurface
+                                        )
+                                        if (module.metamodule) {
                                             Text(
-                                                text = module.moduleName,
-                                                fontSize = 17.sp,
-                                                fontWeight = FontWeight(550),
-                                                color = colorScheme.onSurface,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                                modifier = Modifier.weight(1f, fill = false),
-                                            )
-                                            RepoBadgesMiuix(
-                                                metamodule = module.metamodule,
-                                                isScript = module.isScript,
-                                                installState = repoInstallStateOf(module, state.installedVersions),
+                                                text = "META",
+                                                fontSize = 13.sp,
+                                                color = metaTint,
+                                                modifier = Modifier
+                                                    .padding(start = 6.dp)
+                                                    .clip(Xc.shapes.xs)
+                                                    .background(metaBg)
+                                                    .padding(horizontal = 6.dp, vertical = 2.dp),
+                                                fontWeight = FontWeight(750),
+                                                maxLines = 1
                                             )
                                         }
-                                        RepoStarsMiuix(module.stars, Modifier.padding(start = 8.dp))
+                                        Spacer(Modifier.weight(1f))
+                                        if (module.stargazerCount > 0) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(
+                                                    imageVector = MiuixIcons.TopDownloads,
+                                                    contentDescription = "stars",
+                                                    tint = colorScheme.onSurfaceVariantSummary,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Text(
+                                                    text = module.stargazerCount.toString(),
+                                                    fontSize = 13.sp,
+                                                    color = colorScheme.onSurfaceVariantSummary,
+                                                    modifier = Modifier.padding(start = 4.dp)
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                                 if (module.moduleId.isNotEmpty()) {
                                     Text(
                                         text = "ID: ${module.moduleId}",
-                                        fontSize = 12.sp,
-                                        modifier = Modifier.padding(top = 2.dp),
+                                        fontSize = 13.sp,
                                         fontWeight = FontWeight(550),
                                         color = colorScheme.onSurfaceVariantSummary,
                                     )
                                 }
                                 Text(
                                     text = "${stringResource(id = R.string.module_author)}: ${module.authors}",
-                                    fontSize = 12.sp,
+                                    fontSize = 13.sp,
                                     modifier = Modifier.padding(bottom = 1.dp),
                                     fontWeight = FontWeight(550),
                                     color = colorScheme.onSurfaceVariantSummary,
                                 )
                                 if (module.summary.isNotEmpty()) {
-                                    RepoSummaryText(module) { actions.onOpenRepoDetail(module) }
+                                    Text(
+                                        text = module.summary,
+                                        fontSize = 15.sp,
+                                        color = colorScheme.onSurfaceVariantSummary,
+                                        modifier = Modifier.padding(top = 2.dp),
+                                        overflow = TextOverflow.Ellipsis,
+                                        maxLines = 4,
+                                    )
                                 }
                             }
                         }
@@ -330,7 +432,7 @@ fun ModuleRepoScreenMiuix(
         val isLoading = state.modules.isEmpty()
         val hadDataOnEntry = remember { state.modules.isNotEmpty() }
         val contentReady = hadDataOnEntry || rememberContentReady()
-        val emptyMessage = state.emptyStateMessage
+        val offline = state.offline
 
         searchStatus.SearchBox {
             val pullToRefreshState = rememberPullToRefreshState()
@@ -365,9 +467,12 @@ fun ModuleRepoScreenMiuix(
                 ),
             ) {
                 if (!contentReady || isLoading) {
+                    // 空态必须是可滚动容器：PullToRefresh 靠子容器的 nested scroll
+                    // 分发下拉手势，普通 Box 会把手势吞成死区（下拉永远没反应）。
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
                             .padding(
                                 top = innerPadding.calculateTopPadding(),
                                 start = innerPadding.calculateStartPadding(layoutDirection),
@@ -375,12 +480,12 @@ fun ModuleRepoScreenMiuix(
                             ),
                         contentAlignment = Alignment.Center
                     ) {
-                        if (emptyMessage != null) {
+                        if (offline) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(
-                                    text = stringResource(emptyMessage),
+                                    text = stringResource(R.string.network_offline),
                                     color = colorScheme.onSurfaceVariantSummary,
-                                    fontSize = 16.sp
+                                    fontSize = 15.sp
                                 )
                                 Spacer(Modifier.height(12.dp))
                                 TextButton(
@@ -411,67 +516,87 @@ fun ModuleRepoScreenMiuix(
                             ),
                             overscrollEffect = null,
                         ) {
-                            if (state.stale) {
-                                item(key = "__notice_stale", contentType = "notice") {
-                                    Text(
-                                        text = stringResource(R.string.module_repo_using_cache),
-                                        fontSize = 12.sp,
-                                        color = colorScheme.onSurfaceVariantSummary,
-                                        modifier = Modifier
-                                            .padding(horizontal = 24.dp)
-                                            .padding(bottom = 8.dp),
-                                    )
-                                }
+                            item {
+                                Text(
+                                    text = if (fellBack) {
+                                        // 说清楚「谁不可用」与「现在用的是谁」：过去第二个占位符
+                                        // 写死成"官方源"，而官方源排第三顺位、真正接住的通常是
+                                        // 第二顺位的自建仓库 raw，用户会以为自己在看官方仓库。
+                                        stringResource(
+                                            R.string.module_repos_source_fallback,
+                                            ModuleRepoSettings.labelOf(ModuleRepoSettings.primaryUrl),
+                                            sourceHost,
+                                        )
+                                    } else {
+                                        stringResource(R.string.module_repos_source_current, sourceHost)
+                                    },
+                                    fontSize = 13.sp,
+                                    color = colorScheme.onSurfaceVariantSummary,
+                                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 2.dp),
+                                )
                             }
                             items(items = state.modules, key = { it.moduleId }, contentType = { "module" }) { module ->
                                 val moduleAuthor = stringResource(id = R.string.module_author)
 
-                                Card(
+                                Card(cornerRadius = XcRadius.md, 
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(horizontal = 12.dp)
-                                        .padding(bottom = 12.dp),
+                                        .padding(bottom = 12.dp)
+                                        .xGlassBody(backdrop = backdrop, shape = Xc.shapes.md),
+                                    colors = CardDefaults.defaultColors(color = Color.Transparent),
                                     insideMargin = PaddingValues(16.dp),
                                     showIndication = true,
                                     onClick = { actions.onOpenRepoDetail(module) }) {
                                     Column {
                                         if (module.moduleName.isNotEmpty()) {
                                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                                RepoModuleIcon(module.iconUrl, Modifier.padding(end = 8.dp))
                                                 Text(
                                                     text = module.moduleName,
-                                                    fontSize = 17.sp,
+                                                    fontSize = 15.sp,
                                                     fontWeight = FontWeight(550),
-                                                    color = colorScheme.onSurface,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis,
-                                                    modifier = Modifier.weight(1f, fill = false),
+                                                    color = colorScheme.onSurface
                                                 )
-                                                RepoBadgesMiuix(
-                                                    metamodule = module.metamodule,
-                                                    isScript = module.isScript,
-                                                    installState = repoInstallStateOf(module, state.installedVersions),
-                                                )
+                                                if (module.metamodule) {
+                                                    Text(
+                                                        text = "META",
+                                                        fontSize = 13.sp,
+                                                        color = metaTint,
+                                                        modifier = Modifier
+                                                            .padding(start = 6.dp)
+                                                            .clip(Xc.shapes.xs)
+                                                            .background(metaBg)
+                                                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                                                        fontWeight = FontWeight(750),
+                                                        maxLines = 1
+                                                    )
+                                                }
                                             }
                                         }
                                         if (module.moduleId.isNotEmpty()) {
                                             Text(
                                                 text = "ID: ${module.moduleId}",
-                                                fontSize = 12.sp,
-                                                modifier = Modifier.padding(top = 2.dp),
+                                                fontSize = 13.sp,
                                                 fontWeight = FontWeight(550),
                                                 color = colorScheme.onSurfaceVariantSummary,
                                             )
                                         }
-                                        if (module.authors.isNotEmpty()) Text(
+                                        Text(
                                             text = "$moduleAuthor: ${module.authors}",
-                                            fontSize = 12.sp,
+                                            fontSize = 13.sp,
                                             modifier = Modifier.padding(bottom = 1.dp),
                                             fontWeight = FontWeight(550),
                                             color = colorScheme.onSurfaceVariantSummary,
                                         )
                                         if (module.summary.isNotEmpty()) {
-                                            RepoSummaryText(module) { actions.onOpenRepoDetail(module) }
+                                            Text(
+                                                text = module.summary,
+                                                fontSize = 15.sp,
+                                                color = colorScheme.onSurfaceVariantSummary,
+                                                modifier = Modifier.padding(top = 2.dp),
+                                                overflow = TextOverflow.Ellipsis,
+                                                maxLines = 4,
+                                            )
                                         }
                                         HorizontalDivider(
                                             modifier = Modifier.padding(vertical = 8.dp),
@@ -483,19 +608,27 @@ fun ModuleRepoScreenMiuix(
                                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                                         ) {
                                             Row {
-                                                Text(
-                                                    text = module.latestVersion,
-                                                    fontSize = 12.sp,
-                                                    color = colorScheme.onSurfaceVariantSummary,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis,
-                                                )
-                                                RepoStarsMiuix(module.stars, Modifier.padding(start = 12.dp))
+                                                if (module.stargazerCount > 0) {
+                                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                                        Icon(
+                                                            imageVector = MiuixIcons.TopDownloads,
+                                                            contentDescription = "stars",
+                                                            tint = colorScheme.onSurfaceVariantSummary,
+                                                            modifier = Modifier.size(16.dp)
+                                                        )
+                                                        Text(
+                                                            text = module.stargazerCount.toString(),
+                                                            fontSize = 13.sp,
+                                                            color = colorScheme.onSurfaceVariantSummary,
+                                                            modifier = Modifier.padding(start = 4.dp)
+                                                        )
+                                                    }
+                                                }
                                                 Spacer(Modifier.weight(1f))
                                                 if (module.latestReleaseTime.isNotEmpty()) {
                                                     Text(
                                                         text = module.latestReleaseTime,
-                                                        fontSize = 12.sp,
+                                                        fontSize = 13.sp,
                                                         color = colorScheme.onSurfaceVariantSummary,
                                                         textAlign = TextAlign.End
                                                     )
@@ -517,176 +650,13 @@ fun ModuleRepoScreenMiuix(
 }
 
 @Composable
-private fun RepoSummaryText(module: RepoModule, onModuleClick: () -> Unit) {
-    val maxLinesLimit = LocalModuleDescriptionMaxLines.current
-    var expanded by rememberSaveable(module.moduleId) { mutableStateOf(false) }
-    var canExpand by rememberSaveable(module.moduleId) { mutableStateOf(true) }
-    ExpandableDescriptionText(
-        text = module.summary,
-        expanded = expanded,
-        maxLinesLimit = maxLinesLimit,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 2.dp)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-            ) {
-                if (canExpand) {
-                    expanded = !expanded
-                } else {
-                    onModuleClick()
-                }
-            },
-        fontSize = 14.sp,
-        color = colorScheme.onSurfaceVariantSummary,
-        onCanExpandChange = { canExpand = it },
-    )
-}
-
-/** Star icon + compact count; nothing when the count is unknown or 0. */
-@Composable
-private fun RepoStarsMiuix(stars: Int?, modifier: Modifier = Modifier) {
-    if (stars == null || stars <= 0) return
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = modifier) {
-        Icon(
-            imageVector = MiuixIcons.TopDownloads,
-            contentDescription = stringResource(R.string.module_repos_sort_stars),
-            tint = colorScheme.onSurfaceVariantSummary,
-            modifier = Modifier.size(16.dp)
-        )
-        Text(
-            text = formatStarCount(stars),
-            fontSize = 12.sp,
-            color = colorScheme.onSurfaceVariantSummary,
-            modifier = Modifier.padding(start = 4.dp)
-        )
-    }
-}
-
-@Composable
-private fun MiuixTag(text: String, background: Color, tint: Color) {
-    Text(
-        text = text,
-        fontSize = 12.sp,
-        color = tint,
-        modifier = Modifier
-            .padding(start = 6.dp)
-            .clip(RoundedCornerShape(6.dp))
-            .background(background)
-            .padding(horizontal = 6.dp, vertical = 2.dp),
-        fontWeight = FontWeight(750),
-        maxLines = 1
-    )
-}
-
-@Composable
-private fun RepoBadgesMiuix(
-    metamodule: Boolean,
-    isScript: Boolean,
-    installState: RepoInstallState,
-) {
-    if (metamodule) {
-        MiuixTag(
-            text = "META",
-            background = colorScheme.tertiaryContainer.copy(alpha = 0.6f),
-            tint = colorScheme.onTertiaryContainer.copy(alpha = 0.8f),
-        )
-    }
-    if (isScript) {
-        MiuixTag(
-            text = stringResource(R.string.module_repo_script_badge),
-            background = colorScheme.tertiaryContainer.copy(alpha = 0.6f),
-            tint = colorScheme.onTertiaryContainer.copy(alpha = 0.8f),
-        )
-    }
-    when (installState) {
-        RepoInstallState.UPDATABLE -> MiuixTag(
-            text = stringResource(R.string.module_repo_update_available),
-            background = colorScheme.primary.copy(alpha = 0.15f),
-            tint = colorScheme.primary,
-        )
-
-        RepoInstallState.INSTALLED -> MiuixTag(
-            text = stringResource(R.string.module_repo_installed),
-            background = colorScheme.secondaryContainer.copy(alpha = 0.8f),
-            tint = colorScheme.onSecondaryContainer,
-        )
-
-        RepoInstallState.NONE -> {}
-    }
-}
-
-/** Loading / not-in-index / failure placeholder; returns true when the page content can be shown. */
-@Composable
-private fun LazyItemScope.detailStatusMiuix(state: ModuleRepoDetailUiState, onRetry: () -> Unit): Boolean {
-    when {
-        state.notInIndex -> {
-            Box(
-                modifier = Modifier
-                    .fillParentMaxSize()
-                    .padding(horizontal = 24.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = stringResource(R.string.module_repo_not_in_index),
-                    color = colorScheme.onSurfaceVariantSummary,
-                    textAlign = TextAlign.Center,
-                )
-            }
-        }
-
-        state.detail == null && state.loaded && state.loadFailed -> {
-            Box(modifier = Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = stringResource(R.string.module_repo_load_failed),
-                        color = colorScheme.onSurfaceVariantSummary,
-                        fontSize = 16.sp
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    TextButton(
-                        modifier = Modifier
-                            .padding(horizontal = 24.dp)
-                            .fillMaxWidth(),
-                        text = stringResource(R.string.network_retry),
-                        onClick = onRetry,
-                    )
-                }
-            }
-        }
-
-        state.detail == null -> {
-            Box(modifier = Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
-                InfiniteProgressIndicator()
-            }
-        }
-
-        else -> return true
-    }
-    return false
-}
-
-/** The detail is the last good cached copy because it could not be refreshed. */
-@Composable
-private fun CachedDetailNoticeMiuix(modifier: Modifier = Modifier) {
-    Text(
-        text = stringResource(R.string.module_repo_using_cache),
-        fontSize = 12.sp,
-        color = colorScheme.onSurfaceVariantSummary,
-        modifier = modifier,
-    )
-}
-
-@Composable
 private fun ReadmePage(
-    state: ModuleRepoDetailUiState,
-    onRetry: () -> Unit,
+    readmeHtml: String?,
+    readmeLoaded: Boolean,
     innerPadding: PaddingValues, scrollBehavior: ScrollBehavior, backdrop: LayerBackdrop?
 ) {
     val layoutDirection = LocalLayoutDirection.current
     val isReady = rememberContentReady()
-    val detail = state.detail
     Box(modifier = if (backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier) {
         LazyColumn(
             modifier = Modifier
@@ -702,19 +672,8 @@ private fun ReadmePage(
             ),
             overscrollEffect = null,
         ) {
-            if (detail?.fromCache == true) {
-                item(key = "__notice_cached", contentType = "notice") {
-                    CachedDetailNoticeMiuix(
-                        Modifier
-                            .padding(horizontal = 24.dp)
-                            .padding(top = 6.dp)
-                    )
-                }
-            }
             item {
-                if (!detailStatusMiuix(state, onRetry) || detail == null) return@item
-                val readmeHtml = detail.readmeHtml
-                if (readmeHtml != null) {
+                if (readmeLoaded && readmeHtml != null) {
                     var loaded by remember(readmeHtml) { mutableStateOf(false) }
                     val alpha by animateFloatAsState(
                         targetValue = if (loaded) 1f else 0f,
@@ -729,11 +688,12 @@ private fun ReadmePage(
                     Box {
                         if (isReady) {
                             Box(modifier = Modifier.graphicsLayer { this.alpha = alpha }) {
-                                GithubMarkdown(
-                                    content = readmeHtml,
-                                    onLoadingChange = { loaded = !it },
-                                    restrictedBaseUrl = detail.readmeBaseUrl,
-                                )
+                                Column {
+                                    GithubMarkdown(
+                                        content = readmeHtml,
+                                        onLoadingChange = { loaded = !it },
+                                    )
+                                }
                             }
                         }
                         if (placeholderAlpha > 0f) {
@@ -747,29 +707,26 @@ private fun ReadmePage(
                             }
                         }
                     }
-                    return@item
-                }
-                Box(
-                    modifier = Modifier.fillParentMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (detail.readmeFailed) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                text = stringResource(R.string.module_repo_readme_failed),
-                                color = colorScheme.onSurfaceVariantSummary,
-                            )
-                            Spacer(Modifier.height(12.dp))
-                            TextButton(
-                                text = stringResource(R.string.network_retry),
-                                onClick = onRetry,
-                            )
-                        }
-                    } else {
+                } else if (readmeLoaded) {
+                    // 说明加载完但确实没有内容：过去这里和"还在加载"共用同一个
+                    // 转圈分支，于是任何拿不到说明的模块（自建仓库的模块、官方站点
+                    // 上不存在的模块）都会永远转圈 —— 用户分不清"没说明"和"卡住了"。
+                    Box(
+                        modifier = Modifier.fillParentMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
                         Text(
-                            text = stringResource(R.string.module_repo_no_readme),
+                            text = stringResource(R.string.module_repos_detail_no_readme),
+                            fontSize = 15.sp,
                             color = colorScheme.onSurfaceVariantSummary,
                         )
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier.fillParentMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        InfiniteProgressIndicator()
                     }
                 }
             }
@@ -778,10 +735,11 @@ private fun ReadmePage(
     }
 }
 
+@SuppressLint("DefaultLocale")
 @Composable
 fun ReleasesPage(
-    state: ModuleRepoDetailUiState,
-    onRetry: () -> Unit,
+    detailReleases: List<ReleaseArg>,
+    detailLoaded: Boolean,
     innerPadding: PaddingValues,
     scrollBehavior: ScrollBehavior,
     backdrop: LayerBackdrop?,
@@ -793,10 +751,8 @@ fun ReleasesPage(
     onInstallModule: (Uri) -> Unit,
     context: Context,
     setPendingDownload: ((() -> Unit)) -> Unit,
-    uriHandler: UriHandler,
 ) {
     val layoutDirection = LocalLayoutDirection.current
-    val detail = state.detail
     Box(modifier = if (backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier) {
         LazyColumn(
             modifier = Modifier
@@ -812,315 +768,293 @@ fun ReleasesPage(
             ),
             overscrollEffect = null,
         ) {
-            if (detail == null) {
-                item { detailStatusMiuix(state, onRetry) }
-                return@LazyColumn
-            }
-            item {
-                Spacer(Modifier.height(6.dp))
-            }
-            if (detail.fromCache) {
-                item(key = "__notice_cached", contentType = "notice") {
-                    CachedDetailNoticeMiuix(
-                        Modifier
-                            .padding(horizontal = 24.dp)
-                            .padding(bottom = 8.dp)
-                    )
+            if (detailLoaded && detailReleases.isEmpty()) {
+                // 没有版本时过去是纯白屏：用户分不清"这个模块没有可下载版本"和"还在加载"。
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillParentMaxSize()
+                            .padding(top = 80.dp),
+                        contentAlignment = Alignment.TopCenter,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.module_repos_detail_no_release),
+                            fontSize = 15.sp,
+                            color = colorScheme.onSurfaceVariantSummary,
+                        )
+                    }
                 }
             }
-            items(items = detail.releases, key = { "release_${it.tag}" }, contentType = { "release" }) { rel ->
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp)
-                        .padding(bottom = 12.dp)
-                ) {
-                    Column {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .padding(start = 16.dp, end = 16.dp, top = 16.dp)
-                                    .weight(1f)
+            if (detailReleases.isNotEmpty()) {
+                item {
+                    Spacer(Modifier.height(6.dp))
+                }
+                items(items = detailReleases, key = { it.tagName }, contentType = { "release" }) { rel ->
+                    val title = remember(rel.name, rel.tagName) { rel.name.ifBlank { rel.tagName } }
+                    Card(cornerRadius = XcRadius.md, 
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp)
+                            .padding(bottom = 12.dp)
+                            .xGlassBody(backdrop = backdrop, shape = Xc.shapes.md),
+                        colors = CardDefaults.defaultColors(color = Color.Transparent),
+                    ) {
+                        Column {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()
                             ) {
+                                Column(
+                                    modifier = Modifier
+                                        .padding(start = 16.dp, end = 16.dp, top = 16.dp)
+                                        .weight(1f)
+                                ) {
+                                    Text(
+                                        text = title, fontSize = 15.sp, fontWeight = FontWeight(550), color = colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = rel.tagName,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight(550),
+                                        color = colorScheme.onSurfaceVariantSummary,
+                                        modifier = Modifier.padding(top = 2.dp)
+                                    )
+                                }
                                 Text(
-                                    text = rel.name, fontSize = 17.sp, fontWeight = FontWeight(550), color = colorScheme.onSurface
-                                )
-                                Text(
-                                    text = if (rel.name == rel.tag) rel.version else "${rel.tag} · ${rel.version}",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight(550),
+                                    text = rel.publishedAt,
+                                    fontSize = 13.sp,
                                     color = colorScheme.onSurfaceVariantSummary,
-                                    modifier = Modifier.padding(top = 2.dp)
+                                    modifier = Modifier
+                                        .padding(start = 16.dp, end = 16.dp, top = 16.dp)
+                                        .align(Alignment.Top)
                                 )
                             }
-                            Text(
-                                text = rel.publishedAt,
-                                fontSize = 12.sp,
-                                color = colorScheme.onSurfaceVariantSummary,
-                                modifier = Modifier
-                                    .padding(start = 16.dp, end = 16.dp, top = 16.dp)
-                                    .align(Alignment.Top)
-                            )
-                        }
-                        val changelog = rel.changelogHtml
-                        if (changelog != null) {
-                            Column {
-                                HorizontalDivider(
-                                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp),
-                                    thickness = 0.5.dp,
-                                    color = colorScheme.outline.copy(alpha = 0.5f)
-                                )
-                                val descReady = rememberContentReady()
-                                var descLoaded by remember(changelog) { mutableStateOf(false) }
-                                val descAlpha by animateFloatAsState(
-                                    targetValue = if (descLoaded) 1f else 0f,
-                                    animationSpec = tween(durationMillis = 300),
-                                    label = "MiuixReleaseDescAlpha",
-                                )
-                                val descPlaceholderAlpha by animateFloatAsState(
-                                    targetValue = if (descLoaded) 0f else 1f,
-                                    animationSpec = tween(durationMillis = 150),
-                                    label = "MiuixDescPlaceholderAlpha",
-                                )
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .animateContentSize(animationSpec = tween(durationMillis = 300)),
-                                ) {
-                                    if (descReady) {
-                                        Box(modifier = Modifier.graphicsLayer { this.alpha = descAlpha }) {
-                                            GithubMarkdown(
-                                                content = changelog,
-                                                onLoadingChange = { descLoaded = !it },
-                                                restrictedBaseUrl = detail.readmeBaseUrl,
+                            AnimatedVisibility(
+                                visible = rel.assets.isNotEmpty(),
+                                enter = fadeIn() + expandVertically(),
+                                exit = fadeOut() + shrinkVertically()
+                            ) {
+                                Column {
+                                    AnimatedVisibility(
+                                        visible = rel.descriptionHTML.isNotEmpty(),
+                                        enter = fadeIn() + expandVertically(),
+                                        exit = fadeOut() + shrinkVertically()
+                                    ) {
+                                        Column {
+                                            HorizontalDivider(
+                                                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp),
+                                                thickness = 0.5.dp,
+                                                color = colorScheme.outline.copy(alpha = 0.5f)
                                             )
+                                            val descReady = rememberContentReady()
+                                            var descLoaded by remember(rel.descriptionHTML) { mutableStateOf(false) }
+                                            val descAlpha by animateFloatAsState(
+                                                targetValue = if (descLoaded) 1f else 0f,
+                                                animationSpec = tween(durationMillis = 300),
+                                                label = "MiuixReleaseDescAlpha",
+                                            )
+                                            val descPlaceholderAlpha by animateFloatAsState(
+                                                targetValue = if (descLoaded) 0f else 1f,
+                                                animationSpec = tween(durationMillis = 150),
+                                                label = "MiuixDescPlaceholderAlpha",
+                                            )
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .animateContentSize(animationSpec = tween(durationMillis = 300)),
+                                            ) {
+                                                if (descReady) {
+                                                    Box(modifier = Modifier.graphicsLayer { this.alpha = descAlpha }) {
+                                                        GithubMarkdown(
+                                                            content = rel.descriptionHTML,
+                                                            onLoadingChange = { descLoaded = !it },
+                                                        )
+                                                    }
+                                                }
+                                                if (descPlaceholderAlpha > 0f) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .height(72.dp)
+                                                            .graphicsLayer { this.alpha = descPlaceholderAlpha },
+                                                        contentAlignment = Alignment.Center,
+                                                    ) {
+                                                        InfiniteProgressIndicator()
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
-                                    if (descPlaceholderAlpha > 0f) {
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .height(72.dp)
-                                                .graphicsLayer { this.alpha = descPlaceholderAlpha },
-                                            contentAlignment = Alignment.Center,
+                                    HorizontalDivider(
+                                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+                                        thickness = 0.5.dp,
+                                        color = colorScheme.outline.copy(alpha = 0.5f)
+                                    )
+                                    rel.assets.forEachIndexed { index, asset ->
+                                        val fileName = asset.name
+                                        stringResource(R.string.module_downloading)
+                                        val sizeText = remember(asset.size) {
+                                            val s = asset.size
+                                            when {
+                                                s >= 1024L * 1024L * 1024L -> String.format("%.1f GB", s / (1024f * 1024f * 1024f))
+                                                s >= 1024L * 1024L -> String.format("%.1f MB", s / (1024f * 1024f))
+                                                s >= 1024L -> String.format("%.0f KB", s / 1024f)
+                                                else -> "$s B"
+                                            }
+                                        }
+                                        val sizeAndDownloads =
+                                            remember(sizeText, asset.downloadCount) { "$sizeText · ${asset.downloadCount} downloads" }
+                                        var isDownloading by remember(fileName, asset.downloadUrl) { mutableStateOf(false) }
+                                        var progress by remember(fileName, asset.downloadUrl) { mutableIntStateOf(0) }
+                                        var downloadedUri by remember(fileName, asset.downloadUrl) { mutableStateOf<Uri?>(null) }
+                                        val isDownloaded = downloadedUri != null
+                                        val expectedSha = asset.sha256
+                                        val onClickDownload = remember(fileName, asset.downloadUrl, expectedSha) {
+                                            {
+                                                val startText = context.getString(R.string.module_start_downloading, fileName)
+                                                setPendingDownload {
+                                                    isDownloading = true
+                                                    scope.launch(Dispatchers.IO) {
+                                                        download(
+                                                            asset.downloadUrl,
+                                                            fileName,
+                                                            onDownloaded = { uri ->
+                                                                // 索引给了 sha256 就校验：不匹配的文件当场丢弃，
+                                                                // 不进入"可安装"状态（否则被替换过的 zip 会被直接安装）。
+                                                                // 回调在主线程（DownloadManager 用 mainHandler.post），
+                                                                // 所以整个哈希过程必须挪到 IO，否则大模块会卡住界面。
+                                                                if (expectedSha.isEmpty()) {
+                                                                    isDownloading = false
+                                                                    downloadedUri = uri
+                                                                } else {
+                                                                    scope.launch(Dispatchers.IO) {
+                                                                        val actual = sha256Of(context, uri)
+                                                                        withContext(Dispatchers.Main) {
+                                                                            isDownloading = false
+                                                                            if (expectedSha.equals(actual, ignoreCase = true)) {
+                                                                                downloadedUri = uri
+                                                                            } else {
+                                                                                downloadedUri = null
+                                                                                Toast.makeText(
+                                                                                    context,
+                                                                                    R.string.module_download_hash_mismatch,
+                                                                                    Toast.LENGTH_LONG,
+                                                                                ).show()
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                }
+                                                            },
+                                                            onDownloading = { isDownloading = true },
+                                                            onProgress = { p -> scope.launch(Dispatchers.Main) { progress = p } })
+                                                    }
+                                                }
+                                                confirmDialog.showConfirm(title = confirmTitle, content = startText)
+                                            }
+                                        }
+                                        val bottomPadding = if (index == rel.assets.lastIndex) 16.dp else 8.dp
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                                         ) {
-                                            InfiniteProgressIndicator()
+                                            Column(
+                                                modifier = Modifier
+                                                    .padding(start = 16.dp, end = 16.dp, bottom = bottomPadding)
+                                                    .weight(1f)
+                                            ) {
+                                                Text(
+                                                    text = fileName, fontSize = 15.sp, color = colorScheme.onSurface
+                                                )
+                                                Text(
+                                                    text = sizeAndDownloads,
+                                                    fontSize = 13.sp,
+                                                    color = colorScheme.onSurfaceVariantSummary,
+                                                    modifier = Modifier.padding(top = 2.dp)
+                                                )
+                                            }
+                                            if (isDownloaded) {
+                                                IconButton(
+                                                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = bottomPadding),
+                                                    backgroundColor = secondaryContainer,
+                                                    minHeight = 35.dp,
+                                                    minWidth = 35.dp,
+                                                    onClick = {
+                                                        val uri = downloadedUri ?: return@IconButton
+                                                        val file = uri.path?.let { java.io.File(it) }
+                                                        if (file != null && file.exists()) {
+                                                            onInstallModule(uri)
+                                                        } else {
+                                                            downloadedUri = null
+                                                        }
+                                                    },
+                                                ) {
+                                                    Row(
+                                                        modifier = Modifier.padding(horizontal = 10.dp),
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                    ) {
+                                                        Icon(
+                                                            modifier = Modifier.size(20.dp),
+                                                            imageVector = MiuixIcons.FileDownloads,
+                                                            tint = actionIconTint,
+                                                            contentDescription = stringResource(R.string.install)
+                                                        )
+                                                        Text(
+                                                            modifier = Modifier.padding(start = 4.dp, end = 2.dp),
+                                                            text = stringResource(R.string.install),
+                                                            color = actionIconTint,
+                                                            fontWeight = FontWeight.Medium,
+                                                            fontSize = 15.sp
+                                                        )
+                                                    }
+                                                }
+                                            } else {
+                                                IconButton(
+                                                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = bottomPadding),
+                                                    backgroundColor = secondaryContainer,
+                                                    minHeight = 35.dp,
+                                                    minWidth = 35.dp,
+                                                    enabled = !isDownloading,
+                                                    onClick = onClickDownload,
+                                                ) {
+                                                    if (isDownloading) {
+                                                        CircularProgressIndicator(
+                                                            progress = progress / 100f, size = 20.dp, strokeWidth = 2.dp
+                                                        )
+                                                    } else {
+                                                        Row(
+                                                            modifier = Modifier.padding(horizontal = 10.dp),
+                                                            verticalAlignment = Alignment.CenterVertically,
+                                                        ) {
+                                                            Icon(
+                                                                modifier = Modifier.size(20.dp),
+                                                                imageVector = MiuixIcons.FileDownloads,
+                                                                tint = actionIconTint,
+                                                                contentDescription = stringResource(R.string.download)
+                                                            )
+                                                            Text(
+                                                                modifier = Modifier.padding(start = 4.dp, end = 2.dp),
+                                                                text = stringResource(R.string.download),
+                                                                color = actionIconTint,
+                                                                fontWeight = FontWeight.Medium,
+                                                                fontSize = 15.sp
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        if (index != rel.assets.lastIndex) {
+                                            HorizontalDivider(
+                                                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+                                                thickness = 0.5.dp,
+                                                color = colorScheme.outline.copy(alpha = 0.5f)
+                                            )
                                         }
                                     }
                                 }
                             }
                         }
-                        HorizontalDivider(
-                            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
-                            thickness = 0.5.dp,
-                            color = colorScheme.outline.copy(alpha = 0.5f)
-                        )
-                        ReleaseZipRowMiuix(
-                            release = rel,
-                            canInstall = state.canInstall,
-                            isScript = state.isScript,
-                            actionIconTint = actionIconTint,
-                            secondaryContainer = secondaryContainer,
-                            confirmTitle = confirmTitle,
-                            confirmDialog = confirmDialog,
-                            scope = scope,
-                            onInstallModule = onInstallModule,
-                            context = context,
-                            setPendingDownload = setPendingDownload,
-                        )
-                        InfoRowMiuix(
-                            stringResource(R.string.module_repo_release_page), rel.tagCommit.take(12), rel.releaseUrl,
-                            actionIconTint, secondaryContainer, uriHandler,
-                            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
-                        )
-                        rel.attestationUrl?.let { url ->
-                            InfoRowMiuix(
-                                stringResource(R.string.module_repo_attestation), null, url,
-                                actionIconTint, secondaryContainer, uriHandler,
-                                modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
-                            )
-                        }
                     }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ReleaseZipRowMiuix(
-    release: RepoRelease,
-    canInstall: Boolean,
-    isScript: Boolean,
-    actionIconTint: Color,
-    secondaryContainer: Color,
-    confirmTitle: String,
-    confirmDialog: ConfirmDialogHandle,
-    scope: CoroutineScope,
-    onInstallModule: (Uri) -> Unit,
-    context: Context,
-    setPendingDownload: ((() -> Unit)) -> Unit,
-) {
-    val handle = rememberReleaseDownload(release)
-    val onClickDownload = {
-        val startText = context.getString(R.string.module_start_downloading, release.zipName)
-        setPendingDownload { scope.startReleaseDownload(context, release, handle) }
-        confirmDialog.showConfirm(title = confirmTitle, content = startText)
-    }
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
-                .weight(1f)
-        ) {
-            Text(text = release.zipName, fontSize = 14.sp, color = colorScheme.onSurface)
-            Text(
-                text = formatFileSize(release.zipSize),
-                fontSize = 12.sp,
-                color = colorScheme.onSurfaceVariantSummary,
-                modifier = Modifier.padding(top = 2.dp)
-            )
-            Text(
-                text = "SHA-256: ${shortHash(release.sha256)}",
-                fontSize = 12.sp,
-                fontFamily = FontFamily.Monospace,
-                color = colorScheme.onSurfaceVariantSummary,
-            )
-            if (release.immutable) {
-                Text(
-                    text = stringResource(R.string.module_repo_immutable_release),
-                    fontSize = 12.sp,
-                    color = colorScheme.onSurfaceVariantSummary,
-                )
-            }
-        }
-        if (!canInstall) return@Row
-        val downloadedUri = handle.downloadedUri
-        IconButton(
-            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
-            backgroundColor = secondaryContainer,
-            minHeight = 35.dp,
-            minWidth = 35.dp,
-            enabled = downloadedUri != null || !handle.isDownloading,
-            onClick = {
-                if (downloadedUri != null) {
-                    scope.launch {
-                        if (isDownloadAvailable(downloadedUri)) {
-                            onInstallModule(downloadedUri)
-                        } else {
-                            handle.setDownloaded(null)
-                        }
-                    }
-                } else {
-                    onClickDownload()
-                }
-            },
-        ) {
-            if (downloadedUri == null && handle.isDownloading) {
-                CircularProgressIndicator(
-                    progress = handle.progress / 100f, size = 20.dp, strokeWidth = 2.dp
-                )
-            } else {
-                val label = stringResource(
-                    when {
-                        downloadedUri == null -> R.string.download
-                        isScript -> R.string.script_run
-                        else -> R.string.install
-                    }
-                )
-                Row(
-                    modifier = Modifier.padding(horizontal = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(
-                        modifier = Modifier.size(20.dp),
-                        imageVector = if (downloadedUri != null && isScript) MiuixIcons.Play else MiuixIcons.FileDownloads,
-                        tint = actionIconTint,
-                        contentDescription = label
-                    )
-                    Text(
-                        modifier = Modifier.padding(start = 4.dp, end = 2.dp),
-                        text = label,
-                        color = actionIconTint,
-                        fontWeight = FontWeight.Medium,
-                        fontSize = 15.sp
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun InfoRowMiuix(
-    title: String,
-    value: String?,
-    url: String?,
-    actionIconTint: Color,
-    secondaryContainer: Color,
-    uriHandler: UriHandler,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(text = title, fontSize = 14.sp, color = colorScheme.onSurface)
-            if (!value.isNullOrEmpty()) {
-                Text(
-                    text = value,
-                    fontSize = 12.sp,
-                    color = colorScheme.onSurfaceVariantSummary,
-                    modifier = Modifier.padding(top = 2.dp)
-                )
-            }
-        }
-        if (!url.isNullOrEmpty()) {
-            IconButton(
-                backgroundColor = secondaryContainer,
-                minHeight = 35.dp,
-                minWidth = 35.dp,
-                onClick = { uriHandler.openUri(url) },
-            ) {
-                Icon(
-                    modifier = Modifier.size(20.dp),
-                    imageVector = MiuixIcons.Link,
-                    tint = actionIconTint,
-                    contentDescription = null
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun InfoCardMiuix(title: String, rows: List<@Composable () -> Unit>) {
-    if (rows.isEmpty()) return
-    SmallTitle(text = title, modifier = Modifier.padding(top = 6.dp))
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp)
-            .padding(bottom = 6.dp),
-        insideMargin = PaddingValues(16.dp)
-    ) {
-        Column {
-            rows.forEachIndexed { index, row ->
-                row()
-                if (index != rows.lastIndex) {
-                    HorizontalDivider(
-                        modifier = Modifier.padding(vertical = 8.dp),
-                        thickness = 0.5.dp,
-                        color = colorScheme.outline.copy(alpha = 0.5f)
-                    )
                 }
             }
         }
@@ -1129,17 +1063,16 @@ private fun InfoCardMiuix(title: String, rows: List<@Composable () -> Unit>) {
 
 @Composable
 fun InfoPage(
-    state: ModuleRepoDetailUiState,
+    module: RepoModuleArg,
     innerPadding: PaddingValues,
     scrollBehavior: ScrollBehavior,
     backdrop: LayerBackdrop?,
     actionIconTint: Color,
     secondaryContainer: Color,
     uriHandler: UriHandler,
+    sourceUrl: String,
 ) {
     val layoutDirection = LocalLayoutDirection.current
-    val detail = state.detail
-    val authors = detail?.module?.authorList?.map { AuthorArg(it.name, it.link) } ?: state.module.authorsList
     Box(modifier = if (backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier) {
         LazyColumn(
             modifier = Modifier
@@ -1155,129 +1088,103 @@ fun InfoPage(
             ),
             overscrollEffect = null,
         ) {
-            item {
-                Column(modifier = Modifier.padding(horizontal = 18.dp)) {
-                    if (state.notInIndex) {
-                        Text(
-                            text = stringResource(R.string.module_repo_not_in_index),
-                            fontSize = 14.sp,
-                            color = colorScheme.error,
-                        )
-                    }
-                    if (state.isScript) {
-                        Text(
-                            text = lastRunText(LocalContext.current, state.lastRun),
-                            fontSize = 14.sp,
-                            color = colorScheme.onSurfaceVariantSummary,
-                        )
-                    }
-                    if (detail?.healthStale == true) {
-                        Text(
-                            text = stringResource(R.string.module_repo_health_stale),
-                            fontSize = 14.sp,
-                            color = colorScheme.onSurfaceVariantSummary,
-                        )
-                    }
-                    if (detail?.fromCache == true) {
-                        Text(
-                            text = stringResource(R.string.module_repo_using_cache),
-                            fontSize = 14.sp,
-                            color = colorScheme.onSurfaceVariantSummary,
-                        )
-                    }
-                }
-            }
-            if (authors.isNotEmpty()) {
+            if (module.authorsList.isNotEmpty()) {
                 item {
-                    InfoCardMiuix(
-                        title = stringResource(R.string.module_author),
-                        rows = authors.map { author ->
-                            { InfoRowMiuix(author.name, null, author.link, actionIconTint, secondaryContainer, uriHandler) }
-                        }
+                    SmallTitle(
+                        text = stringResource(R.string.module_author), modifier = Modifier.padding(top = 6.dp)
                     )
+                    Card(cornerRadius = XcRadius.md, 
+                        modifier = Modifier.padding(horizontal = 12.dp).xGlassBody(backdrop = backdrop, shape = Xc.shapes.md),
+                        colors = CardDefaults.defaultColors(color = Color.Transparent),
+                        insideMargin = PaddingValues(16.dp)
+                    ) {
+                        Column {
+                            module.authorsList.forEachIndexed { index, author ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text(
+                                        text = author.name, fontSize = 15.sp, color = colorScheme.onSurface, modifier = Modifier.weight(1f)
+                                    )
+                                    val clickable = author.link.isNotEmpty()
+                                    val tint = if (clickable) actionIconTint else actionIconTint.copy(alpha = 0.35f)
+                                    IconButton(
+                                        backgroundColor = secondaryContainer,
+                                        minHeight = 35.dp,
+                                        minWidth = 35.dp,
+                                        enabled = clickable,
+                                        onClick = {
+                                            if (clickable) {
+                                                uriHandler.openUri(author.link)
+                                            }
+                                        },
+                                    ) {
+                                        Icon(
+                                            modifier = Modifier.size(20.dp),
+                                            imageVector = MiuixIcons.Link,
+                                            tint = tint,
+                                            contentDescription = null
+                                        )
+                                    }
+                                }
+                                if (index != module.authorsList.lastIndex) {
+                                    HorizontalDivider(
+                                        modifier = Modifier.padding(vertical = 8.dp),
+                                        thickness = 0.5.dp,
+                                        color = colorScheme.outline.copy(alpha = 0.5f)
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
-            if (detail != null) {
+            if (sourceUrl.isNotEmpty()) {
                 item {
-                    InfoCardMiuix(
-                        title = stringResource(R.string.module_repos_source_code),
-                        rows = listOf {
-                            InfoRowMiuix(
-                                detail.sourceFullName,
-                                stringResource(R.string.module_repo_source_commit, detail.sourceCommit.take(12)),
-                                detail.sourceUrl,
-                                actionIconTint,
-                                secondaryContainer,
-                                uriHandler
+                    SmallTitle(
+                        text = stringResource(R.string.module_repos_source_code), modifier = Modifier.padding(top = 6.dp)
+                    )
+                    Card(cornerRadius = XcRadius.md, 
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp)
+                            .padding(bottom = 12.dp)
+                            .xGlassBody(backdrop = backdrop, shape = Xc.shapes.md),
+                        colors = CardDefaults.defaultColors(color = Color.Transparent),
+                        insideMargin = PaddingValues(16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = sourceUrl,
+                                fontSize = 15.sp,
+                                color = colorScheme.onSurface,
+                                modifier = Modifier.weight(1f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
-                        }
-                    )
-                }
-                item {
-                    val versionText = "${detail.module.latestVersion} (${detail.module.latestVersionCode})"
-                    InfoCardMiuix(
-                        title = stringResource(R.string.tab_info),
-                        rows = buildList<@Composable () -> Unit> {
-                            add {
-                                InfoRowMiuix(
-                                    stringResource(R.string.module_version), versionText, null,
-                                    actionIconTint, secondaryContainer, uriHandler
-                                )
-                            }
-                            detail.module.tags.takeIf { it.isNotEmpty() }?.let { tags ->
-                                add {
-                                    InfoRowMiuix(
-                                        stringResource(R.string.module_repo_tags), tags.joinToString(", "), null,
-                                        actionIconTint, secondaryContainer, uriHandler
-                                    )
-                                }
-                            }
-                            detail.module.stars?.let { stars ->
-                                add {
-                                    InfoRowMiuix(
-                                        stringResource(R.string.module_repo_stars),
-                                        listOfNotNull(
-                                            NumberFormat.getIntegerInstance().format(stars),
-                                            detail.module.starsRepository,
-                                        ).joinToString(" · "),
-                                        starsUrl(detail.module.starsRepository),
-                                        actionIconTint, secondaryContainer, uriHandler
-                                    )
-                                }
-                            }
-                            detail.license?.let { license ->
-                                add {
-                                    InfoRowMiuix(
-                                        stringResource(R.string.module_repo_license), license, null,
-                                        actionIconTint, secondaryContainer, uriHandler
-                                    )
-                                }
-                            }
-                            detail.homepage?.let { url ->
-                                add {
-                                    InfoRowMiuix(
-                                        stringResource(R.string.module_repo_homepage), url, url,
-                                        actionIconTint, secondaryContainer, uriHandler
-                                    )
-                                }
-                            }
-                            detail.support?.let { url ->
-                                add {
-                                    InfoRowMiuix(
-                                        stringResource(R.string.module_repo_support), url, url,
-                                        actionIconTint, secondaryContainer, uriHandler
-                                    )
-                                }
-                            }
-                            add {
-                                InfoRowMiuix(
-                                    stringResource(R.string.module_repo_integrity),
-                                    stringResource(R.string.module_repo_integrity_desc),
-                                    null, actionIconTint, secondaryContainer, uriHandler
+                            IconButton(
+                                backgroundColor = secondaryContainer,
+                                minHeight = 35.dp,
+                                minWidth = 35.dp,
+                                onClick = {
+                                    uriHandler.openUri(sourceUrl)
+                                },
+                            ) {
+                                Icon(
+                                    modifier = Modifier.size(20.dp),
+                                    imageVector = MiuixIcons.Link,
+                                    tint = actionIconTint,
+                                    contentDescription = null
                                 )
                             }
                         }
-                    )
+                    }
                 }
             }
             item { Spacer(Modifier.height(12.dp)) }
@@ -1297,7 +1204,7 @@ fun ModuleRepoDetailScreenMiuix(
     val secondaryContainer = colorScheme.secondaryContainer.copy(alpha = 0.8f)
     val module = state.module
     val scope = rememberCoroutineScope()
-    val confirmTitle = stringResource(if (state.isScript) R.string.script_run_title else R.string.module_install)
+    val confirmTitle = stringResource(R.string.module_install)
     var pendingDownload by remember { mutableStateOf<(() -> Unit)?>(null) }
     val confirmDialog = rememberConfirmDialog(onConfirm = { pendingDownload?.invoke() })
 
@@ -1305,7 +1212,7 @@ fun ModuleRepoDetailScreenMiuix(
 
     val backdrop = rememberBlurBackdrop(enableBlur)
     val blurActive = backdrop != null
-    val detailBarColor = if (blurActive) Color.Transparent else colorScheme.surface
+    val detailBarColor = if (blurActive) Color.Transparent else colorScheme.surface.copy(alpha = 1f)
 
     val tabs = listOf(
         stringResource(R.string.tab_readme), stringResource(R.string.tab_releases), stringResource(R.string.tab_info)
@@ -1318,58 +1225,55 @@ fun ModuleRepoDetailScreenMiuix(
     val coroutineScope = rememberCoroutineScope()
 
     Scaffold(
+        containerColor = Color.Transparent,
         topBar = {
             BlurredBar(backdrop) {
-                TopAppBar(
-                    color = detailBarColor,
-                    title = state.detail?.module?.moduleName ?: module.moduleName,
-                    scrollBehavior = scrollBehavior,
-                    navigationIcon = {
+                TopAppBar(color = detailBarColor, title = module.moduleName, scrollBehavior = scrollBehavior, navigationIcon = {
+                    IconButton(
+                        onClick = actions.onBack
+                    ) {
+                        val layoutDirection = LocalLayoutDirection.current
+                        Icon(
+                            modifier = Modifier.graphicsLayer {
+                                if (layoutDirection == LayoutDirection.Rtl) scaleX = -1f
+                            }, imageVector = MiuixIcons.Back, contentDescription = null, tint = colorScheme.onSurface
+                        )
+                    }
+                }, actions = {
+                    if (state.webUrl.isNotEmpty()) {
                         IconButton(
-                            onClick = actions.onBack
+                            onClick = actions.onOpenWebUrl
                         ) {
-                            val layoutDirection = LocalLayoutDirection.current
                             Icon(
-                                modifier = Modifier.graphicsLayer {
-                                    if (layoutDirection == LayoutDirection.Rtl) scaleX = -1f
-                                }, imageVector = MiuixIcons.Back, contentDescription = null, tint = colorScheme.onSurface
+                                imageVector = MiuixIcons.HorizontalSplit, contentDescription = null, tint = colorScheme.onBackground
                             )
                         }
-                    }, actions = {
-                        if (state.webUrl.isNotEmpty()) {
-                            IconButton(
-                                onClick = actions.onOpenWebUrl
-                            ) {
-                                Icon(
-                                    imageVector = MiuixIcons.HorizontalSplit, contentDescription = null, tint = colorScheme.onBackground
-                                )
-                            }
-                        }
-                    }, bottomContent = {
-                        Column(
-                            modifier = Modifier
-                                .padding(horizontal = 12.dp)
-                                .padding(bottom = 6.dp)
-                                .deferredTopPadding(dynamicTopPadding)
-                        ) {
-                            TabRow(
-                                tabs = tabs,
-                                selectedTabIndex = pagerState.currentPage,
-                                onTabSelected = { index ->
-                                    coroutineScope.launch {
-                                        pagerState.animateScrollToPage(
-                                            page = index,
-                                            animationSpec = PagerNavigationSpringSpec,
-                                        )
-                                    }
-                                },
-                                colors = TabRowDefaults.tabRowColors(
-                                    backgroundColor = if (blurActive) Color.Transparent else colorScheme.surface
-                                ),
-                                height = tabRowHeight,
-                            )
-                        }
-                    })
+                    }
+                }, bottomContent = {
+                    Column(
+                        modifier = Modifier
+                            .padding(horizontal = 12.dp)
+                            .padding(bottom = 6.dp)
+                            .deferredTopPadding(dynamicTopPadding)
+                    ) {
+                        TabRow(
+                            tabs = tabs,
+                            selectedTabIndex = pagerState.currentPage,
+                            onTabSelected = { index ->
+                                coroutineScope.launch {
+                                    pagerState.animateScrollToPage(
+                                        page = index,
+                                        animationSpec = PagerNavigationSpringSpec,
+                                    )
+                                }
+                            },
+                            colors = TabRowDefaults.tabRowColors(
+                                backgroundColor = if (blurActive) Color.Transparent else colorScheme.surface
+                            ),
+                            height = tabRowHeight,
+                        )
+                    }
+                })
             }
         },
         contentWindowInsets = WindowInsets.systemBars.add(WindowInsets.displayCutout).only(WindowInsetsSides.Horizontal),
@@ -1389,16 +1293,16 @@ fun ModuleRepoDetailScreenMiuix(
 
             when (page) {
                 0 -> ReadmePage(
-                    state = state,
-                    onRetry = actions.onRetry,
+                    readmeHtml = state.readmeHtml,
+                    readmeLoaded = state.readmeLoaded,
                     innerPadding = innerPadding,
                     scrollBehavior = scrollBehavior,
                     backdrop = backdrop
                 )
 
                 1 -> ReleasesPage(
-                    state = state,
-                    onRetry = actions.onRetry,
+                    detailReleases = state.detailReleases,
+                    detailLoaded = state.readmeLoaded,
                     innerPadding = innerPadding,
                     scrollBehavior = scrollBehavior,
                     backdrop = backdrop,
@@ -1409,13 +1313,7 @@ fun ModuleRepoDetailScreenMiuix(
                     scope = scope,
                     onInstallModule = actions.onInstallModule,
                     context = context,
-                    setPendingDownload = { pendingDownload = it },
-                    uriHandler = remember(actions) {
-                        object : UriHandler {
-                            override fun openUri(uri: String) = actions.onOpenUrl(uri)
-                        }
-                    },
-                )
+                    setPendingDownload = { pendingDownload = it })
 
                 2 -> {
                     val uriHandler = remember(actions) {
@@ -1424,13 +1322,14 @@ fun ModuleRepoDetailScreenMiuix(
                         }
                     }
                     InfoPage(
-                        state = state,
+                        module = module,
                         innerPadding = innerPadding,
                         scrollBehavior = scrollBehavior,
                         backdrop = backdrop,
                         actionIconTint = actionIconTint,
                         secondaryContainer = secondaryContainer,
                         uriHandler = uriHandler,
+                        sourceUrl = state.sourceUrl,
                     )
                 }
             }

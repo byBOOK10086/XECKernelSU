@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.captionBar
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.only
@@ -23,6 +24,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -39,6 +41,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.weishu.kernelsu.R
 import me.weishu.kernelsu.ui.component.KeyEventBlocker
+import me.weishu.kernelsu.ui.design.glass.xGlassBody
+import me.weishu.kernelsu.ui.design.token.Xc
 import me.weishu.kernelsu.ui.theme.LocalEnableBlur
 import me.weishu.kernelsu.ui.util.BlurredBar
 import me.weishu.kernelsu.ui.util.rememberBlurBackdrop
@@ -72,85 +76,117 @@ fun FlashScreenMiuix(
     val scrollState = rememberScrollState()
     val backdrop = rememberBlurBackdrop(enableBlur)
     val blurActive = backdrop != null
-    val barColor = if (blurActive) Color.Transparent else colorScheme.surface
+    val barColor = if (blurActive) Color.Transparent else colorScheme.surface.copy(alpha = 1f)
 
-    if (state.showJailbreakWarning) {
-        JailbreakFlashWarningDialog(
-            onConfirm = actions.onConfirmJailbreakWarning,
-            onDismiss = actions.onDismissJailbreakWarning,
-        )
-    }
-
-    Scaffold(
-        topBar = {
-            TopBar(
-                state.flashingStatus,
-                onBack = actions.onBack,
-                onSave = actions.onSaveLog,
-                backdrop = backdrop,
-                barColor = barColor,
-            )
-        },
-        floatingActionButton = {
-            if (state.showRebootAction) {
-                val reboot = stringResource(id = state.rebootLabelRes)
-                FloatingActionButton(
-                    modifier = Modifier
-                        .padding(
-                            bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
-                                    WindowInsets.captionBar.asPaddingValues().calculateBottomPadding() + 20.dp,
-                            end = 20.dp
-                        )
-                        .border(0.05.dp, colorScheme.outline.copy(alpha = 0.5f), CircleShape),
-                    onClick = actions.onReboot,
-                    shadowElevation = 0.dp,
-                    content = {
-                        Icon(
-                            Icons.Rounded.Refresh,
-                            reboot,
-                            Modifier.size(40.dp),
-                            tint = colorScheme.onPrimary
-                        )
-                    },
+    // 对话框是同窗口玻璃浮层，必须叠在 Scaffold 之上，所以整体包一层 Box
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            containerColor = Color.Transparent,
+            topBar = {
+                TopBar(
+                    state.flashingStatus,
+                    onBack = actions.onBack,
+                    onSave = actions.onSaveLog,
+                    backdrop = backdrop,
+                    barColor = barColor,
                 )
+            },
+            floatingActionButton = {
+                if (state.showStuckBootTxn) {
+                    // 事务卡住时刷写闸门是永久关的，必须给一个显式的解除动作。
+                    FloatingActionButton(
+                        modifier = Modifier
+                            .padding(
+                                bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
+                                end = 20.dp,
+                            )
+                            .border(0.05.dp, colorScheme.error.copy(alpha = 0.6f), CircleShape),
+                        onClick = actions.onClearStuckBootTxn,
+                        shadowElevation = 0.dp,
+                        content = {
+                            Icon(
+                                Icons.Rounded.Delete,
+                                stringResource(id = R.string.flash_boot_txn_clear),
+                                Modifier.size(40.dp),
+                                tint = colorScheme.onPrimary,
+                            )
+                        },
+                    )
+                } else if (state.showRebootAction) {
+                    val reboot = stringResource(id = state.rebootLabelRes)
+                    FloatingActionButton(
+                        modifier = Modifier
+                            .padding(
+                                bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
+                                        WindowInsets.captionBar.asPaddingValues().calculateBottomPadding() + 20.dp,
+                                end = 20.dp
+                            )
+                            .border(0.05.dp, colorScheme.outline.copy(alpha = 0.5f), CircleShape),
+                        onClick = actions.onReboot,
+                        shadowElevation = 0.dp,
+                        content = {
+                            Icon(
+                                Icons.Rounded.Refresh,
+                                reboot,
+                                Modifier.size(40.dp),
+                                tint = colorScheme.onPrimary
+                            )
+                        },
+                    )
+                }
+            },
+            popupHost = { },
+            contentWindowInsets = WindowInsets.systemBars.add(WindowInsets.displayCutout).only(WindowInsetsSides.Horizontal)
+        ) { innerPadding ->
+            val layoutDirection = LocalLayoutDirection.current
+            KeyEventBlocker {
+                it.key == Key.VolumeDown || it.key == Key.VolumeUp
             }
-        },
-        popupHost = { },
-        contentWindowInsets = WindowInsets.systemBars.add(WindowInsets.displayCutout).only(WindowInsetsSides.Horizontal)
-    ) { innerPadding ->
-        val layoutDirection = LocalLayoutDirection.current
-        KeyEventBlocker {
-            it.key == Key.VolumeDown || it.key == Key.VolumeUp
+
+            Box(modifier = if (backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize(1f)
+                        .scrollEndHaptic()
+                        .padding(
+                            start = innerPadding.calculateStartPadding(layoutDirection),
+                            end = innerPadding.calculateEndPadding(layoutDirection),
+                        )
+                        .verticalScroll(scrollState),
+                ) {
+                    LaunchedEffect(state.text) {
+                        scrollState.animateScrollTo(scrollState.maxValue)
+                    }
+                    Spacer(Modifier.height(innerPadding.calculateTopPadding()))
+                    // 日志压进玻璃卡体：磨砂玻璃垫底后文字跟着主题语义色走
+                    // （浅色档深字 / 深色档浅字），不再固定纯黑。
+                    Text(
+                        modifier = Modifier
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                            .fillMaxWidth()
+                            .xGlassBody(backdrop = backdrop, shape = Xc.shapes.lg)
+                            .padding(horizontal = 16.dp, vertical = 14.dp),
+                        text = state.text,
+                        color = Xc.colors.text,
+                        fontSize = 13.sp,
+                        fontFamily = FontFamily.Monospace,
+                    )
+                    Spacer(
+                        Modifier.height(
+                            12.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
+                                    WindowInsets.captionBar.asPaddingValues().calculateBottomPadding()
+                        )
+                    )
+                }
+            }
         }
 
-        Box(modifier = if (backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize(1f)
-                    .scrollEndHaptic()
-                    .padding(
-                        start = innerPadding.calculateStartPadding(layoutDirection),
-                        end = innerPadding.calculateEndPadding(layoutDirection),
-                    )
-                    .verticalScroll(scrollState),
-            ) {
-                LaunchedEffect(state.text) {
-                    scrollState.animateScrollTo(scrollState.maxValue)
-                }
-                Spacer(Modifier.height(innerPadding.calculateTopPadding()))
-                Text(
-                    modifier = Modifier.padding(8.dp),
-                    text = state.text,
-                    fontSize = 12.sp,
-                    fontFamily = FontFamily.Monospace,
-                )
-                Spacer(
-                    Modifier.height(
-                        12.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
-                                WindowInsets.captionBar.asPaddingValues().calculateBottomPadding()
-                    )
-                )
-            }
+        if (state.showJailbreakWarning) {
+            JailbreakFlashWarningDialog(
+                backdrop = backdrop,
+                onConfirm = actions.onConfirmJailbreakWarning,
+                onDismiss = actions.onDismissJailbreakWarning,
+            )
         }
     }
 }

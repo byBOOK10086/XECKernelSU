@@ -9,9 +9,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import me.weishu.kernelsu.data.repository.SettingsRepository
 import me.weishu.kernelsu.data.repository.SettingsRepositoryImpl
+import me.weishu.kernelsu.data.theme.ThemeRepository
 import me.weishu.kernelsu.data.theme.ThemeResolver
 import me.weishu.kernelsu.ksuApp
-import me.weishu.kernelsu.ui.UiMode
 import me.weishu.kernelsu.ui.theme.ThemeController
 
 class MainActivityViewModel(
@@ -51,13 +51,12 @@ class MainActivityViewModel(
             enableFloatingBottomBar = settingRepo.enableFloatingBottomBar,
             enableFloatingBottomBarBlur = settingRepo.enableFloatingBottomBarBlur,
             enableNavigationBadge = settingRepo.enableNavigationBadge,
-            enableSwipeDismiss = settingRepo.enableSwipeDismiss,
-            pagerInterceptionMode = settingRepo.pagerInterceptionMode,
-            moduleDescriptionMaxLines = settingRepo.moduleDescriptionMaxLines,
-            uiMode = UiMode.fromValue(settingRepo.uiMode),
             componentTransparent = settingRepo.componentTransparent,
-            // Disk read only when the id changed: ThemeResolver caches by theme id, and this
-            // runs on every appearance preference change.
+            wallpaperLight = settingRepo.wallpaperLight,
+            wallpaperDark = settingRepo.wallpaperDark,
+            wallpaperBlur = settingRepo.wallpaperBlur,
+            // 主题：按 id 读一次本地主题包并解析成令牌。ThemeResolver 内部有"同一个 id 不重复
+            // 读盘"的缓存，所以这个监听回调（每次外观设置变化都会进来）不会反复做磁盘 IO。
             theme = ThemeResolver.active(ksuApp),
         )
     }
@@ -69,18 +68,19 @@ class MainActivityViewModel(
             "color_style",
             "color_spec",
             "page_scale",
-            "module_description_max_lines",
             "enable_blur",
             "enable_floating_bottom_bar",
             "enable_floating_bottom_bar_blur",
             "enable_navigation_badge",
-            "enable_swipe_dismiss",
-            "pager_interception_mode",
-            "ui_mode",
+            // 组件透明：开关一动整树立刻重组，不需要重启。
             "component_transparent",
-            // Applying / restoring a theme writes this key; without it the whole app would
-            // keep drawing the previous skin until the next cold start.
-            "theme_id",
+            // 自定义背景：选完图要立刻换掉根层壁纸（内置池的随机抽签结果不受影响）。
+            "wallpaper_light",
+            "wallpaper_dark",
+            // 背景模糊拖动条：松手即生效，同样不需要重启。
+            "wallpaper_blur",
+            // 主题：应用/换掉/恢复默认都要立刻整树刷新。
+            ThemeRepository.KEY_ACTIVE,
         )
     }
 }
@@ -98,7 +98,16 @@ private class MainPageState(
 }
 
 object MainPagerConfig {
-    const val PAGE_COUNT = 4
+    /**
+     * 7 → 5（2026-10-06）：底栏收敛——终端并入设置页入口卡。
+     * 4 → 5（2026-11-08）：检测页按 MIUI 8 原型重新立起来，顺序为
+     * Home / SuperUser / Module / Detect / Setting。
+     *
+     * 旧版本存过的 selected_main_page 会被 [coercePage] 夹回范围；另外索引 3
+     * 从"设置"变成了"检测"，装了旧版且停在设置页的用户，升级后第一次打开会落到
+     * 检测页。这是可接受的：页码是纯 UI 偏好，没有数据副作用。
+     */
+    const val PAGE_COUNT = 5
     const val LAST_PAGE_INDEX = PAGE_COUNT - 1
 
     fun coercePage(page: Int): Int = page.coerceIn(0, LAST_PAGE_INDEX)

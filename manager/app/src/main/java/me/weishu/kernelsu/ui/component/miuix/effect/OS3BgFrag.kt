@@ -1,4 +1,4 @@
-// Mirrored from compose-miuix-ui example.
+// Mirrored from the compose-miuix-ui example (miuix, Apache-2.0): https://github.com/yukonga/miuix
 
 package me.weishu.kernelsu.ui.component.miuix.effect
 
@@ -84,7 +84,9 @@ const val OS3_BG_FRAG = """
         color.a = clamp(color.a, 0., 1.);
         color.a *= uAlphaMulti;
 
-        color += (10.0 / 255.0) * gradientNoise(fragCoord.xy) - (5.0 / 255.0);
+        // Keep the material variation subtle; the previous 10/255 grain read
+        // as visible dust over every glass surface.
+        color += (2.0 / 255.0) * gradientNoise(fragCoord.xy) - (1.0 / 255.0);
         return vec4(color.rgb * color.a, color.a);
     }
 """

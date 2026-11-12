@@ -1,5 +1,7 @@
 package me.weishu.kernelsu.ui.component.bottombar
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.MutatePriority
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
@@ -14,12 +16,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
-import me.weishu.kernelsu.ui.LocalUiMode
-import me.weishu.kernelsu.ui.UiMode
+import me.weishu.kernelsu.ui.component.PagerNavigationSpringSpec
 import me.weishu.kernelsu.ui.util.shouldShowSplitPane
 import top.yukonga.miuix.kmp.blur.Backdrop
 import top.yukonga.miuix.kmp.blur.LayerBackdrop
-import top.yukonga.miuix.kmp.utils.springAnimateToPage
+import kotlin.math.abs
 
 class MainPagerState(
     val pagerState: PagerState,
@@ -31,6 +32,27 @@ class MainPagerState(
 
     var isNavigating by mutableStateOf(false)
         private set
+
+    // 页内浮层（模块长按操作面板等）打开期间锁住横向翻页手势：面板属于
+    // pager 某一页的子树，遮罩只消费点击不消费拖动，不锁的话长按触发后
+    // 手指的残余漂移、或浮层上的横向滑动会直接把 pager 翻到相邻页，
+    // 浮层跟着页面一起被带走——表现为"长按后跑到相邻页、面板功能点不开"。
+    // 引用计数支持多处浮层叠加；programmatic 的 animateToPage 不受影响，
+    // 底栏点按仍可换页（浮层留在原页，回来还在）。
+    private var gestureLockCount = 0
+
+    var isGestureLocked by mutableStateOf(false)
+        private set
+
+    fun lockPagerGestures() {
+        gestureLockCount++
+        isGestureLocked = true
+    }
+
+    fun unlockPagerGestures() {
+        gestureLockCount = (gestureLockCount - 1).coerceAtLeast(0)
+        if (gestureLockCount == 0) isGestureLocked = false
+    }
 
     private var navJob: Job? = null
 
@@ -65,6 +87,51 @@ class MainPagerState(
         if (!isNavigating && selectedPage != pagerState.currentPage) {
             selectedPage = pagerState.currentPage
         }
+    }
+}
+
+private suspend fun PagerState.springAnimateToPage(target: Int) {
+    if (target !in 0 until pageCount) return
+    var shouldSnapToTarget = false
+    scroll(MutatePriority.UserInput) {
+        val pageSize = layoutInfo.pageSize + layoutInfo.pageSpacing
+        val distance = target - currentPage - currentPageOffsetFraction
+        val scrollPixels = distance * pageSize
+        if (abs(scrollPixels) <= 0.5f) return@scroll
+
+        var consumedScroll = 0f
+        var skipScroll = false
+        Animatable(0f).animateTo(
+            targetValue = scrollPixels,
+            animationSpec = PagerNavigationSpringSpec,
+        ) {
+            if (skipScroll) return@animateTo
+
+            val delta = value - consumedScroll
+            if (abs(delta) > 0.5f) {
+                val consumed = scrollBy(delta)
+                consumedScroll += consumed
+                if (abs(delta - consumed) > 0.1f) {
+                    shouldSnapToTarget = true
+                    skipScroll = true
+                }
+            } else {
+                consumedScroll = value
+            }
+
+            if (abs(velocity) < 0.1f && abs(scrollPixels - consumedScroll) < 1.0f) {
+                skipScroll = true
+            }
+        }
+
+        val remaining = scrollPixels - consumedScroll
+        if (abs(remaining) > 0.5f) {
+            scrollBy(remaining)
+        }
+    }
+
+    if (shouldSnapToTarget || currentPage != target) {
+        scrollToPage(target)
     }
 }
 
@@ -106,7 +173,7 @@ internal fun badgeFor(index: Int, state: NavigationBadgeState): NavBadge? = when
 
 @Composable
 fun useNavigationRail(enableFloatingBottomBar: Boolean): Boolean {
-    return shouldShowSplitPane() && !(LocalUiMode.current == UiMode.Miuix && enableFloatingBottomBar)
+    return shouldShowSplitPane() && !enableFloatingBottomBar
 }
 
 @Composable
@@ -116,10 +183,7 @@ fun BottomBar(
     navigationBadge: NavigationBadgeState,
     modifier: Modifier = Modifier,
 ) {
-    when (LocalUiMode.current) {
-        UiMode.Miuix -> BottomBarMiuix(blurBackdrop, backdrop, navigationBadge, modifier)
-        UiMode.Material -> BottomBarMaterial(navigationBadge)
-    }
+    BottomBarMiuix(blurBackdrop, backdrop, navigationBadge, modifier)
 }
 
 @Composable
@@ -127,8 +191,5 @@ fun SideRail(
     navigationBadge: NavigationBadgeState,
     modifier: Modifier = Modifier,
 ) {
-    when (LocalUiMode.current) {
-        UiMode.Miuix -> NavigationRailMiuix(navigationBadge, modifier)
-        UiMode.Material -> NavigationRailMaterial(navigationBadge, modifier)
-    }
+    NavigationRailMiuix(navigationBadge, modifier)
 }

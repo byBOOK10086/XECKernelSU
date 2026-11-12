@@ -21,12 +21,14 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -58,6 +60,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -65,11 +68,18 @@ import me.weishu.kernelsu.R
 import me.weishu.kernelsu.ui.component.ListPopupDefaults
 import me.weishu.kernelsu.ui.component.ScrollToTopOnChange
 import me.weishu.kernelsu.ui.component.SearchStatus
+import me.weishu.kernelsu.ui.component.dialog.XDialog
+import me.weishu.kernelsu.ui.component.dialog.XDialogTitle
 import me.weishu.kernelsu.ui.component.miuix.SearchBarFake
 import me.weishu.kernelsu.ui.component.miuix.SearchBox
 import me.weishu.kernelsu.ui.component.miuix.SearchPager
 import me.weishu.kernelsu.ui.component.miuix.WarningCard
 import me.weishu.kernelsu.ui.component.statustag.StatusTag
+import me.weishu.kernelsu.ui.design.glass.xGlassBody
+import me.weishu.kernelsu.ui.design.panel.Xc8Dropdown
+import me.weishu.kernelsu.ui.design.token.LocalXcReducedMotion
+import me.weishu.kernelsu.ui.design.token.Xc
+import me.weishu.kernelsu.ui.design.token.XcMotionDefault
 import me.weishu.kernelsu.ui.theme.LocalEnableBlur
 import me.weishu.kernelsu.ui.util.BlurredBar
 import me.weishu.kernelsu.ui.util.SulogEntry
@@ -77,6 +87,7 @@ import me.weishu.kernelsu.ui.util.SulogEventFilter
 import me.weishu.kernelsu.ui.util.rememberBlurBackdrop
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.DropdownImpl
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -89,19 +100,18 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.basic.rememberPullToRefreshState
+import top.yukonga.miuix.kmp.blur.LayerBackdrop
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.basic.ArrowRight
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Filter
-import top.yukonga.miuix.kmp.overlay.OverlayDialog
 import top.yukonga.miuix.kmp.overlay.OverlayListPopup
-import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme
-import top.yukonga.miuix.kmp.theme.MiuixTheme.isDynamicColor
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
+import me.weishu.kernelsu.ui.design.token.XcRadius
 
 @Composable
 fun SulogScreenMiuix(
@@ -116,7 +126,7 @@ fun SulogScreenMiuix(
     }
     val backdrop = rememberBlurBackdrop(enableBlur)
     val blurActive = backdrop != null
-    val barColor = if (blurActive) Color.Transparent else colorScheme.surface
+    val barColor = if (blurActive) Color.Transparent else colorScheme.surface.copy(alpha = 1f)
     val pullToRefreshState = rememberPullToRefreshState()
     val listState = rememberLazyListState()
     val fileSelector = buildSulogFileSelector(state.files, state.selectedFilePath)
@@ -150,6 +160,7 @@ fun SulogScreenMiuix(
     )
 
     Scaffold(
+        containerColor = Color.Transparent,
         topBar = {
             BlurredBar(backdrop) {
                 searchStatus.TopAppBarAnim(backgroundColor = barColor) {
@@ -318,17 +329,20 @@ fun SulogScreenMiuix(
                         }
 
                         item {
-                            Card(
+                            Card(cornerRadius = XcRadius.md, 
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(horizontal = 12.dp)
-                                    .padding(bottom = 12.dp),
+                                    .padding(bottom = 12.dp)
+                                    .xGlassBody(backdrop = backdrop, shape = Xc.shapes.md),
+                                colors = CardDefaults.defaultColors(color = Color.Transparent),
                             ) {
-                                OverlayDropdownPreference(
+                                Xc8Dropdown(
                                     title = stringResource(R.string.sulog_log_files),
                                     items = fileSelector.items,
                                     enabled = fileSelector.items.isNotEmpty(),
                                     selectedIndex = fileSelector.selectedIndex,
+                                    cancelText = stringResource(android.R.string.cancel),
                                     onSelectedIndexChange = { index ->
                                         state.files.getOrNull(index)?.let { file ->
                                             actions.onSelectFile(file.path)
@@ -341,6 +355,7 @@ fun SulogScreenMiuix(
                         sulogEntriesSection(
                             entries = state.visibleEntries,
                             errorMessage = state.errorMessage,
+                            backdrop = backdrop,
                             onEntryClick = { selectedEntry = it },
                         )
 
@@ -367,7 +382,7 @@ private fun SulogStatusSection(
     // Skip entirely when no banner is shown; an empty Row would still take up
     // its bottom padding above the file selector.
     val showBanner = when (state.sulogStatus) {
-        "unsupported", "managed", "forced" -> true
+        "unsupported", "managed" -> true
         "supported" -> !state.isSulogEnabled
         else -> false
     }
@@ -391,12 +406,6 @@ private fun SulogStatusSection(
                 )
             }
 
-            "forced" -> {
-                WarningCard(
-                    message = stringResource(R.string.feature_status_forced_summary),
-                )
-            }
-
             "supported" if !state.isSulogEnabled -> {
                 WarningCard(
                     message = stringResource(R.string.sulog_disabled_title),
@@ -405,11 +414,14 @@ private fun SulogStatusSection(
                             text = stringResource(R.string.sulog_enable_action),
                             onClick = actions.onEnableSulog,
                             minHeight = 28.dp,
-                            cornerRadius = 50.dp,
+                            // MIUI 8 的按钮是方角（4dp），50dp 那种胶囊是上一版玻璃形态的遗留。
+                            cornerRadius = XcRadius.sm,
                             insideMargin = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
                             colors = ButtonDefaults.textButtonColors(
-                                color = if (isDynamicColor) colorScheme.onErrorContainer else colorScheme.error,
-                                textColor = colorScheme.onError,
+                                // 这张告警卡的底已经是 dangerTint，按钮再用同色就糊成
+                                // 一整块，所以这里走实心危险色 + 白字，保住行动号召的分量。
+                                color = Xc.colors.danger,
+                                textColor = Xc.colors.onSemanticSolid,
                             ),
                         )
                     },
@@ -424,8 +436,11 @@ private fun SulogStatusSection(
 private fun LazyListScope.sulogEntriesSection(
     entries: List<SulogEntry>,
     errorMessage: String?,
+    backdrop: LayerBackdrop? = null,
     onEntryClick: (SulogEntry) -> Unit,
 ) {
+    // 与 entries 一一对应的稳定 key。放在 when 之前算一次，两个分支都不重复计算。
+    val keys = stableEntryKeys(entries)
     when {
         errorMessage != null -> item {
             SulogMessageCard(
@@ -435,25 +450,58 @@ private fun LazyListScope.sulogEntriesSection(
             )
         }
 
-        else -> itemsIndexed(entries, key = { index, entry -> "$index-${entry.key}" }) { index, entry ->
+        // 2026-11-11 第三轮：key 去掉 index（否则新日志插到最前时所有既有项的
+        // 下标 +1、key 全变，animateItem 会把整表当新项重放），并补入场动画。
+        // 重复 key 会让 LazyColumn 直接抛异常，所以用 [stableEntryKeys] 做一次
+        // 「只在真重复时加后缀」的去重 —— 后缀与出现次序绑定，前缀项仍然稳定。
+        else -> itemsIndexed(entries, key = { index, _ -> keys[index] }) { index, entry ->
+            val reduced = LocalXcReducedMotion.current
+            val fade = if (reduced) null else tween<Float>(XcMotionDefault.listIn)
+            val place = if (reduced) null else tween<IntOffset>(XcMotionDefault.listIn)
             SulogEntryCard(
                 entry = entry,
+                backdrop = backdrop,
                 onClick = { onEntryClick(entry) },
+                modifier = Modifier.animateItem(
+                    fadeInSpec = fade,
+                    placementSpec = place,
+                    fadeOutSpec = fade,
+                ),
             )
         }
+    }
+}
+
+/**
+ * 给一批日志算稳定 key。
+ *
+ * [SulogEntry.key] 本身是 `seq`（或原始行），正常情况下唯一；但 `dropped` 这类
+ * 没有 seq 的条目可能撞车，而 LazyColumn 对重复 key 是**直接抛异常**的。这里只在
+ * 真的撞车时追加 `#n`，保证既稳定又唯一。
+ */
+private fun stableEntryKeys(entries: List<SulogEntry>): List<String> {
+    val seen = HashMap<String, Int>(entries.size)
+    return entries.map { entry ->
+        val n = seen.getOrDefault(entry.key, 0)
+        seen[entry.key] = n + 1
+        if (n == 0) entry.key else "${entry.key}#$n"
     }
 }
 
 @Composable
 private fun SulogEntryCard(
     entry: SulogEntry,
+    modifier: Modifier = Modifier,
+    backdrop: LayerBackdrop? = null,
     onClick: () -> Unit,
 ) {
-    Card(
-        modifier = Modifier
+    Card(cornerRadius = XcRadius.md, 
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp)
-            .padding(bottom = 12.dp),
+            .padding(bottom = 12.dp)
+            .xGlassBody(backdrop = backdrop, shape = Xc.shapes.md),
+        colors = CardDefaults.defaultColors(color = Color.Transparent),
         onClick = onClick,
         showIndication = true,
         insideMargin = PaddingValues(16.dp),
@@ -477,7 +525,7 @@ private fun SulogEntryCard(
                 sulogEntryDescription(entry)?.let {
                     Text(
                         text = it,
-                        fontSize = 12.sp,
+                        fontSize = 13.sp,
                         color = colorScheme.onSurfaceVariantSummary,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
@@ -487,7 +535,7 @@ private fun SulogEntryCard(
                     Text(
                         text = it,
                         modifier = Modifier.basicMarquee(),
-                        fontSize = 12.sp,
+                        fontSize = 13.sp,
                         fontWeight = FontWeight(550),
                         color = colorScheme.onSurfaceVariantSummary,
                         maxLines = 1,
@@ -510,7 +558,7 @@ private fun SulogEntryCard(
                 Text(
                     text = it,
                     color = colorScheme.onSurfaceVariantActions,
-                    fontSize = 12.sp,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight(550),
                     maxLines = 1,
                     softWrap = false,
@@ -545,14 +593,14 @@ private fun SulogMessageCard(
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
                 text = title,
-                fontSize = 17.sp,
+                fontSize = 15.sp,
                 fontWeight = FontWeight(550),
                 color = colorScheme.onSurfaceVariantSummary,
             )
             if (summary != null) {
                 Text(
                     text = summary,
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
                     color = colorScheme.onSurfaceVariantSummary,
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
@@ -571,31 +619,30 @@ private fun SulogDetailDialog(
     var lastEntry by remember { mutableStateOf(entry) }
     if (entry != null) lastEntry = entry
     val displayEntry = lastEntry ?: return
-    OverlayDialog(
+    XDialog(
         show = show,
-        title = sulogEntryTitle(displayEntry),
         onDismissRequest = onDismiss,
-        content = {
-            Column {
-                SelectionContainer(
-                    modifier = Modifier
-                        .weight(1f, fill = false)
-                        .verticalScroll(rememberScrollState()),
-                ) {
-                    Text(
-                        text = sulogEntryDetailText(displayEntry),
-                        fontSize = 14.sp,
-                        fontFamily = FontFamily.Monospace,
-                    )
-                }
-                Spacer(Modifier.height(12.dp))
-                TextButton(
-                    modifier = Modifier.fillMaxWidth(),
-                    text = stringResource(android.R.string.ok),
-                    onClick = onDismiss,
-                    colors = ButtonDefaults.textButtonColorsPrimary(),
+    ) {
+        XDialogTitle(text = sulogEntryTitle(displayEntry))
+        Column {
+            SelectionContainer(
+                modifier = Modifier
+                    .heightIn(max = 420.dp)
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                Text(
+                    text = sulogEntryDetailText(displayEntry),
+                    fontSize = 13.sp,
+                    fontFamily = FontFamily.Monospace,
                 )
             }
-        },
-    )
+            Spacer(Modifier.height(12.dp))
+            TextButton(
+                modifier = Modifier.fillMaxWidth(),
+                text = stringResource(android.R.string.ok),
+                onClick = onDismiss,
+                colors = ButtonDefaults.textButtonColorsPrimary(),
+            )
+        }
+    }
 }

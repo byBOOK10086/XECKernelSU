@@ -18,14 +18,14 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import me.weishu.kernelsu.R
+import me.weishu.kernelsu.ui.component.dialog.XDialog
+import me.weishu.kernelsu.ui.component.dialog.XDialogTitle
 import me.weishu.kernelsu.ui.util.getCurrentKmi
 import me.weishu.kernelsu.ui.util.getSupportedKmis
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.TextButton
-import top.yukonga.miuix.kmp.overlay.OverlayDialog
 import top.yukonga.miuix.kmp.preference.CheckboxLocation
 import top.yukonga.miuix.kmp.preference.CheckboxPreference
 
@@ -42,58 +42,64 @@ fun ChooseKmiDialogMiuix(
         value = getCurrentKmi()
     }
     val currentSelection = rememberSaveable(currentKmi) { mutableStateOf(currentKmi) }
-    OverlayDialog(
+    // 列表来自 ksud 里编进去的 .ko 资产，正常一定非空；但万一拿不到（老版本 ksud、
+    // 或者执行环境异常），也要把「本设备 KMI」自己列出来 —— 否则弹窗是空的、
+    // 「确认」永久禁用，用户就只能取消，安装流程直接断在这里。
+    val listedKmis = supportedKMIs.ifEmpty {
+        listOfNotNull(currentKmi.takeIf { it.isNotBlank() })
+    }
+    XDialog(
         show = show,
-        title = stringResource(R.string.select_kmi),
-        summary = stringResource(R.string.current_kmi, currentKmi.let { it.ifBlank { "Unknown" } }),
         onDismissRequest = {
             onDismissRequest()
             currentSelection.value = currentKmi
         },
-        insideMargin = DpSize(0.dp, 24.dp),
-        content = {
-            Column(modifier = Modifier.heightIn(max = 500.dp)) {
-                LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
-                    items(supportedKMIs) { kmi ->
-                        CheckboxPreference(
-                            title = kmi,
-                            summary = if (kmi == currentKmi) stringResource(R.string.current_device_kmi) else null,
-                            insideMargin = PaddingValues(horizontal = 30.dp, vertical = 16.dp),
-                            checkboxLocation = CheckboxLocation.End,
-                            checked = currentSelection.value == kmi,
-                            holdDownState = currentSelection.value == kmi,
-                            onCheckedChange = { _ ->
-                                currentSelection.value = kmi
-                            }
-                        )
-                    }
-                }
-                Spacer(Modifier.height(12.dp))
-                Row(
-                    modifier = Modifier.padding(horizontal = 24.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    TextButton(
-                        onClick = {
-                            onDismissRequest()
-                            currentSelection.value = currentKmi
-                        },
-                        text = stringResource(android.R.string.cancel),
-                        modifier = Modifier.weight(1f),
-                    )
-                    Spacer(modifier = Modifier.width(20.dp))
-                    TextButton(
-                        enabled = supportedKMIs.contains(currentSelection.value),
-                        onClick = {
-                            onSelected(currentSelection.value)
-                            onDismissRequest()
-                        },
-                        text = stringResource(R.string.confirm),
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.textButtonColorsPrimary()
+    ) {
+        XDialogTitle(
+            text = stringResource(R.string.select_kmi),
+            summary = stringResource(R.string.current_kmi, currentKmi.let { it.ifBlank { "Unknown" } }),
+        )
+        Column(modifier = Modifier.heightIn(max = 500.dp)) {
+            LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
+                items(listedKmis) { kmi ->
+                    CheckboxPreference(
+                        title = kmi,
+                        summary = if (kmi == currentKmi) stringResource(R.string.current_device_kmi) else null,
+                        insideMargin = PaddingValues(horizontal = 30.dp, vertical = 16.dp),
+                        checkboxLocation = CheckboxLocation.End,
+                        checked = currentSelection.value == kmi,
+                        holdDownState = currentSelection.value == kmi,
+                        onCheckedChange = { _ ->
+                            currentSelection.value = kmi
+                        }
                     )
                 }
             }
+            Spacer(Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.padding(horizontal = 24.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                TextButton(
+                    onClick = {
+                        onDismissRequest()
+                        currentSelection.value = currentKmi
+                    },
+                    text = stringResource(android.R.string.cancel),
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(modifier = Modifier.width(20.dp))
+                TextButton(
+                    enabled = listedKmis.contains(currentSelection.value),
+                    onClick = {
+                        onSelected(currentSelection.value)
+                        onDismissRequest()
+                    },
+                    text = stringResource(R.string.confirm),
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.textButtonColorsPrimary()
+                )
+            }
         }
-    )
+    }
 }

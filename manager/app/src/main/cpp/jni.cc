@@ -8,9 +8,112 @@
 
 #include <android/log.h>
 #include <cstring>
+#include <vector>
 
 #include "ksu.h"
 #include "logging.h"
+
+extern "C"
+JNIEXPORT jboolean JNICALL
+Java_me_weishu_kernelsu_Natives_setSuperkeyGuard(JNIEnv *env, jobject, jboolean armed) {
+    return set_superkey_guard(armed == JNI_TRUE);
+}
+
+extern "C"
+JNIEXPORT jboolean JNICALL
+Java_me_weishu_kernelsu_Natives_setSuperkey(JNIEnv *env, jobject, jstring newKey, jstring oldKey, jboolean clear) {
+    const char *n = newKey ? env->GetStringUTFChars(newKey, nullptr) : "";
+    const char *o = oldKey ? env->GetStringUTFChars(oldKey, nullptr) : "";
+    bool ok = set_superkey(n, o, clear == JNI_TRUE);
+    if (newKey) env->ReleaseStringUTFChars(newKey, n);
+    if (oldKey) env->ReleaseStringUTFChars(oldKey, o);
+    return ok;
+}
+
+extern "C"
+JNIEXPORT jboolean JNICALL
+Java_me_weishu_kernelsu_Natives_superkeyAuth(JNIEnv *env, jobject, jstring key) {
+    if (!key) return JNI_FALSE;
+    const char *k = env->GetStringUTFChars(key, nullptr);
+    bool ok = superkey_auth(k);
+    env->ReleaseStringUTFChars(key, k);
+    return ok;
+}
+
+extern "C"
+JNIEXPORT jbooleanArray JNICALL
+Java_me_weishu_kernelsu_Natives_superkeyStatus(JNIEnv *env, jobject) {
+    superkey_status st = superkey_status_query();
+    jbooleanArray out = env->NewBooleanArray(2);
+    jboolean vals[2] = {(jboolean)(st.set ? JNI_TRUE : JNI_FALSE), (jboolean)(st.guard_armed ? JNI_TRUE : JNI_FALSE)};
+    env->SetBooleanArrayRegion(out, 0, 2, vals);
+    return out;
+}
+
+extern "C"
+JNIEXPORT jboolean JNICALL
+Java_me_weishu_kernelsu_Natives_setExecPolicy(JNIEnv *env, jobject, jint uid, jboolean restricted, jobjectArray paths) {
+    std::vector<std::string> vec;
+    jsize n = env->GetArrayLength(paths);
+    for (jsize i = 0; i < n; i++) {
+        auto js = (jstring) env->GetObjectArrayElement(paths, i);
+        if (!js)
+            continue;
+        const char *chars = env->GetStringUTFChars(js, nullptr);
+        if (chars)
+            vec.emplace_back(chars);
+        env->ReleaseStringUTFChars(js, chars);
+        env->DeleteLocalRef(js);
+    }
+    return set_exec_policy((uid_t) uid, restricted == JNI_TRUE, vec);
+}
+
+extern "C"
+JNIEXPORT jobjectArray JNICALL
+Java_me_weishu_kernelsu_Natives_getExecPolicy(JNIEnv *env, jobject, jint uid) {
+    bool restricted = false;
+    std::vector<std::string> paths = get_exec_policy((uid_t) uid, restricted);
+    if (!restricted)
+        return nullptr;
+    jobjectArray out = env->NewObjectArray(
+        (jsize) paths.size(), env->FindClass("java/lang/String"), nullptr);
+    for (size_t i = 0; i < paths.size(); i++) {
+        env->SetObjectArrayElement(
+            out, (jsize) i, env->NewStringUTF(paths[i].c_str()));
+    }
+    return out;
+}
+
+extern "C"
+JNIEXPORT jboolean JNICALL
+Java_me_weishu_kernelsu_Natives_setUtsSpoof(JNIEnv *env, jobject, jint uid, jboolean enabled, jstring release, jstring version) {
+    std::string rel, ver;
+    if (release) {
+        const char *chars = env->GetStringUTFChars(release, nullptr);
+        if (chars) rel = chars;
+        env->ReleaseStringUTFChars(release, chars);
+    }
+    if (version) {
+        const char *chars = env->GetStringUTFChars(version, nullptr);
+        if (chars) ver = chars;
+        env->ReleaseStringUTFChars(version, chars);
+    }
+    return set_uts_spoof((uid_t) uid, enabled == JNI_TRUE, rel, ver);
+}
+
+extern "C"
+JNIEXPORT jobjectArray JNICALL
+Java_me_weishu_kernelsu_Natives_getUtsSpoof(JNIEnv *env, jobject, jint uid) {
+    std::string release, version;
+    int state = get_uts_spoof((uid_t) uid, release, version);
+    if (state != 1)
+        return nullptr;
+    jclass stringClass = env->FindClass("java/lang/String");
+    jobjectArray out = env->NewObjectArray(2, stringClass, nullptr);
+    env->SetObjectArrayElement(out, 0, env->NewStringUTF(release.c_str()));
+    env->SetObjectArrayElement(out, 1, env->NewStringUTF(version.c_str()));
+    return out;
+}
 
 extern "C"
 JNIEXPORT jint JNICALL

@@ -87,21 +87,3 @@ fun getTemplateInfoById(id: String): me.weishu.kernelsu.data.model.TemplateInfo?
         Log.e(TAG, "ignore invalid template: $it", it)
     }.getOrNull()
 }
-
-@Suppress("unused")
-fun generateTemplates() {
-    val templateJson = JSONObject()
-    templateJson.put("id", "com.example")
-    templateJson.put("name", "Example")
-    templateJson.put("description", "This is an example template")
-    templateJson.put("local", true)
-    templateJson.put("namespace", Natives.Profile.Namespace.INHERITED.name)
-    templateJson.put("uid", 0)
-    templateJson.put("gid", 0)
-
-    templateJson.put("groups", JSONArray().apply { put(Groups.INET.name) })
-    templateJson.put("capabilities", JSONArray().apply { put(Capabilities.CAP_NET_RAW.name) })
-    templateJson.put("context", "u:r:ksu:s0")
-    templateJson.put("flags", JSONArray().apply { put(Natives.Profile.RootProfileFlag.NO_NEW_PRIVS.name) })
-    Log.i(TAG, "$templateJson")
-}

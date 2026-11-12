@@ -20,15 +20,14 @@ fun isNetworkAvailable(context: Context): Boolean {
 }
 
 /**
- * "Is there a usable transport at all" - checks INTERNET but deliberately not
- * VALIDATED.
+ * "有没有网络载体"：只查 INTERNET 能力，**不要求 VALIDATED**。
  *
- * Captive portals, hotel Wi-Fi and aggressively filtered networks routinely
- * report VALIDATED=false while plain HTTP still works. Gating a user-visible
- * action on VALIDATED refuses to even try on those networks; the action itself
- * already reports its own failure, which is the honest signal.
+ * 为什么单列一个：校园网 / 酒店 Wi-Fi / 强制门户会让 `NET_CAPABILITY_VALIDATED`
+ * 长期为 false（系统认为"这根网线还没通过验证"），但实际 HTTP 往往能通（门户白名单、
+ * 代理、或只是探测地址被挡）。商店这种"能试就试、失败再报错"的场景用 VALIDATED 当
+ * 闸门会直接把用户挡在门外；真连不上时请求层自己会失败并给出可重试的错误。
  *
- * Use [isNetworkAvailable] when the question really is "can we reach the net".
+ * 需要"确定能上网"的判断（例如自动更新）仍然用 [isNetworkAvailable]。
  */
 fun hasInternetTransport(context: Context): Boolean {
     val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager

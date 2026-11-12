@@ -1,16 +1,11 @@
 package me.weishu.kernelsu.ui
 
 /**
- * The entry that stays enabled when the launcher icon is hidden.
+ * 隐身入口的常开落点：xudc stealth 守卫 am start 到这里。
  *
- * Hiding the icon means disabling every component that answers MAIN/LAUNCHER - including
- * [MainActivity]. A disabled component cannot be started, not even with an explicit
- * `am start -n`, so pointing the "way back in" at the launcher component would be a one-way
- * door. This activity therefore has no launcher filter, is never disabled by
- * [me.weishu.kernelsu.privilege.StealthEntrance], and simply *is* the manager (it extends
- * [MainActivity]) so the quick-settings tile and the adb fallback both land on the real UI.
- *
- * It carries the same VIEW filters as [MainActivity] on purpose: while the icon is hidden the
- * main activity is disabled, and opening a module zip from a file manager has to keep working.
+ * 为什么需要它：藏图标要停用的是 launcher 组件（XecMainActivity），而**已停用的
+ * 组件无法被 am start**——守卫若指向 launcher 组件，图标一藏入口就死（第一版
+ * 的实测教训）。这个 Activity 不带 LAUNCHER filter、永不停用，直接继承
+ * MainActivity，没有转发没有闪屏，行为与从图标打开一致。
  */
 class StealthLaunchActivity : MainActivity()

@@ -10,12 +10,9 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -25,15 +22,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import me.weishu.kernelsu.data.repository.SettingsRepositoryImpl
-import me.weishu.kernelsu.ui.LocalUiMode
-import me.weishu.kernelsu.ui.UiMode
+import me.weishu.kernelsu.data.theme.ThemeRepository
+import me.weishu.kernelsu.data.theme.ThemeResolver
+import me.weishu.kernelsu.ui.design.token.XcTheme
 import me.weishu.kernelsu.ui.theme.KernelSUTheme
 import me.weishu.kernelsu.ui.theme.ThemeController
+import me.weishu.kernelsu.ui.theme.isInDarkTheme
 import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
 
 @SuppressLint("SetJavaScriptEnabled")
-class WebUIActivity : ComponentActivity() {
+open class WebUIActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
 
         enableEdgeToEdge()
@@ -45,27 +43,32 @@ class WebUIActivity : ComponentActivity() {
         setContent {
             val context = LocalContext.current
             val prefs = context.getSharedPreferences("settings", MODE_PRIVATE)
-            val settingsRepo = remember { SettingsRepositoryImpl() }
             var appSettings by remember { mutableStateOf(ThemeController.getAppSettings()) }
-            var uiModeValue by remember { mutableStateOf(settingsRepo.uiMode) }
-            val uiMode = remember(uiModeValue) {
-                UiMode.fromValue(uiModeValue)
-            }
+            // 主题也要跟过来：模块 WebUI 是这个 App 的一部分，只包深浅色会导致
+            // 从模块页点进 WebUI 时配色突然变回默认皮肤。
+            var theme by remember { mutableStateOf(ThemeResolver.active(context)) }
 
             DisposableEffect(prefs) {
                 val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
                     if (key in listOf("color_mode", "key_color", "color_style", "color_spec")) {
                         appSettings = ThemeController.getAppSettings()
-                    } else if (key == "ui_mode") {
-                        uiModeValue = settingsRepo.uiMode
+                    }
+                    if (key == ThemeRepository.KEY_ACTIVE) {
+                        theme = ThemeResolver.active(context)
                     }
                 }
                 prefs.registerOnSharedPreferenceChangeListener(listener)
                 onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
             }
 
-            CompositionLocalProvider(LocalUiMode provides uiMode) {
-                KernelSUTheme(appSettings = appSettings, uiMode = uiMode) {
+            // WebUI 跑在独立 Activity 里，令牌层要自己再包一遍——否则这边取到的
+            // Xc.colors 会一直是默认深色，跟主界面的深浅色对不上。
+            XcTheme(
+                isDark = isInDarkTheme(),
+                isAmoled = appSettings.colorMode.isAmoled,
+                theme = theme,
+            ) {
+                KernelSUTheme(appSettings = appSettings) {
                     MainContent(activity = this, onFinish = { finish() })
                 }
             }
@@ -117,25 +120,10 @@ private fun MainContent(activity: ComponentActivity, onFinish: () -> Unit) {
 
 @Composable
 private fun LoadingContent() {
-    when (LocalUiMode.current) {
-        UiMode.Miuix -> {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                InfiniteProgressIndicator()
-            }
-        }
-
-        UiMode.Material -> {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.background),
-                contentAlignment = Alignment.Center
-            ) {
-                androidx.compose.material3.LoadingIndicator()
-            }
-        }
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        InfiniteProgressIndicator()
     }
 }

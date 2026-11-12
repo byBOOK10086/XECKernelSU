@@ -5,7 +5,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import me.weishu.kernelsu.ksuApp
 import me.weishu.kernelsu.ui.util.hasInternetTransport
-import me.weishu.kernelsu.ui.util.downloadToFile
 import me.weishu.kernelsu.ui.util.sha256Of
 import okhttp3.Request
 import org.json.JSONObject
@@ -265,7 +264,10 @@ object StoreCatalogRepository {
                 if (isCancelled()) return@withContext Result.failure(StoreFailure.Cancelled())
                 try {
                     if (tmp.exists()) tmp.delete()
-                    downloadToFile(url, tmp) { read, total ->
+                    me.weishu.kernelsu.ui.screen.remote.RemoteDownloader.downloadTo(
+                        url,
+                        tmp,
+                    ) { read, total ->
                         if (isCancelled()) throw CancellationSignal()
                         onProgress(read, total)
                     }

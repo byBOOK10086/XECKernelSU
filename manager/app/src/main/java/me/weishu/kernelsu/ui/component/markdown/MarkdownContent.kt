@@ -6,10 +6,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.LoadingIndicator
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -19,17 +15,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
-import me.weishu.kernelsu.ui.LocalUiMode
-import me.weishu.kernelsu.ui.UiMode
 import top.yukonga.miuix.kmp.basic.InfiniteProgressIndicator
 
 @Composable
 fun MarkdownContent(
     content: String,
     isMarkdown: Boolean,
-    restrictedBaseUrl: String? = null,
 ) {
-    val uiMode = LocalUiMode.current
     var loaded by remember(content, isMarkdown) { mutableStateOf(false) }
     val alpha by animateFloatAsState(
         targetValue = if (loaded) 1f else 0f,
@@ -41,18 +33,20 @@ fun MarkdownContent(
         animationSpec = tween(durationMillis = 150),
         label = "MarkdownContentPlaceholderAlpha",
     )
-    val containerColor = when (uiMode) {
-        UiMode.Material -> MaterialTheme.colorScheme.surfaceContainerHigh
-        UiMode.Miuix -> null
-    }
+    val containerColor = null
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .let { if (uiMode == UiMode.Miuix) it.animateContentSize(animationSpec = tween(durationMillis = 300)) else it }
+            .animateContentSize(animationSpec = tween(durationMillis = 300))
     ) {
+        // 本组件的唯一调用点是 XDialogHost 的确认框，而确认框的正文本来就活在
+        // XGlassDialog 的纵向滚动 Column 里（那一层传给子项的 maxHeight 是
+        // Infinity）。此处再套一层 verticalScroll 就是同方向嵌套滚动，必崩：
+        // IllegalStateException: Vertically scrollable component was measured with
+        // an infinity maximum height constraints。WebView 自己是 wrapContentHeight、
+        // 不滚动，高度交给外层滚即可。
         Box(
             modifier = Modifier
-                .verticalScroll(rememberScrollState())
                 .graphicsLayer { this.alpha = alpha }
         ) {
             GithubMarkdown(
@@ -60,7 +54,6 @@ fun MarkdownContent(
                 isMarkdown = isMarkdown,
                 onLoadingChange = { loaded = !it },
                 containerColor = containerColor,
-                restrictedBaseUrl = restrictedBaseUrl,
             )
         }
         if (placeholderAlpha > 0f) {
@@ -71,10 +64,7 @@ fun MarkdownContent(
                     .graphicsLayer { this.alpha = placeholderAlpha },
                 contentAlignment = Alignment.Center,
             ) {
-                when (LocalUiMode.current) {
-                    UiMode.Material -> LoadingIndicator()
-                    UiMode.Miuix -> InfiniteProgressIndicator()
-                }
+                InfiniteProgressIndicator()
             }
         }
     }

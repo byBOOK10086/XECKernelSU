@@ -49,10 +49,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.weishu.kernelsu.R
 import me.weishu.kernelsu.ui.component.KeyEventBlocker
+import me.weishu.kernelsu.ui.design.glass.xGlassBody
+import me.weishu.kernelsu.ui.design.token.Xc
 import me.weishu.kernelsu.ui.theme.LocalEnableBlur
 import me.weishu.kernelsu.ui.util.BlurredBar
 import me.weishu.kernelsu.ui.util.rememberBlurBackdrop
-import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.FloatingActionButton
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -103,16 +104,16 @@ fun ExecuteModuleActionScreenMiuix(
     val enableBlur = LocalEnableBlur.current
     val backdrop = rememberBlurBackdrop(enableBlur)
     val blurActive = backdrop != null
-    val barColor = if (blurActive) Color.Transparent else colorScheme.surface
+    val barColor = if (blurActive) Color.Transparent else colorScheme.surface.copy(alpha = 1f)
 
     BackHandler(enabled = !state.isComplete) { }
 
     Scaffold(
+        containerColor = Color.Transparent,
         topBar = {
             TopBar(
                 onBack = actions.onBack,
                 onSave = actions.onSaveLog,
-                title = state.title ?: stringResource(R.string.action),
                 backdrop = backdrop,
                 barColor = barColor,
             )
@@ -168,12 +169,16 @@ fun ExecuteModuleActionScreenMiuix(
                 }
                 Spacer(Modifier.height(innerPadding.calculateTopPadding()))
                 Text(
-                    modifier = Modifier.padding(8.dp),
+                    modifier = Modifier
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                        .fillMaxWidth()
+                        .xGlassBody(backdrop = backdrop, shape = Xc.shapes.lg)
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
                     text = state.text,
-                    fontSize = 12.sp,
+                    color = Xc.colors.text,
+                    fontSize = 13.sp,
                     fontFamily = FontFamily.Monospace,
                 )
-                state.resultNotice?.let { ResultNoticeMiuix(it) }
                 Spacer(
                     Modifier.height(
                         12.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() +
@@ -189,14 +194,13 @@ fun ExecuteModuleActionScreenMiuix(
 private fun TopBar(
     onBack: () -> Unit = {},
     onSave: () -> Unit = {},
-    title: String,
     backdrop: LayerBackdrop?,
     barColor: Color,
 ) {
     BlurredBar(backdrop) {
         SmallTopAppBar(
             color = barColor,
-            title = title,
+            title = stringResource(R.string.action),
             navigationIcon = {
                 IconButton(
                     onClick = onBack
@@ -223,27 +227,6 @@ private fun TopBar(
                     )
                 }
             }
-        )
-    }
-}
-
-@Composable
-private fun ResultNoticeMiuix(notice: ActionResultNotice) {
-    val color = when (notice.kind) {
-        ActionResultKind.SUCCESS -> colorScheme.primary
-        ActionResultKind.NOT_APPLICABLE -> colorScheme.onSurfaceVariantSummary
-        ActionResultKind.FAILURE -> colorScheme.error
-    }
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-    ) {
-        Text(
-            text = notice.text,
-            color = color,
-            fontSize = 15.sp,
-            modifier = Modifier.padding(16.dp),
         )
     }
 }

@@ -1,7 +1,9 @@
 package me.weishu.kernelsu.ui.design.panel
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -59,10 +61,10 @@ import top.yukonga.miuix.kmp.basic.Text
  */
 
 /** 行内左右留白。MIUI 8 的行是 15dp，比 Material 的 16dp 略窄，为的是多塞一点字符。 */
-private val RowPaddingH = 15.dp
+private val RowPaddingH = 14.dp
 
 /** 行内上下留白。13dp 是"有副标题也撑得住、没副标题也不塌"的那一档。 */
-private val RowPaddingV = 13.dp
+private val RowPaddingV = 12.dp
 
 /** 分组标题：面板之外，左对齐，字号比正文小一档。 */
 @Composable
@@ -79,7 +81,7 @@ fun Xc8SectionLabel(
     ) {
         Text(
             text = text,
-            fontSize = 11.sp,
+            fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold,
             letterSpacing = 1.2.sp,
             color = Xc.colors.textMuted,
@@ -162,9 +164,25 @@ fun Xc8Row(
     )
     val effectiveTitleColor = if (enabled) titleColor else Xc.colors.textMuted
     val subtitleColor = if (enabled) Xc.colors.textSecondary else Xc.colors.textMuted
+    // §七.5：可点行按下时轻微缩到 0.98，与「压暗一档」叠加而不是替换 ——
+    // 压暗是这套面板原本的按下语言，缩放只补一层"被按住了"的物理感。
+    //
+    // 用 graphicsLayer 而不是 animateContentSize/尺寸动画：scale 只影响绘制，
+    // 不参与测量，列表行高与滚动位置都不会因为按下而抖动。
+    // 减少动态效果时不做缩放（缩放属于装饰，不是状态信息）。
+    val rowReduced = me.weishu.kernelsu.ui.design.token.LocalXcReducedMotion.current
+    val rowScale by animateFloatAsState(
+        targetValue = if (pressed && clickable && !rowReduced) 0.98f else 1f,
+        animationSpec = tween(Xc8Motion.press),
+        label = "xc8RowScale",
+    )
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .graphicsLayer {
+                scaleX = rowScale
+                scaleY = rowScale
+            }
             .background(background)
             .drawBehind {
                 drawLine(
@@ -207,6 +225,7 @@ fun Xc8Row(
             Text(
                 text = title,
                 fontSize = 15.sp,
+                lineHeight = 22.sp,
                 color = effectiveTitleColor,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -215,8 +234,8 @@ fun Xc8Row(
                 Spacer(Modifier.height(2.dp))
                 Text(
                     text = subtitle,
-                    fontSize = 12.sp,
-                    lineHeight = 16.sp,
+                    fontSize = 13.sp,
+                    lineHeight = 18.sp,
                     color = subtitleColor,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
@@ -241,7 +260,7 @@ fun Xc8Value(text: String, modifier: Modifier = Modifier, tint: Color = Xc.color
     Text(
         text = text,
         modifier = modifier,
-        fontSize = 14.sp,
+        fontSize = 15.sp,
         color = tint,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
@@ -285,7 +304,7 @@ fun Xc8Tag(text: String, modifier: Modifier = Modifier, tone: Xc8Tone = Xc8Tone.
             .clip(Xc.shapes.xs)
             .background(background)
             .padding(horizontal = 7.dp, vertical = 2.dp),
-        fontSize = 11.sp,
+        fontSize = 12.sp,
         color = foreground,
         maxLines = 1,
     )
@@ -306,7 +325,7 @@ fun Xc8Note(text: String, modifier: Modifier = Modifier) {
     ) {
         Text(
             text = text,
-            fontSize = 11.sp,
+            fontSize = 12.sp,
             lineHeight = 16.sp,
             color = Xc.colors.textMuted,
             modifier = Modifier.padding(start = RowPaddingH, end = RowPaddingH, top = 2.dp, bottom = 10.dp),
@@ -320,7 +339,7 @@ fun Xc8KeyValueCell(label: String, value: String, modifier: Modifier = Modifier)
     Column(modifier = modifier.padding(horizontal = RowPaddingH, vertical = 9.dp)) {
         Text(
             text = label,
-            fontSize = 11.sp,
+            fontSize = 12.sp,
             color = Xc.colors.textMuted,
             maxLines = 1,
         )
@@ -419,12 +438,12 @@ fun Xc8PageHeading(
     ) {
         Column(modifier = Modifier.weight(1f)) {
             if (kicker != null) {
-                Text(text = kicker, fontSize = 11.sp, color = Xc.colors.textMuted, maxLines = 1)
+                Text(text = kicker, fontSize = 12.sp, color = Xc.colors.textMuted, maxLines = 1)
                 Spacer(Modifier.height(2.dp))
             }
             Text(
                 text = title,
-                fontSize = 21.sp,
+                fontSize = 24.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = Xc.colors.text,
                 maxLines = 1,
@@ -434,7 +453,7 @@ fun Xc8PageHeading(
                 Spacer(Modifier.height(4.dp))
                 Text(
                     text = subtitle,
-                    fontSize = 12.sp,
+                    fontSize = 13.sp,
                     lineHeight = 17.sp,
                     color = Xc.colors.textSecondary,
                 )

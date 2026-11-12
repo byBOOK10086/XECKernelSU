@@ -56,6 +56,11 @@ import me.weishu.kernelsu.ui.component.profile.AppProfileConfig
 import me.weishu.kernelsu.ui.component.profile.RootProfileConfig
 import me.weishu.kernelsu.ui.component.profile.TemplateConfig
 import me.weishu.kernelsu.ui.component.statustag.StatusTag
+import me.weishu.kernelsu.ui.design.glass.xGlassBody
+import me.weishu.kernelsu.ui.design.panel.Xc8Panel
+import me.weishu.kernelsu.ui.design.panel.Xc8Row
+import me.weishu.kernelsu.ui.design.panel.Xc8Switch
+import me.weishu.kernelsu.ui.design.token.Xc
 import me.weishu.kernelsu.ui.theme.LocalEnableBlur
 import me.weishu.kernelsu.ui.util.BlurredBar
 import me.weishu.kernelsu.ui.util.listAppProfileTemplates
@@ -65,6 +70,7 @@ import me.weishu.kernelsu.ui.util.setSepolicy
 import me.weishu.kernelsu.ui.viewmodel.SuperUserViewModel
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.ListPopupColumn
@@ -82,10 +88,12 @@ import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.MoreCircle
 import top.yukonga.miuix.kmp.overlay.OverlayListPopup
 import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
-import top.yukonga.miuix.kmp.preference.SwitchPreference
+import top.yukonga.miuix.kmp.basic.TextField
+import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
+import me.weishu.kernelsu.ui.design.token.XcRadius
 
 /**
  * @author weishu
@@ -100,8 +108,9 @@ fun AppProfileScreenMiuix(
     val scrollBehavior = MiuixScrollBehavior()
     val backdrop = rememberBlurBackdrop(enableBlur)
     val blurActive = backdrop != null
-    val barColor = if (blurActive) Color.Transparent else colorScheme.surface
+    val barColor = if (blurActive) Color.Transparent else colorScheme.surface.copy(alpha = 1f)
     Scaffold(
+        containerColor = Color.Transparent,
         topBar = {
             TopBar(
                 onBack = actions.onBack,
@@ -156,6 +165,12 @@ fun AppProfileScreenMiuix(
                         onViewTemplate = actions.onViewTemplate,
                         onManageTemplate = actions.onManageTemplate,
                         onProfileChange = actions.onProfileChange,
+                        execRestricted = state.execRestricted,
+                        execPaths = state.execPaths,
+                        onExecPolicyChange = actions.onExecPolicyChange,
+                        utsRelease = state.utsRelease,
+                        utsVersion = state.utsVersion,
+                        onUtsSpoofChange = actions.onUtsSpoofChange,
                     )
                     Spacer(
                         Modifier.height(
@@ -172,6 +187,7 @@ fun AppProfileScreenMiuix(
 @Composable
 private fun AppProfileInner(
     modifier: Modifier = Modifier,
+    backdrop: LayerBackdrop? = null,
     packageName: String,
     appLabel: String,
     appIcon: @Composable (() -> Unit),
@@ -186,6 +202,13 @@ private fun AppProfileInner(
     onViewTemplate: (id: String) -> Unit = {},
     onManageTemplate: () -> Unit = {},
     onProfileChange: (Natives.Profile) -> Unit,
+    // 受限授权与 per-app uname 身份：值与回调由外层 state/actions 穿进来。
+    execRestricted: Boolean = false,
+    execPaths: List<String> = emptyList(),
+    onExecPolicyChange: (Boolean, List<String>) -> Unit = { _, _ -> },
+    utsRelease: String = "",
+    utsVersion: String = "",
+    onUtsSpoofChange: (String, String) -> Unit = { _, _ -> },
 ) {
     val isRootGranted = !isSpecialApp && profile.allowSu
     val userId = appUid / 100000
@@ -195,11 +218,13 @@ private fun AppProfileInner(
     Column(
         modifier = modifier
     ) {
-        Card(
+        Card(cornerRadius = XcRadius.md, 
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp)
-                .padding(bottom = 12.dp),
+                .padding(bottom = 12.dp)
+                .xGlassBody(backdrop = backdrop, shape = Xc.shapes.md),
+            colors = CardDefaults.defaultColors(color = Color.Transparent),
             insideMargin = PaddingValues(start = 12.dp, end = 16.dp, top = 10.dp, bottom = 10.dp)
         ) {
             Row(
@@ -223,7 +248,7 @@ private fun AppProfileInner(
                     if (isSpecialApp) {
                         Text(
                             text = packageName,
-                            fontSize = 12.sp,
+                            fontSize = 13.sp,
                             color = colorScheme.onSurfaceVariantSummary,
                             fontWeight = FontWeight.Medium,
                             modifier = Modifier.basicMarquee(),
@@ -233,7 +258,7 @@ private fun AppProfileInner(
                     } else if (!isUidGroup) {
                         Text(
                             text = "$appVersionName ($appVersionCode)",
-                            fontSize = 12.sp,
+                            fontSize = 13.sp,
                             color = colorScheme.onSurfaceVariantSummary,
                             fontWeight = FontWeight.Medium,
                             modifier = Modifier
@@ -243,7 +268,7 @@ private fun AppProfileInner(
                         )
                         Text(
                             text = packageName,
-                            fontSize = 12.sp,
+                            fontSize = 13.sp,
                             color = colorScheme.onSurfaceVariantSummary,
                             fontWeight = FontWeight.Medium,
                             modifier = Modifier
@@ -255,7 +280,7 @@ private fun AppProfileInner(
                         if (sharedUserId.isNotEmpty()) {
                             Text(
                                 text = sharedUserId,
-                                fontSize = 12.sp,
+                                fontSize = 13.sp,
                                 color = colorScheme.onSurfaceVariantSummary,
                                 fontWeight = FontWeight.Medium,
                                 modifier = Modifier
@@ -266,7 +291,7 @@ private fun AppProfileInner(
                         }
                         Text(
                             text = stringResource(R.string.group_contains_apps, affectedApps.size),
-                            fontSize = 12.sp,
+                            fontSize = 13.sp,
                             color = colorScheme.onSurfaceVariantSummary,
                             fontWeight = FontWeight.Medium,
                             modifier = Modifier
@@ -304,27 +329,42 @@ private fun AppProfileInner(
         }
 
         if (!isSpecialApp) {
-            Card(
+            // root 授权是整页最重要的一行，独占一块面板；开关与整行都走同一个 profile 写回。
+            Xc8Panel(
                 modifier = Modifier
-                    .fillMaxWidth()
                     .padding(horizontal = 12.dp)
                     .padding(bottom = 12.dp),
             ) {
-                SwitchPreference(
-                    startAction = {
-                        Icon(
-                            imageVector = Icons.Rounded.Security,
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 6.dp),
-                            tint = colorScheme.onBackground
+                Xc8Row(
+                    title = stringResource(id = R.string.superuser),
+                    leading = Icons.Rounded.Security,
+                    onClick = { onProfileChange(profile.copy(allowSu = !isRootGranted)) },
+                    trailing = {
+                        Xc8Switch(
+                            checked = isRootGranted,
+                            onCheckedChange = { onProfileChange(profile.copy(allowSu = it)) },
                         )
                     },
-                    title = stringResource(id = R.string.superuser),
-                    checked = isRootGranted,
-                    onCheckedChange = { onProfileChange(profile.copy(allowSu = it)) },
                 )
             }
         }
+
+        // 受限授权（XECKernelPro 扩展）：白名单内的 `su -c` 才授予 root。
+        AnimatedVisibility(visible = isRootGranted) {
+            ExecPolicyCard(
+                restricted = execRestricted,
+                paths = execPaths,
+                onChange = onExecPolicyChange,
+            )
+        }
+
+        // Per-app uname 身份（XECKernelPro 扩展）：按 uid 改写 uname 的
+        // release/version，无需授 root 也生效（应用侦测内核指纹用）。
+        UtsSpoofCard(
+            release = utsRelease,
+            version = utsVersion,
+            onChange = onUtsSpoofChange,
+        )
 
         val initialRootMode = if (profile.rootUseDefault) {
             Mode.Default
@@ -338,7 +378,7 @@ private fun AppProfileInner(
         }
         val nonRootMode = if (profile.nonRootUseDefault) Mode.Default else Mode.Custom
         val dropdownMode = if (isRootGranted) rootMode else nonRootMode
-        ProfileBox(dropdownMode, isRootGranted) { mode ->
+        ProfileBox(dropdownMode, isRootGranted, backdrop = backdrop) { mode ->
             if (isRootGranted) {
                 when (mode) {
                     Mode.Default, Mode.Custom -> {
@@ -391,11 +431,13 @@ private fun AppProfileInner(
             enter = fadeIn() + expandVertically(),
             exit = fadeOut() + shrinkVertically()
         ) {
-            Card(
+            Card(cornerRadius = XcRadius.md, 
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp)
-                    .padding(bottom = if (rootMode != Mode.Default) 12.dp else 0.dp),
+                    .padding(bottom = if (rootMode != Mode.Default) 12.dp else 0.dp)
+                    .xGlassBody(backdrop = backdrop, shape = Xc.shapes.md),
+                colors = CardDefaults.defaultColors(color = Color.Transparent),
             ) {
                 AnimatedVisibility(
                     visible = rootMode == Mode.Template,
@@ -428,11 +470,13 @@ private fun AppProfileInner(
             enter = fadeIn() + expandVertically(),
             exit = fadeOut() + shrinkVertically()
         ) {
-            Card(
+            Card(cornerRadius = XcRadius.md, 
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp)
-                    .padding(bottom = if (nonRootMode != Mode.Default) 12.dp else 0.dp),
+                    .padding(bottom = if (nonRootMode != Mode.Default) 12.dp else 0.dp)
+                    .xGlassBody(backdrop = backdrop, shape = Xc.shapes.md),
+                colors = CardDefaults.defaultColors(color = Color.Transparent),
             ) {
                 AnimatedVisibility(
                     visible = nonRootMode == Mode.Custom,
@@ -454,11 +498,13 @@ private fun AppProfileInner(
                 text = stringResource(R.string.app_profile_affects_following_apps),
                 modifier = Modifier.padding(top = 4.dp)
             )
-            Card(
+            Card(cornerRadius = XcRadius.md, 
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp)
-                    .padding(bottom = 12.dp),
+                    .padding(bottom = 12.dp)
+                    .xGlassBody(backdrop = backdrop, shape = Xc.shapes.md),
+                colors = CardDefaults.defaultColors(color = Color.Transparent),
             ) {
                 Spacer(Modifier.height(3.dp))
                 affectedApps.forEach { app ->
@@ -570,6 +616,7 @@ private fun TopBar(
 private fun ProfileBox(
     mode: Mode,
     hasTemplate: Boolean,
+    backdrop: LayerBackdrop? = null,
     onModeChange: (Mode) -> Unit,
 ) {
     val defaultText = stringResource(R.string.profile_default)
@@ -596,10 +643,12 @@ private fun ProfileBox(
         }
     }
     val selectedIndex = modesAndTitles.indexOfFirst { it.first == mode }
-    Card(
+    Card(cornerRadius = XcRadius.md, 
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp),
+            .padding(horizontal = 12.dp)
+            .xGlassBody(backdrop = backdrop, shape = Xc.shapes.md),
+        colors = CardDefaults.defaultColors(color = Color.Transparent),
     ) {
         OverlayDropdownPreference(
             title = stringResource(R.string.profile),
@@ -615,6 +664,143 @@ private fun ProfileBox(
             selectedIndex = if (selectedIndex == -1) 0 else selectedIndex,
         ) {
             onModeChange(modesAndTitles[it].first)
+        }
+    }
+}
+
+/**
+ * Per-app uname 身份卡：release/version 两个覆写位 + 应用。
+ * 语义（与内核 feature/uts_spoof.c 对齐）：真 uname 成功后按 uid 改写用户
+ * 缓冲，内核 uts 状态不动；空串 = 保留真实字段；两串都空 = 移除条目。
+ */
+@Composable
+private fun UtsSpoofCard(
+    release: String,
+    version: String,
+    onChange: (String, String) -> Unit,
+) {
+    Card(cornerRadius = XcRadius.md, 
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp)
+            .padding(bottom = 12.dp),
+        colors = CardDefaults.defaultColors(color = Color.Transparent),
+    ) {
+        Column(Modifier.padding(vertical = 8.dp)) {
+            Text(
+                text = stringResource(id = R.string.uts_spoof_title),
+                modifier = Modifier.padding(horizontal = 16.dp),
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = colorScheme.onBackground,
+            )
+            Text(
+                text = stringResource(id = R.string.uts_spoof_summary),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                fontSize = 13.sp,
+                lineHeight = 17.sp,
+                color = colorScheme.onSurfaceVariantSummary,
+            )
+            var rel by rememberSaveable(release) { mutableStateOf(release) }
+            var ver by rememberSaveable(version) { mutableStateOf(version) }
+            TextField(
+                value = rel,
+                onValueChange = { rel = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                label = stringResource(id = R.string.uts_spoof_release_label),
+                singleLine = true,
+            )
+            Spacer(Modifier.height(8.dp))
+            TextField(
+                value = ver,
+                onValueChange = { ver = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                label = stringResource(id = R.string.uts_spoof_version_label),
+                singleLine = true,
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = stringResource(id = R.string.uts_spoof_hint),
+                modifier = Modifier.padding(horizontal = 16.dp),
+                fontSize = 13.sp,
+                lineHeight = 17.sp,
+                color = colorScheme.onSurfaceVariantSummary,
+            )
+            TextButton(
+                text = stringResource(id = R.string.uts_spoof_apply),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp),
+                onClick = { onChange(rel, ver) },
+            )
+        }
+    }
+}
+
+/**
+ * 受限授权卡：开关 + 白名单编辑（一行一条命令；basename 匹配）。
+ * 语义（与内核 exec_policy.c 对齐）：受限后 GRANT_ROOT 与交互式 su 一律拒绝，
+ * 仅 `su -c <白名单命令>` 授予 root —— fail closed。
+ */
+@Composable
+private fun ExecPolicyCard(
+    restricted: Boolean,
+    paths: List<String>,
+    onChange: (Boolean, List<String>) -> Unit,
+) {
+    Card(cornerRadius = XcRadius.md, 
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp),
+        colors = CardDefaults.defaultColors(color = Color.Transparent),
+    ) {
+        Column(Modifier.padding(vertical = 8.dp)) {
+            // 只换开关这一行：同一张卡里还有白名单编辑区与按钮，Card 和编辑区保持原样，
+            // 避免把"开关 + 表单"这种混合卡片拆成两块。
+            Xc8Row(
+                title = stringResource(id = R.string.exec_policy_title),
+                subtitle = stringResource(id = R.string.exec_policy_summary),
+                onClick = { onChange(!restricted, paths) },
+                trailing = {
+                    Xc8Switch(
+                        checked = restricted,
+                        onCheckedChange = { onChange(it, paths) },
+                    )
+                },
+            )
+            AnimatedVisibility(visible = restricted) {
+                Column(Modifier.padding(horizontal = 16.dp)) {
+                    var text by rememberSaveable(paths) {
+                        mutableStateOf(paths.joinToString("\n"))
+                    }
+                    TextField(
+                        value = text,
+                        onValueChange = { text = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = stringResource(id = R.string.exec_policy_paths_label),
+                        maxLines = 8,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = stringResource(id = R.string.exec_policy_hint),
+                        fontSize = 13.sp,
+                        lineHeight = 17.sp,
+                        color = colorScheme.onSurfaceVariantSummary,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    TextButton(
+                        text = stringResource(id = R.string.exec_policy_apply),
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = {
+                            onChange(true, text.split('\n').map { it.trim() }.filter { it.isNotEmpty() })
+                        },
+                    )
+                }
+            }
         }
     }
 }

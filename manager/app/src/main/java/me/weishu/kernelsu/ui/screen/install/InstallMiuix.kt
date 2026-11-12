@@ -31,6 +31,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -39,8 +40,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import me.weishu.kernelsu.R
 import me.weishu.kernelsu.ui.component.dialog.rememberConfirmDialog
+import me.weishu.kernelsu.ui.design.glass.xGlassBody
+import me.weishu.kernelsu.ui.design.token.Xc
 import me.weishu.kernelsu.ui.theme.LocalEnableBlur
 import me.weishu.kernelsu.ui.util.BlurredBar
 import me.weishu.kernelsu.ui.util.LkmSelection
@@ -48,6 +52,7 @@ import me.weishu.kernelsu.ui.util.rememberBlurBackdrop
 import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
@@ -55,6 +60,7 @@ import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.ScrollBehavior
 import top.yukonga.miuix.kmp.basic.SnackbarHost
 import top.yukonga.miuix.kmp.basic.SnackbarHostState
+import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.blur.LayerBackdrop
@@ -68,10 +74,12 @@ import top.yukonga.miuix.kmp.icon.extended.ExpandLess
 import top.yukonga.miuix.kmp.icon.extended.ExpandMore
 import top.yukonga.miuix.kmp.icon.extended.MoveFile
 import top.yukonga.miuix.kmp.preference.CheckboxPreference
-import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
+import me.weishu.kernelsu.ui.design.token.XcRadius
+import me.weishu.kernelsu.ui.design.panel.Xc8Dropdown
+import me.weishu.kernelsu.ui.design.panel.Xc8Panel
 
 /**
  * @author weishu
@@ -87,9 +95,10 @@ internal fun InstallScreenMiuix(
     val scrollBehavior = MiuixScrollBehavior()
     val backdrop = rememberBlurBackdrop(enableBlur)
     val blurActive = backdrop != null
-    val barColor = if (blurActive) Color.Transparent else colorScheme.surface
+    val barColor = if (blurActive) Color.Transparent else colorScheme.surface.copy(alpha = 1f)
 
     Scaffold(
+        containerColor = Color.Transparent,
         topBar = {
             TopBar(
                 onBack = actions.onBack,
@@ -120,14 +129,18 @@ internal fun InstallScreenMiuix(
                 overscrollEffect = null,
             ) {
                 item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
+                    Card(cornerRadius = XcRadius.md, 
+                        modifier = Modifier.fillMaxWidth().xGlassBody(backdrop = backdrop, shape = Xc.shapes.md),
+                        colors = CardDefaults.defaultColors(color = Color.Transparent),
                     ) {
                         SelectInstallMethod(
                             state = uiState,
                             onSelected = actions.onSelectMethod,
                             onDownloadFile = actions.onDownloadFile,
                             onSelectBootImage = actions.onSelectBootImage,
+                            onSelectAnyKernel = actions.onSelectAnyKernel,
+                            onSelectBootImageForKpatch = actions.onSelectBootImageForKpatch,
+                            onPrivilegeUpdate = actions.onPrivilegeUpdate,
                         )
                     }
                     AnimatedVisibility(
@@ -146,28 +159,18 @@ internal fun InstallScreenMiuix(
                         } else {
                             uiState.partitionSelectionIndex
                         }
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 12.dp),
-                        ) {
-                            OverlayDropdownPreference(
+                        Xc8Panel(modifier = Modifier.padding(top = 12.dp)) {
+                            Xc8Dropdown(
                                 items = partitionItems,
                                 selectedIndex = partitionIndex,
+                                leading = MiuixIcons.ConvertFile,
+                                cancelText = stringResource(android.R.string.cancel),
                                 title = if (isDownload) {
                                     stringResource(R.string.install_select_partition)
                                 } else {
                                     "${stringResource(R.string.install_select_partition)} (${uiState.slotSuffix})"
                                 },
                                 onSelectedIndexChange = actions.onSelectPartition,
-                                startAction = {
-                                    Icon(
-                                        MiuixIcons.ConvertFile,
-                                        tint = colorScheme.onSurface,
-                                        modifier = Modifier.padding(end = 12.dp),
-                                        contentDescription = null
-                                    )
-                                }
                             )
                         }
                     }
@@ -176,10 +179,12 @@ internal fun InstallScreenMiuix(
                         enter = expandVertically(),
                         exit = shrinkVertically()
                     ) {
-                        Card(
+                        Card(cornerRadius = XcRadius.md, 
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(top = 12.dp),
+                                .padding(top = 12.dp)
+                                .xGlassBody(backdrop = backdrop, shape = Xc.shapes.md),
+                            colors = CardDefaults.defaultColors(color = Color.Transparent),
                         ) {
                             CheckboxPreference(
                                 title = stringResource(id = R.string.install_force_backup),
@@ -189,10 +194,12 @@ internal fun InstallScreenMiuix(
                             )
                         }
                     }
-                    Card(
+                    Card(cornerRadius = XcRadius.md, 
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 12.dp),
+                            .padding(top = 12.dp)
+                            .xGlassBody(backdrop = backdrop, shape = Xc.shapes.md),
+                        colors = CardDefaults.defaultColors(color = Color.Transparent),
                     ) {
                         BasicComponent(
                             title = stringResource(id = R.string.install_upload_lkm_file),
@@ -235,10 +242,12 @@ internal fun InstallScreenMiuix(
                             }
                         )
                     }
-                    Card(
+                    Card(cornerRadius = XcRadius.md, 
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 12.dp),
+                            .padding(top = 12.dp)
+                            .xGlassBody(backdrop = backdrop, shape = Xc.shapes.md),
+                        colors = CardDefaults.defaultColors(color = Color.Transparent),
                     ) {
                         BasicComponent(
                             title = stringResource(id = R.string.advanced_options),
@@ -300,6 +309,9 @@ private fun SelectInstallMethod(
     onSelected: (InstallMethod) -> Unit,
     onDownloadFile: () -> Unit,
     onSelectBootImage: () -> Unit,
+    onSelectAnyKernel: () -> Unit,
+    onSelectBootImageForKpatch: () -> Unit,
+    onPrivilegeUpdate: () -> Unit,
 ) {
     val confirmDialog = rememberConfirmDialog(
         onConfirm = {
@@ -313,21 +325,47 @@ private fun SelectInstallMethod(
         when (option) {
             is InstallMethod.SelectFile -> onSelectBootImage()
             is InstallMethod.DownloadFile -> onDownloadFile()
+            is InstallMethod.AnyKernel -> onSelectAnyKernel()
+            is InstallMethod.KernelPatch -> onSelectBootImageForKpatch()
             is InstallMethod.DirectInstall -> onSelected(option)
             is InstallMethod.DirectInstallToInactiveSlot -> confirmDialog.showConfirm(dialogTitle, dialogContent)
         }
     }
 
     Column {
+        // root 形态声明（内核态 5.10+ / 挂载态 5.10 以下）：两种形态互斥、不会共存，
+        // ksud 侧由 root_mode 闸门强制，这里让用户在选安装方式前就看到自己所处的一侧。
+        state.rootModeTip?.let { tip ->
+            Text(
+                text = tip,
+                fontSize = 12.sp,
+                color = colorScheme.onSurfaceVariantSummary,
+                modifier = Modifier.padding(bottom = 6.dp),
+            )
+        }
         state.installMethodOptions.forEach { option ->
+            // 需要 root + GKI 的三项始终在列表里，条件不满足时只是变灰 + 显示原因，
+            // 而不是整项消失（消失就是用户报的"没看见 GKI 功能"）。
+            val gated = option is InstallMethod.AnyKernel ||
+                    option is InstallMethod.DirectInstall ||
+                    option is InstallMethod.DirectInstallToInactiveSlot
+            val blockedReason = when {
+                // KernelPatch 的不可用原因是「本 APK 没带 kptools 载荷」，与 root/GKI 无关
+                option is InstallMethod.KernelPatch -> state.kernelPatchBlockedReason
+                gated -> state.gatedInstallBlockedReason
+                else -> null
+            }
+            val available = blockedReason == null
             val interactionSource = remember { MutableInteractionSource() }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .fillMaxWidth()
+                    .alpha(if (available) 1f else 0.45f)
                     .toggleable(
                         value = option.javaClass == state.installMethod?.javaClass,
-                        onValueChange = { onClick(option) },
+                        onValueChange = { if (available) onClick(option) },
+                        enabled = available,
                         role = Role.RadioButton,
                         indication = LocalIndication.current,
                         interactionSource = interactionSource
@@ -335,9 +373,9 @@ private fun SelectInstallMethod(
             ) {
                 CheckboxPreference(
                     title = stringResource(id = option.label),
-                    summary = option.summary,
+                    summary = blockedReason ?: option.summary,
                     checked = option.javaClass == state.installMethod?.javaClass,
-                    onCheckedChange = { onClick(option) },
+                    onCheckedChange = { if (available) onClick(option) },
                 )
             }
         }

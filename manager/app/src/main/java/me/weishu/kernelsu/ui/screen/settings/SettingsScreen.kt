@@ -11,8 +11,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import me.weishu.kernelsu.ui.LocalUiMode
-import me.weishu.kernelsu.ui.UiMode
 import me.weishu.kernelsu.ui.navigation3.Navigator
 import me.weishu.kernelsu.ui.navigation3.Route
 import me.weishu.kernelsu.ui.viewmodel.SettingsViewModel
@@ -44,31 +42,27 @@ fun SettingPager(
 
     val actions = SettingsScreenActions(
         onSetCheckUpdate = viewModel::setCheckUpdate,
+        onSetComponentTransparent = viewModel::setComponentTransparent,
         onSetCheckModuleUpdate = viewModel::setCheckModuleUpdate,
         onOpenTheme = { navigator.push(Route.ColorPalette) },
+        // 主题商城/编辑器是独立一屏：调色屏改的是"当前外观"，主题屏管的是"整套皮肤"。
         onOpenThemes = { navigator.push(Route.Themes) },
         onOpenWallpaper = { navigator.push(Route.Wallpaper) },
-        onOpenTools = { navigator.push(Route.Tools) },
-        onOpenRemoteAssistant = { navigator.push(Route.RemoteAssistant) },
-        onSetUiModeIndex = { index ->
-            viewModel.setUiMode(if (index == 0) UiMode.Miuix.value else UiMode.Material.value)
-        },
         onOpenProfileTemplate = { navigator.push(Route.AppProfileTemplate) },
+        onOpenRemoteAssistant = { navigator.push(Route.RemoteAssistant) },
+        onOpenTools = { navigator.push(Route.Tools) },
         onSetSuCompatMode = viewModel::setSuCompatMode,
         onSetKernelUmountEnabled = viewModel::setKernelUmountEnabled,
         onSetSelinuxHideEnabled = viewModel::setSelinuxHideEnabled,
         onSetSulogEnabled = viewModel::setSulogEnabled,
         onSetAdbRootEnabled = viewModel::setAdbRootEnabled,
-        onSetShellSuAdbOnlyEnabled = viewModel::setShellSuAdbOnlyEnabled,
         onSetDefaultUmountModules = viewModel::setDefaultUmountModules,
         onSetEnableWebDebugging = viewModel::setEnableWebDebugging,
         onSetAutoJailbreak = viewModel::setAutoJailbreak,
+        onSetTeeEngineEnabled = viewModel::setTeeEngineEnabled,
         onSetUseSoftReboot = viewModel::setUseSoftReboot,
         onOpenAbout = { navigator.push(Route.About) },
     )
 
-    when (LocalUiMode.current) {
-        UiMode.Miuix -> SettingPagerMiuix(uiState, actions, bottomInnerPadding)
-        UiMode.Material -> SettingPagerMaterial(uiState, actions, bottomInnerPadding)
-    }
+    SettingPagerMiuix(uiState, actions, bottomInnerPadding)
 }

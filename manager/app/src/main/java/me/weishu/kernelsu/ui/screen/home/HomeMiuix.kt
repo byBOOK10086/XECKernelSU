@@ -186,17 +186,20 @@ fun HomePagerMiuix(
                         WarningCard(
                             stringResource(id = R.string.home_pr_build_warning),
                             level = WarningLevel.Notice,
+                            block = warningBlock,
                         )
                     } else if (state.showKernelPrBuildWarning) {
                         WarningCard(
                             stringResource(id = R.string.home_pr_kernel_warning),
                             level = WarningLevel.Notice,
+                            block = warningBlock,
                         )
                     }
                     if (state.showGkiWarning) {
                         WarningCard(
                             stringResource(id = R.string.home_gki_warning),
                             level = WarningLevel.Notice,
+                            block = warningBlock,
                         )
                     }
                     if (state.requiresNewKernel) {
@@ -205,11 +208,13 @@ fun HomePagerMiuix(
                                 id = if (state.lkmMode == true) R.string.require_kernel_version else R.string.require_kernel_version_gki
                             ),
                             onClick = if (state.lkmMode == true) actions.onInstallClick else null,
+                            block = warningBlock,
                         )
                     }
                     if (state.requiresNewManager) {
                         WarningCard(
                             stringResource(id = R.string.require_manager_version),
+                            block = warningBlock,
                         )
                     }
                     if (state.showLkmUpdate) {
@@ -217,10 +222,14 @@ fun HomePagerMiuix(
                             message = stringResource(R.string.home_lkm_update_available),
                             level = WarningLevel.Notice,
                             onClick = actions.onInstallClick,
+                            block = warningBlock,
                         )
                     }
                     if (state.showRootWarning) {
-                        WarningCard(stringResource(id = R.string.grant_root_failed))
+                        WarningCard(stringResource(id = R.string.grant_root_failed), block = warningBlock)
+                    }
+                    if (state.showDaemonMissingWarning) {
+                        WarningCard(stringResource(id = R.string.home_daemon_missing), block = warningBlock)
                     }
 
                     HomeHero(state = state, onInstall = actions.onInstallClick)
@@ -257,7 +266,7 @@ fun HomePagerMiuix(
 
                     Spacer(
                         Modifier.height(
-                            bottomInnerPadding + 12.dp + if (!Natives.fullFeatured)
+                            bottomInnerPadding + 12.dp + if (!Natives.isFullFeatured())
                                 WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() else 0.dp
                         )
                     )
@@ -319,7 +328,7 @@ private fun HomeHeader(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        RebootListPopupMiuix()
+        RebootListPopupMiuix(iconTint = Xc.colors.text)
         Spacer(Modifier.width(6.dp))
         Box(
             modifier = Modifier

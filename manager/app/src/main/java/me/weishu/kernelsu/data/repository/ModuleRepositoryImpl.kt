@@ -12,6 +12,17 @@ import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
 
+private fun JSONObject.getStringIgnoreCase(key: String, default: String = ""): String {
+    val keys = keys()
+    while (keys.hasNext()) {
+        val k = keys.next()
+        if (k.equals(key, ignoreCase = true)) {
+            return optString(k, default)
+        }
+    }
+    return default
+}
+
 class ModuleRepositoryImpl : ModuleRepository {
 
     companion object {
@@ -29,8 +40,8 @@ class ModuleRepositoryImpl : ModuleRepository {
                     Module(
                         id = obj.getString("id"),
                         name = obj.optString("name"),
-                        author = obj.optString("author", "Unknown"),
-                        version = obj.optString("version", "Unknown"),
+                        author = obj.getStringIgnoreCase("author", ""),
+                        version = obj.getStringIgnoreCase("version", ""),
                         versionCode = obj.optInt("versionCode", 0),
                         description = obj.optString("description"),
                         enabled = obj.getBoolean("enabled"),
@@ -41,8 +52,7 @@ class ModuleRepositoryImpl : ModuleRepository {
                         hasActionScript = obj.optBoolean("action"),
                         metamodule = (obj.optInt("metamodule") != 0) || obj.optBoolean("metamodule"),
                         actionIconPath = obj.optString("actionIcon").takeIf { it.isNotBlank() },
-                        webUiIconPath = obj.optString("webuiIcon").takeIf { it.isNotBlank() },
-                        preinit = obj.optString("preinit")
+                        webUiIconPath = obj.optString("webuiIcon").takeIf { it.isNotBlank() }
                     )
                 }.toList()
         }
@@ -82,7 +92,7 @@ class ModuleRepositoryImpl : ModuleRepository {
             if (versionCode <= module.versionCode || zipUrl.isEmpty()) {
                 ModuleUpdateInfo.Empty
             } else {
-                ModuleUpdateInfo(zipUrl, version, changelog, versionCode)
+                ModuleUpdateInfo(zipUrl, version, changelog)
             }
         }
     }

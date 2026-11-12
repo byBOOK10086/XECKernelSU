@@ -38,7 +38,8 @@ ALLOWED_LOCALES = {"values", "values-night", "values-zh-rCN"}
 SOURCE_SUFFIXES = {".kt", ".kts", ".java", ".rs", ".c", ".h", ".py", ".sh"}
 SKIP_DIRS = {".git", "build", "target", "node_modules", "third_party", "generated-images",
              "builtin",  # ksud embeds whole module trees here (vendored payload, not our source)
-             "susfs"  # kernel/susfs is staged from third_party by scripts/prepare_susfs_lkm.py
+             "susfs",  # kernel/susfs is staged from third_party by scripts/prepare_susfs_lkm.py
+             ".cxx"  # AGP CMake scratch dir created by a local gradle build
              }
 
 problems = []

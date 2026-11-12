@@ -1,7 +1,6 @@
 package me.weishu.kernelsu.data.repository
 
 interface SettingsRepository {
-    var uiMode: String
     var checkUpdate: Boolean
     var checkModuleUpdate: Boolean
     var themeMode: Int
@@ -10,27 +9,43 @@ interface SettingsRepository {
     var colorStyle: String
     var colorSpec: String
     var enablePredictiveBack: Boolean
-    var enableSwipeDismiss: Boolean
-    var pagerInterceptionMode: Int
     var enableBlur: Boolean
     var enableFloatingBottomBar: Boolean
     var enableFloatingBottomBarBlur: Boolean
     var enableNavigationBadge: Boolean
-    /** Draw panel/list surfaces without their own background (XEC component switch). */
+
+    /**
+     * 组件透明：把所有面板/行/按钮的底色一起设成全透明（描边与文字保留）。
+     *
+     * 走 `XcGlass.surfaceAlpha`，与主题包里的值相乘，所以主题自带的不透明度仍然生效，
+     * 这里是用户侧的运行期开关。
+     */
     var componentTransparent: Boolean
     var navigationRailExpanded: Boolean
     var pageScale: Float
-    /** Custom wallpaper chosen by the user, stored as a file path ("" = none). */
+
+    /**
+     * 自定义背景的文件名（空串 = 使用内置随机池）。
+     *
+     * 存的是 `filesDir/wallpapers/` 下的文件名而不是布尔开关：文件才是唯一事实来源，
+     * 名字对不上（比如被清理、被换过）时读出来就是不存在的文件，调用侧自然回落内置池，
+     * 不需要额外的一致性检查。
+     */
     var wallpaperLight: String
     var wallpaperDark: String
-    /** Blur applied to the custom wallpaper, 0..100 (0 = none). */
+
+    /**
+     * 背景模糊强度，百分比 0..100（0 = 关）。
+     *
+     * 只作用于**根层壁纸**：模糊后的壁纸同时是液态玻璃的采样源，观感接近 iOS 桌面壁纸
+     * 被模糊后透出图标层。与 [enableBlur]（玻璃本身的模糊开关）互相独立——用户可能想要
+     * 模糊的壁纸 + 不透明的卡片，也可能反过来。
+     */
     var wallpaperBlur: Int
-    var moduleDescriptionMaxLines: Int
     var enableWebDebugging: Boolean
     var moduleSortEnabledFirst: Boolean
     var moduleSortActionFirst: Boolean
-    /** Name of the [me.weishu.kernelsu.ui.screen.modulerepo.RepoSort] entry. */
-    var moduleRepoSortOrder: String
+    var moduleRepoSortOrder: Int
     var superuserShowSystemApps: Boolean
     var superuserShowOnlyPrimaryUserApps: Boolean
     var superuserSortOption: Int
@@ -56,17 +71,11 @@ interface SettingsRepository {
 
     suspend fun getSulogStatus(): String
     suspend fun getSulogPersistValue(): Long?
-    suspend fun getSulogValue(): Long?
     fun setSulogEnabled(enabled: Boolean): Boolean
 
     suspend fun getAdbRootStatus(): String
     suspend fun getAdbRootPersistValue(): Long?
-    suspend fun getAdbRootValue(): Long?
     fun setAdbRootEnabled(enabled: Boolean): Boolean
-    suspend fun getShellSuAdbOnlyStatus(): String
-    suspend fun getShellSuAdbOnlyPersistValue(): Long?
-    suspend fun getShellSuAdbOnlyValue(): Long?
-    fun setShellSuAdbOnlyEnabled(enabled: Boolean): Boolean
 
     fun isDefaultUmountModules(): Boolean
     fun setDefaultUmountModules(enabled: Boolean): Boolean

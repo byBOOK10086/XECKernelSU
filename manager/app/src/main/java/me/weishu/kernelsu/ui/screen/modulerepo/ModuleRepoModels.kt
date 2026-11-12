@@ -4,21 +4,38 @@ import android.os.Parcelable
 import kotlinx.parcelize.Parcelize
 
 @Parcelize
+data class ReleaseAssetArg(
+    val name: String,
+    val downloadUrl: String,
+    val size: Long,
+    val downloadCount: Int,
+    /** 仓库索引里的 zip sha256（空串 = 该源没提供，不做校验）。 */
+    val sha256: String = "",
+) : Parcelable
+
+@Parcelize
+data class ReleaseArg(
+    val tagName: String,
+    val name: String,
+    val publishedAt: String,
+    val assets: List<ReleaseAssetArg>,
+    val descriptionHTML: String
+) : Parcelable
+
+@Parcelize
 data class AuthorArg(
     val name: String,
     val link: String,
 ) : Parcelable
 
-/** Navigation argument: the list entry a detail page was opened from. */
 @Parcelize
 data class RepoModuleArg(
     val moduleId: String,
     val moduleName: String,
     val authors: String,
     val authorsList: List<AuthorArg>,
-    val latestVersion: String,
-    val latestVersionCode: Int,
+    val latestRelease: String,
     val latestReleaseTime: String,
-    val metamodule: Boolean,
-    val script: Boolean = false,
+    val latestAsset: ReleaseAssetArg? = null,
+    val releases: List<ReleaseArg>
 ) : Parcelable

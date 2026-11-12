@@ -66,20 +66,20 @@
       "lines": 512,
       "reason": "ported file: split candidate, no reason recorded yet"
     },
+    "manager/app/src/main/java/me/weishu/kernelsu/ui/MainActivity.kt": {
+      "lines": 837,
+      "reason": "legacy manager UI ported back from the previous tree (2026-11-12): pinned at its ported size; it may only shrink from here"
+    },
     "manager/app/src/main/java/me/weishu/kernelsu/ui/component/FloatingBottomBar.kt": {
-      "lines": 514,
-      "reason": "ported file: split candidate, no reason recorded yet"
+      "lines": 516,
+      "reason": "legacy manager UI ported back from the previous tree (2026-11-12): pinned at its ported size; it may only shrink from here"
+    },
+    "manager/app/src/main/java/me/weishu/kernelsu/ui/component/liquid/Lens.kt": {
+      "lines": 550,
+      "reason": "legacy manager UI ported back from the previous tree (2026-11-12): pinned at its ported size; it may only shrink from here"
     },
     "manager/app/src/main/java/me/weishu/kernelsu/ui/component/markdown/GithubMarkdown.kt": {
       "lines": 542,
-      "reason": "ported file: split candidate, no reason recorded yet"
-    },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/component/material/SegmentedList.kt": {
-      "lines": 651,
-      "reason": "ported file: split candidate, no reason recorded yet"
-    },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/component/profile/RootProfileConfigMaterial.kt": {
-      "lines": 469,
       "reason": "ported file: split candidate, no reason recorded yet"
     },
     "manager/app/src/main/java/me/weishu/kernelsu/ui/component/profile/RootProfileConfigMiuix.kt": {
@@ -91,28 +91,20 @@
       "reason": "ported file: split candidate, no reason recorded yet"
     },
     "manager/app/src/main/java/me/weishu/kernelsu/ui/design/panel/Xc8Controls.kt": {
-      "lines": 478,
-      "reason": "ported file: split candidate, no reason recorded yet"
+      "lines": 486,
+      "reason": "legacy manager UI ported back from the previous tree (2026-11-12): pinned at its ported size; it may only shrink from here"
     },
     "manager/app/src/main/java/me/weishu/kernelsu/ui/design/panel/Xc8Panel.kt": {
-      "lines": 449,
-      "reason": "ported file: split candidate, no reason recorded yet"
+      "lines": 468,
+      "reason": "legacy manager UI ported back from the previous tree (2026-11-12): pinned at its ported size; it may only shrink from here"
     },
     "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/about/AboutMiuix.kt": {
-      "lines": 449,
-      "reason": "ported file: split candidate, no reason recorded yet"
-    },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/appprofile/AppProfileMaterial.kt": {
-      "lines": 456,
-      "reason": "ported file: split candidate, no reason recorded yet"
+      "lines": 453,
+      "reason": "legacy manager UI ported back from the previous tree (2026-11-12): pinned at its ported size; it may only shrink from here"
     },
     "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/appprofile/AppProfileMiuix.kt": {
-      "lines": 620,
-      "reason": "ported file: split candidate, no reason recorded yet"
-    },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/colorpalette/ColorPaletteScreenMaterial.kt": {
-      "lines": 674,
-      "reason": "ported file: split candidate, no reason recorded yet"
+      "lines": 806,
+      "reason": "legacy manager UI ported back from the previous tree (2026-11-12): pinned at its ported size; it may only shrink from here"
     },
     "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/colorpalette/ColorPaletteScreenMiuix.kt": {
       "lines": 729,
@@ -122,29 +114,25 @@
       "lines": 459,
       "reason": "ported file: split candidate, no reason recorded yet"
     },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/home/HomeMaterial.kt": {
-      "lines": 609,
-      "reason": "ported file: split candidate, no reason recorded yet"
-    },
     "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/home/HomeMiuix.kt": {
-      "lines": 864,
-      "reason": "the home screen: hero + stats + device + update card. Scheduled for splitting after the navigation shell lands"
+      "lines": 873,
+      "reason": "legacy manager UI ported back from the previous tree (2026-11-12): pinned at its ported size; it may only shrink from here"
+    },
+    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/install/InstallMiuix.kt": {
+      "lines": 416,
+      "reason": "legacy manager UI ported back from the previous tree (2026-11-12): pinned at its ported size; it may only shrink from here"
+    },
+    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/install/InstallScreen.kt": {
+      "lines": 433,
+      "reason": "legacy manager UI ported back from the previous tree (2026-11-12): pinned at its ported size; it may only shrink from here"
     },
     "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/module/ModuleActionSheet.kt": {
       "lines": 478,
       "reason": "ported file: split candidate, no reason recorded yet"
     },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/module/ModuleMaterial.kt": {
-      "lines": 1030,
-      "reason": "ported file: split candidate, no reason recorded yet"
-    },
     "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/module/ModuleMiuix.kt": {
       "lines": 1195,
       "reason": "module list + batch actions + sheet"
-    },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/modulerepo/ModuleRepoMaterial.kt": {
-      "lines": 1126,
-      "reason": "ported file: split candidate, no reason recorded yet"
     },
     "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/modulerepo/ModuleRepoMiuix.kt": {
       "lines": 1439,
@@ -154,29 +142,21 @@
       "lines": 1383,
       "reason": "remote assistant: key plan + receive + upload + auth. Split candidate"
     },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/settings/ModuleBackupOps.kt": {
-      "lines": 408,
-      "reason": "ported file: split candidate, no reason recorded yet"
-    },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/sulog/SulogMaterial.kt": {
-      "lines": 451,
-      "reason": "ported file: split candidate, no reason recorded yet"
+    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/settings/SettingsMiuix.kt": {
+      "lines": 530,
+      "reason": "legacy manager UI ported back from the previous tree (2026-11-12): pinned at its ported size; it may only shrink from here"
     },
     "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/sulog/SulogMiuix.kt": {
-      "lines": 601,
-      "reason": "ported file: split candidate, no reason recorded yet"
-    },
-    "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/superuser/SuperUserMaterial.kt": {
-      "lines": 544,
-      "reason": "ported file: split candidate, no reason recorded yet"
+      "lines": 648,
+      "reason": "legacy manager UI ported back from the previous tree (2026-11-12): pinned at its ported size; it may only shrink from here"
     },
     "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/superuser/SuperUserMiuix.kt": {
-      "lines": 625,
-      "reason": "ported file: split candidate, no reason recorded yet"
+      "lines": 646,
+      "reason": "legacy manager UI ported back from the previous tree (2026-11-12): pinned at its ported size; it may only shrink from here"
     },
     "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/template/TemplateMiuix.kt": {
-      "lines": 454,
-      "reason": "ported file: split candidate, no reason recorded yet"
+      "lines": 462,
+      "reason": "legacy manager UI ported back from the previous tree (2026-11-12): pinned at its ported size; it may only shrink from here"
     },
     "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/terminal/FileManager.kt": {
       "lines": 1812,
@@ -191,8 +171,8 @@
       "reason": "theme editor: one composition per token group. Split candidate"
     },
     "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/theme/store/StoreComponents.kt": {
-      "lines": 1186,
-      "reason": "theme store shared components"
+      "lines": 1195,
+      "reason": "legacy manager UI ported back from the previous tree (2026-11-12): pinned at its ported size; it may only shrink from here"
     },
     "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/theme/store/StoreDetailPage.kt": {
       "lines": 494,
@@ -207,8 +187,8 @@
       "reason": "ported file: split candidate, no reason recorded yet"
     },
     "manager/app/src/main/java/me/weishu/kernelsu/ui/util/KsuCli.kt": {
-      "lines": 737,
-      "reason": "ported file: split candidate, no reason recorded yet"
+      "lines": 1146,
+      "reason": "legacy manager UI ported back from the previous tree (2026-11-12): pinned at its ported size; it may only shrink from here"
     },
     "manager/app/src/main/java/me/weishu/kernelsu/ui/util/module/Shortcut.kt": {
       "lines": 418,
@@ -232,10 +212,6 @@
     },
     "manager/app/src/main/java/me/weishu/kernelsu/ui/webui/WebViewInterface.kt": {
       "lines": 512,
-      "reason": "ported file: split candidate, no reason recorded yet"
-    },
-    "manager/app/src/test/java/me/weishu/kernelsu/data/registry/RegistryClientTest.kt": {
-      "lines": 624,
       "reason": "ported file: split candidate, no reason recorded yet"
     },
     "repack_apk.py": {
@@ -294,6 +270,10 @@
       "lines": 801,
       "reason": "ported file: split candidate, no reason recorded yet"
     },
+    "userspace/ksud/src/susfs.rs": {
+      "lines": 705,
+      "reason": "SUSFS reboot(2) supercall ABI: the CMD_* -> struct layout table is data, not logic, and splitting it would scatter one protocol across files. Ported from the previous tree where it was audited and run on device; re-pinned, shrinks from here."
+    },
     "userspace/ksud/src/utils.rs": {
       "lines": 403,
       "reason": "ported file: split candidate, no reason recorded yet"
@@ -301,10 +281,6 @@
     "userspace/ksuinit/src/lib.rs": {
       "lines": 550,
       "reason": "ported file: split candidate, no reason recorded yet"
-    },
-    "userspace/ksud/src/susfs.rs": {
-      "lines": 705,
-      "reason": "SUSFS reboot(2) supercall ABI: the CMD_* -> struct layout table is data, not logic, and splitting it would scatter one protocol across files. Ported from the previous tree where it was audited and run on device; re-pinned, shrinks from here."
     }
   },
   "locales": [

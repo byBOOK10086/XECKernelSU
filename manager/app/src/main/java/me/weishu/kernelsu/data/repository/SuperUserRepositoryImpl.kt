@@ -22,7 +22,7 @@ import me.weishu.kernelsu.data.model.WEBVIEW_ZYGOTE_PROFILE_KEY
 import me.weishu.kernelsu.data.model.WEBVIEW_ZYGOTE_UID
 import me.weishu.kernelsu.ksuApp
 import me.weishu.kernelsu.ui.KsuService
-import me.weishu.kernelsu.ui.util.KsuCli
+import me.weishu.kernelsu.ui.util.awaitRootShell
 import kotlin.coroutines.resume
 
 class SuperUserRepositoryImpl : SuperUserRepository {
@@ -33,12 +33,6 @@ class SuperUserRepositoryImpl : SuperUserRepository {
 
     override suspend fun getAppList(): Result<Pair<List<AppInfo>, List<Int>>> = withContext(Dispatchers.IO) {
         runCatching {
-            if (!KsuCli.SHELL.isRoot) {
-                return@withContext Result.failure(
-                    IllegalStateException("Root access is required")
-                )
-            }
-
             val result = connectKsuService {
                 Log.w(TAG, "KsuService disconnected")
             }
@@ -130,6 +124,12 @@ class SuperUserRepositoryImpl : SuperUserRepository {
     private suspend inline fun connectKsuService(
         crossinline onDisconnect: () -> Unit = {}
     ): Pair<IBinder, ServiceConnection> = withContext(Dispatchers.Main) {
+        // 必须等一条**真的 root** shell：主线程上取到的是"还没探到 root"时的轻量
+        // 兜底 `sh`，拿那条非 root 壳去 exec 绑定任务，RootService 永远连不上
+        // （onServiceConnected 不回调），getPackages() 拿不到包 —— 超级用户列表
+        // 就一条应用都刷不出来（真机实测：进程表里根本没有 `:root` 子进程）。
+        // 这一步是挂起的，所以只能放在 suspendCancellableCoroutine **外面**。
+        val shell = awaitRootShell()
         suspendCancellableCoroutine { cont ->
             val connection = object : ServiceConnection {
                 override fun onServiceDisconnected(name: ComponentName?) {
@@ -160,7 +160,6 @@ class SuperUserRepositoryImpl : SuperUserRepository {
                 Shell.EXECUTOR,
                 connection,
             )
-            val shell = KsuCli.SHELL
             task?.let { shell.execTask(it) }
         }
     }

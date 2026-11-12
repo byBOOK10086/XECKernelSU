@@ -6,13 +6,18 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.ShaderBrush
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.addOutline
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.util.fastCoerceIn
@@ -24,6 +29,7 @@ import org.intellij.lang.annotations.Language
 @SuppressLint("NewApi")
 class InteractiveHighlight(
     val animationScope: CoroutineScope,
+    val shape: Shape = CircleShape,
     val position: (size: Size, offset: Offset) -> Offset = { _, offset -> offset }
 ) {
 
@@ -60,25 +66,32 @@ class InteractiveHighlight(
         Modifier.drawWithContent {
             val progress = pressProgressAnimation.value
             if (progress > 0f) {
-                drawRect(
-                    Color.White.copy(0.06f * progress),
-                    blendMode = BlendMode.Plus
-                )
-                shader.apply {
-                    val position = position(size, positionAnimation.value)
-                    setFloatUniform("size", size.width, size.height)
-                    setColorUniform("color", Color.White.copy(0.12f * progress).toArgb())
-                    setFloatUniform("radius", size.minDimension * 1.2f)
-                    setFloatUniform(
-                        "position",
-                        position.x.fastCoerceIn(0f, size.width),
-                        position.y.fastCoerceIn(0f, size.height)
+                // 高光只能画在容器圆角内部：直接铺满节点会让圆角容器在按下瞬间露出直角。
+                // 这里只裁剪高光本身，不动 drawContent()，避免破坏子内容（阴影、角标等）。
+                val clip = Path().apply {
+                    addOutline(shape.createOutline(size, layoutDirection, this@drawWithContent))
+                }
+                clipPath(clip) {
+                    drawRect(
+                        Color.White.copy(0.06f * progress),
+                        blendMode = BlendMode.Plus
+                    )
+                    shader.apply {
+                        val position = position(size, positionAnimation.value)
+                        setFloatUniform("size", size.width, size.height)
+                        setColorUniform("color", Color.White.copy(0.12f * progress).toArgb())
+                        setFloatUniform("radius", size.minDimension * 1.2f)
+                        setFloatUniform(
+                            "position",
+                            position.x.fastCoerceIn(0f, size.width),
+                            position.y.fastCoerceIn(0f, size.height)
+                        )
+                    }
+                    drawRect(
+                        ShaderBrush(shader),
+                        blendMode = BlendMode.Plus
                     )
                 }
-                drawRect(
-                    ShaderBrush(shader),
-                    blendMode = BlendMode.Plus
-                )
             }
 
             drawContent()

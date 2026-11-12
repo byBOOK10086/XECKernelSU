@@ -10,12 +10,11 @@ import com.materialkolor.dynamiccolor.ColorSpec
 import com.topjohnwu.superuser.ShellUtils
 import me.weishu.kernelsu.Natives
 import me.weishu.kernelsu.ksuApp
-import me.weishu.kernelsu.magica.BootCompletedReceiver
-import me.weishu.kernelsu.ui.UiMode
+import com.xecpro.kernel.XecBootReceiver
 import me.weishu.kernelsu.ui.screen.modulerepo.RepoSort
+import me.weishu.kernelsu.ui.theme.ColorMode
 import me.weishu.kernelsu.ui.util.execKsud
 import me.weishu.kernelsu.ui.util.getFeaturePersistValue
-import me.weishu.kernelsu.ui.util.getFeatureValue
 import me.weishu.kernelsu.ui.util.getFeatureStatus
 import java.security.SecureRandom
 
@@ -31,6 +30,8 @@ class SettingsRepositoryImpl : SettingsRepository {
 
     private companion object {
         private const val INTENT_TOKEN_KEY = "intent_token"
+        private const val KEY_COLOR_MODE = "color_mode"
+        private const val KEY_WHITE_GLASS_MIGRATED = "white_glass_default_migrated"
         private val secureRandom = SecureRandom()
     }
 
@@ -38,9 +39,19 @@ class SettingsRepositoryImpl : SettingsRepository {
         ksuApp.getSharedPreferences(SETTINGS_PREFS, Context.MODE_PRIVATE)
     }
 
-    override var uiMode: String
-        get() = prefs.getString("ui_mode", UiMode.DEFAULT_VALUE) ?: UiMode.DEFAULT_VALUE
-        set(value) = prefs.edit { putString("ui_mode", value) }
+    init {
+        // 一次性迁移到「白色基础液态玻璃」默认档，详见 themeMode 的说明。
+        // 只迁移仍停在旧默认值（DARK）的存量：显式选过 AMOLED / MONET_DARK
+        // 的用户保持原样，迁移标记保证只跑一次。
+        if (!prefs.getBoolean(KEY_WHITE_GLASS_MIGRATED, false)) {
+            prefs.edit {
+                putBoolean(KEY_WHITE_GLASS_MIGRATED, true)
+                if (prefs.getInt(KEY_COLOR_MODE, ColorMode.DARK.value) == ColorMode.DARK.value) {
+                    putInt(KEY_COLOR_MODE, ColorMode.LIGHT.value)
+                }
+            }
+        }
+    }
 
     override var checkUpdate: Boolean
         get() = prefs.getBoolean("check_update", true)
@@ -50,9 +61,13 @@ class SettingsRepositoryImpl : SettingsRepository {
         get() = prefs.getBoolean("module_check_update", true)
         set(value) = prefs.edit { putBoolean("module_check_update", value) }
 
+    // XEC Fluid Glass 走「白色基础液态玻璃」：玻璃令牌在浅色档是
+    // 0x8CFFFFFF 叠纯白 surface，落在近白壁纸上是通透的白玻璃；深色档的
+    // 0x8C131A1C 叠 0xFF131A1C 会合成近黑实色，压在同样的近白壁纸上就是
+    // 一整屏黑框。因此缺省档位为浅色（存量迁移见上面的 init 块）。
     override var themeMode: Int
-        get() = prefs.getInt("color_mode", 0)
-        set(value) = prefs.edit { putInt("color_mode", value) }
+        get() = prefs.getInt(KEY_COLOR_MODE, ColorMode.LIGHT.value)
+        set(value) = prefs.edit { putInt(KEY_COLOR_MODE, value) }
 
     override var miuixMonet: Boolean
         get() = prefs.getBoolean("miuix_monet", false)
@@ -74,25 +89,27 @@ class SettingsRepositoryImpl : SettingsRepository {
         get() = prefs.getBoolean("enable_predictive_back", false)
         set(value) = prefs.edit { putBoolean("enable_predictive_back", value) }
 
-    override var enableSwipeDismiss: Boolean
-        get() = prefs.getBoolean("enable_swipe_dismiss", true)
-        set(value) = prefs.edit { putBoolean("enable_swipe_dismiss", value) }
-
-    override var pagerInterceptionMode: Int
-        get() = prefs.getInt("pager_interception_mode", 1)
-        set(value) = prefs.edit { putInt("pager_interception_mode", value.coerceIn(0, 2)) }
-
+    // 玻璃模糊是 XEC Fluid Glass 的核心签名：默认关闭时所有玻璃面会退化成
+    // 纯色块，观感立刻回到原版。因此这里默认打开（不支持 RenderEffect 的
+    // 设备会在 BlurExt 里自动降级，不会崩）。
     override var enableBlur: Boolean
-        get() = prefs.getBoolean("enable_blur", false)
+        get() = prefs.getBoolean("enable_blur", true)
         set(value) = prefs.edit { putBoolean("enable_blur", value) }
 
+    // 悬浮玻璃底栏同样是签名元素，默认开。
     override var enableFloatingBottomBar: Boolean
-        get() = prefs.getBoolean("enable_floating_bottom_bar", false)
+        get() = prefs.getBoolean("enable_floating_bottom_bar", true)
         set(value) = prefs.edit { putBoolean("enable_floating_bottom_bar", value) }
 
     override var enableFloatingBottomBarBlur: Boolean
-        get() = prefs.getBoolean("enable_floating_bottom_bar_blur", false)
+        get() = prefs.getBoolean("enable_floating_bottom_bar_blur", true)
         set(value) = prefs.edit { putBoolean("enable_floating_bottom_bar_blur", value) }
+
+    // 组件透明：默认关（不透明才是 MIUI 8 的默认观感）。开启后所有组件底色 alpha = 0，
+    // 只剩 1px 描边与文字，壁纸/平色底从面板之间透出来。
+    override var componentTransparent: Boolean
+        get() = prefs.getBoolean("component_transparent", false)
+        set(value) = prefs.edit { putBoolean("component_transparent", value) }
 
     override var enableNavigationBadge: Boolean
         get() = prefs.getBoolean("enable_navigation_badge", true)
@@ -102,14 +119,12 @@ class SettingsRepositoryImpl : SettingsRepository {
         get() = prefs.getBoolean("nav_rail_expanded", false)
         set(value) = prefs.edit { putBoolean("nav_rail_expanded", value) }
 
-    override var componentTransparent: Boolean
-        get() = prefs.getBoolean("component_transparent", false)
-        set(value) = prefs.edit { putBoolean("component_transparent", value) }
-
     override var pageScale: Float
         get() = prefs.getFloat("page_scale", 1.0f)
         set(value) = prefs.edit { putFloat("page_scale", value) }
 
+    // 自定义背景：只存文件名，字节放在 filesDir/wallpapers/（见 WallpaperStore）。
+    // 默认空串 = 走内置的 bg_light_1..4 / bg_dark_1..4 随机池，保持原行为不变。
     override var wallpaperLight: String
         get() = prefs.getString("wallpaper_light", "").orEmpty()
         set(value) = prefs.edit { putString("wallpaper_light", value) }
@@ -118,13 +133,12 @@ class SettingsRepositoryImpl : SettingsRepository {
         get() = prefs.getString("wallpaper_dark", "").orEmpty()
         set(value) = prefs.edit { putString("wallpaper_dark", value) }
 
+    // 背景模糊：百分比 0..100，默认 0（= 不模糊，保持原有观感）。
+    // 夹一次范围是必要的：SharedPreferences 里的值可能是旧版本写的、也可能被外部改坏，
+    // 而下游会把它换算成 dp 交给 RenderEffect，越界值没有意义。
     override var wallpaperBlur: Int
         get() = prefs.getInt("wallpaper_blur", 0).coerceIn(0, 100)
         set(value) = prefs.edit { putInt("wallpaper_blur", value.coerceIn(0, 100)) }
-
-    override var moduleDescriptionMaxLines: Int
-        get() = prefs.getInt("module_description_max_lines", 4)
-        set(value) = prefs.edit { putInt("module_description_max_lines", value) }
 
     override var enableWebDebugging: Boolean
         get() = prefs.getBoolean("enable_web_debugging", false)
@@ -138,15 +152,9 @@ class SettingsRepositoryImpl : SettingsRepository {
         get() = prefs.getBoolean("module_sort_action_first", false)
         set(value) = prefs.edit { putBoolean("module_sort_action_first", value) }
 
-    override var moduleRepoSortOrder: String
-        get() = RepoSort.fromStored(
-            name = prefs.getString("module_repo_sort", null),
-            legacyOrdinal = if (prefs.contains("module_repo_sort_order")) prefs.getInt("module_repo_sort_order", 0) else null,
-        ).name
-        set(value) = prefs.edit {
-            putString("module_repo_sort", value)
-            remove("module_repo_sort_order")
-        }
+    override var moduleRepoSortOrder: Int
+        get() = prefs.getInt("module_repo_sort_order", RepoSort.UPDATED.ordinal)
+        set(value) = prefs.edit { putInt("module_repo_sort_order", value) }
 
     override var superuserShowSystemApps: Boolean
         get() = prefs.getBoolean("show_system_apps", false)
@@ -167,15 +175,9 @@ class SettingsRepositoryImpl : SettingsRepository {
     override var autoJailbreak: Boolean
         get() = prefs.getBoolean("auto_jailbreak", false)
         set(value) {
-            runCatching {
-                ksuApp.packageManager.setComponentEnabledSetting(
-                    ComponentName(ksuApp, BootCompletedReceiver::class.java),
-                    if (value) PackageManager.COMPONENT_ENABLED_STATE_ENABLED else PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-                    PackageManager.DONT_KILL_APP
-                )
-            }.onFailure {
-                Log.e("Settings", "failed to change boot receiver state to $value", it)
-            }
+            // receiver 现在常开：既负责自动越狱（内部按本开关自门控），
+            // 也负责 USER_UNLOCKED 时补拉隐身守卫（ksud 的 boot-completed
+            // 子进程活不过 init 的 cgroup 清理）。因此不再按开关启停组件。
             prefs.edit {
                 putBoolean("auto_jailbreak", value)
             }
@@ -223,15 +225,11 @@ class SettingsRepositoryImpl : SettingsRepository {
 
     override suspend fun getSulogPersistValue(): Long? = getFeaturePersistValue("sulog")
 
-    override suspend fun getSulogValue(): Long? = getFeatureValue("sulog")
-
     override fun setSulogEnabled(enabled: Boolean): Boolean = execKsud("feature set sulog ${if (enabled) 1 else 0}", true)
 
     override suspend fun getAdbRootStatus(): String = getFeatureStatus("adb_root")
 
     override suspend fun getAdbRootPersistValue(): Long? = getFeaturePersistValue("adb_root")
-
-    override suspend fun getAdbRootValue(): Long? = getFeatureValue("adb_root")
 
     override fun setAdbRootEnabled(enabled: Boolean): Boolean =
         if (execKsud("feature set adb_root ${if (enabled) 1 else 0}", true)) {
@@ -240,15 +238,6 @@ class SettingsRepositoryImpl : SettingsRepository {
         } else {
             false
         }
-
-    override suspend fun getShellSuAdbOnlyStatus(): String = getFeatureStatus("shell_su_adb_only")
-
-    override suspend fun getShellSuAdbOnlyPersistValue(): Long? = getFeaturePersistValue("shell_su_adb_only")
-
-    override suspend fun getShellSuAdbOnlyValue(): Long? = getFeatureValue("shell_su_adb_only")
-
-    override fun setShellSuAdbOnlyEnabled(enabled: Boolean): Boolean =
-        execKsud("feature set shell_su_adb_only ${if (enabled) 1 else 0}", true)
 
     override fun isDefaultUmountModules(): Boolean = Natives.isDefaultUmountModules()
 

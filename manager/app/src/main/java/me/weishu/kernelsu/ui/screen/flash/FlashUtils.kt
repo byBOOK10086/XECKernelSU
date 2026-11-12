@@ -5,23 +5,26 @@ import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.os.Parcelable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Adb
 import androidx.compose.material.icons.rounded.DeleteForever
 import androidx.compose.material.icons.rounded.RemoveModerator
 import androidx.compose.material.icons.rounded.RestartAlt
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -29,9 +32,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.parcelize.Parcelize
 import me.weishu.kernelsu.R
+import me.weishu.kernelsu.ui.design.glass.XGlassDialog
+import me.weishu.kernelsu.ui.design.token.Xc
 import me.weishu.kernelsu.ui.util.FlashResult
 import me.weishu.kernelsu.ui.util.LkmSelection
 import me.weishu.kernelsu.ui.util.downloadBoot
+import me.weishu.kernelsu.ui.util.flashAnyKernel
 import me.weishu.kernelsu.ui.util.flashModule
 import me.weishu.kernelsu.ui.util.installBoot
 import me.weishu.kernelsu.ui.util.restoreBoot
@@ -41,6 +47,10 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.time.Duration.Companion.milliseconds
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
+import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.blur.LayerBackdrop
 
 enum class FlashingStatus {
     FLASHING,
@@ -91,6 +101,9 @@ sealed class FlashIt : Parcelable {
     ) : FlashIt()
 
     @Parcelize
+    data class FlashAnyKernel(val uri: Uri) : FlashIt()
+
+    @Parcelize
     data class FlashModules(val uris: List<Uri>) : FlashIt()
 
     @Parcelize
@@ -105,16 +118,14 @@ fun flashModulesSequentially(
     onStdout: (String) -> Unit,
     onStderr: (String) -> Unit
 ): FlashResult {
-    var needsReboot = false
     for (uri in uris) {
         flashModule(uri, onStdout, onStderr).apply {
-            needsReboot = needsReboot || showReboot
             if (code != 0) {
-                return FlashResult(code, err, needsReboot)
+                return FlashResult(code, err, showReboot)
             }
         }
     }
-    return FlashResult(0, "", needsReboot)
+    return FlashResult(0, "", true)
 }
 
 fun flashIt(
@@ -152,6 +163,12 @@ fun flashIt(
 
         FlashIt.FlashRestore -> restoreBoot(onStdout, onStderr)
         FlashIt.FlashUninstall -> uninstallPermanently(onStdout, onStderr)
+
+        is FlashIt.FlashAnyKernel -> flashAnyKernel(
+            flashIt.uri,
+            onStdout,
+            onStderr
+        )
     }
 }
 
@@ -218,7 +235,7 @@ fun saveLog(
             val date = format.format(Date())
             val file = File(
                 Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
-                "KernelSU_install_log_${date}.log"
+                "XECKernelPro_install_log_${date}.log"
             )
             file.writeText(logContent.toString())
             showMessage("Log saved to ${file.absolutePath}")
@@ -230,6 +247,7 @@ private const val JAILBREAK_WARNING_COUNTDOWN = 10
 
 @Composable
 fun JailbreakFlashWarningDialog(
+    backdrop: LayerBackdrop?,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -242,32 +260,42 @@ fun JailbreakFlashWarningDialog(
         }
     }
 
-    AlertDialog(
+    XGlassDialog(
+        // 调用方用 `if (state.showJailbreakWarning)` 条件挂载，所以挂上即显示。
+        show = true,
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(android.R.string.dialog_alert_title)) },
-        text = {
-            Text(
-                stringResource(R.string.jailbreak_flash_warning),
-                style = MaterialTheme.typography.bodyMedium
-            )
-        },
-        confirmButton = {
+        backdrop = backdrop,
+    ) {
+        Text(
+            text = stringResource(android.R.string.dialog_alert_title),
+            fontWeight = FontWeight.SemiBold,
+            color = Xc.colors.text,
+        )
+        Text(
+            text = stringResource(R.string.jailbreak_flash_warning),
+            color = Xc.colors.textSecondary,
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
             TextButton(
+                text = stringResource(android.R.string.cancel),
+                onClick = onDismiss,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(
+                text = if (countdown > 0)
+                    stringResource(R.string.jailbreak_flash_warning_countdown, countdown)
+                else
+                    stringResource(R.string.install_next),
                 onClick = onConfirm,
-                enabled = countdown == 0
-            ) {
-                Text(
-                    if (countdown > 0)
-                        stringResource(R.string.jailbreak_flash_warning_countdown, countdown)
-                    else
-                        stringResource(R.string.install_next)
-                )
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(android.R.string.cancel))
-            }
+                enabled = countdown == 0,
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.textButtonColorsPrimary(),
+            )
         }
-    )
+    }
 }

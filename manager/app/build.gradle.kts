@@ -20,6 +20,8 @@ val androidTargetSdkVersion = rootProject.extra["androidTargetSdkVersion"] as In
 val androidSourceCompatibility = rootProject.extra["androidSourceCompatibility"] as JavaVersion
 val androidTargetCompatibility = rootProject.extra["androidTargetCompatibility"] as JavaVersion
 val managerVersionCode = rootProject.extra["managerVersionCode"] as Int
+// 与内核 KERNEL_SU_VERSION 同口径的基准码，只用于"内置 LKM 是否落后"的比较。
+val managerBaseVersionCode = rootProject.extra["managerBaseVersionCode"] as Int
 val managerVersionName = rootProject.extra["managerVersionName"] as String
 
 val isPrBuild = project.findProperty("IS_PR_BUILD")?.toString()?.toBoolean() ?: false
@@ -149,7 +151,14 @@ android {
         applicationId = managerPackageName
 
         buildConfigField("boolean", "IS_PR_BUILD", isPrBuild.toString())
+        // 内核 KERNEL_SU_VERSION 同口径的基准码：首页用它判断内置 LKM 是否落后。
+        // 不能用 versionCode 代替——那是十倍后的产物号，跟内核永远对不上。
+        buildConfigField("int", "BASE_VERSION_CODE", managerBaseVersionCode.toString())
         resValue("string", "app_name", managerName)
+
+        // 应用本身只有 en / zh-rCN 两套文案；依赖库自带的四十多种语言表纯占体积，
+        // 裁到实际用得到的语言（arsc 900KB 里大半是它们）。
+        resourceConfigurations += listOf("en", "zh-rCN")
 
         externalNativeBuild {
             cmake {
@@ -160,7 +169,8 @@ android {
         }
 
         ndk {
-            abiFilters += listOf("arm64-v8a", "x86_64", "riscv64")
+            // 手机端只有 arm64；x86_64 只为模拟器服务，去掉后安装包直接少 ~6MB。
+            abiFilters += listOf("arm64-v8a")
         }
     }
 
@@ -179,6 +189,13 @@ androidComponents {
     onVariants(selector().withBuildType("release")) {
         it.packaging.resources.excludes.addAll(listOf("META-INF/**", "kotlin/**", "**.bin"))
     }
+    // debug 与 release 用同一个 versionCode（就是 defaultConfig 里那个），不再加偏移。
+    //
+    // 之前为了让 debug 能直接覆盖正式版、又让正式版能盖回来，把正式版码乘十、debug 占 +1；
+    // 结果是公开发版号变成 312770 这种六位数，用户看到就是"版本号乱跳"，已被要求改回。
+    // 现在的取舍：debug 包与正式版同码，若要互相覆盖，同码同签名的重装由安装器决定
+    // （adb install -r 可以，部分 ROM 会要求先卸载）——测试包接受这个代价，公开发版号
+    // 的连贯性优先。
 }
 
 base {
@@ -203,6 +220,9 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.navigation3)
+
+    implementation(libs.androidx.navigation3.runtime)
     implementation(libs.androidx.navigationevent.compose)
 
     implementation(libs.com.github.topjohnwu.libsu.core)
@@ -212,7 +232,6 @@ dependencies {
     implementation(libs.dev.rikka.rikkax.parcelablelist)
 
     implementation(libs.kotlinx.coroutines.core)
-    implementation(libs.kotlinx.serialization.json)
 
     implementation(libs.commonmark)
     implementation(libs.commonmark.ext.gfm.tables)
@@ -228,7 +247,7 @@ dependencies {
 
     implementation(libs.miuix.ui)
     implementation(libs.miuix.icons)
-    implementation(libs.miuix.nav)
+    implementation(libs.miuix.navigation3.ui)
     implementation(libs.miuix.preference)
     implementation(libs.miuix.blur)
 
@@ -241,9 +260,9 @@ dependencies {
 
     implementation(libs.commons.compress)
     implementation(libs.xz)
+    // proto 代码是 generateReleaseProto 现生成的（APEX/OTA 元数据解析），不能删。
     implementation(libs.protobuf.kotlin.lite)
 
-    testImplementation(libs.junit)
 }
 
 kotlin {

@@ -20,36 +20,45 @@ data class HomeUiState(
     val isRootAvailable: Boolean,
     val isSafeMode: Boolean,
     val isLateLoadMode: Boolean,
+    val isDaemonPresent: Boolean,
+    val susfsVersion: String?,
+    val susfsVariant: String?,
+    /**
+     * Whether libTEESimulator is actually mapped into keystore2. `null` means
+     * the probe did not run/was inconclusive; it is not counted as healthy.
+     */
+    val teeInjected: Boolean? = null,
     val checkUpdateEnabled: Boolean,
     val latestVersionInfo: LatestVersionInfo,
     val currentManagerVersionCode: Long,
+    /**
+     * 与内核 `KERNEL_SU_VERSION` 同口径的基准码（`31000 + 提交数`）。
+     *
+     * 只用于"内置 LKM 是否落后"的比较。[currentManagerVersionCode] 是 APK 的产物号
+     * （为区分 debug/release 乘了十倍），拿它跟内核比会永远不相等。
+     */
+    val baseVersionCode: Long,
     val systemInfo: SystemInfo,
     /**
-     * SUSFS variant reported by the kernel (`susfs -v` style string), or null
-     * when the feature is not present. Populated by the SUSFS probe; the home
-     * stat panel shows a placeholder until it arrives, so a null here means
-     * "not probed yet / not supported", never "supported and empty".
-     */
-    val susfsVersion: String? = null,
-    /**
-     * SUSFS variant/flavour string (`susfs4ksu`, `gki-decoupled`, ...). Null when
-     * the version is absent or the variant probe has not run.
-     */
-    val susfsVariant: String? = null,
-    /**
-     * Whether at least one root probe has completed.
+     * 是否已经**至少完成过一次** root 探测。
      *
-     * The first frame can only answer "not yet": the probe touches a root shell
-     * and must not run on the main thread. Without this flag the hero would show
-     * "root failed" for a few hundred milliseconds on every cold start. Warnings
-     * are gated on it, so an unknown state never renders as a failure.
+     * 开机首帧只能先拿一条非 root 的兜底 shell（探测不能跑在主线程上），那一刻
+     * `isRootAvailable` 必然是 false —— 但这不是"获取 Root 失败"，只是"还没问到"。
+     * 没有这个闸门的话，每次冷启动都会红一条「获取 Root 失败！」，然后几百毫秒后
+     * 自己消失。所以告警只在探测落定之后才允许出现。
      */
     val rootProbeSettled: Boolean = true,
-    /** True while a pull-to-refresh / toolbar refresh is in flight. */
+    /**
+     * 是否正在刷新（下拉刷新/顶栏刷新共用）。
+     *
+     * 2026-11-09 加：首页的下拉刷新需要真实的"进行中"状态，否则指示器只能靠
+     * 定时器假装转圈 —— 那会在探测很慢时提前收起，在探测很快时空转。
+     */
     val isRefreshing: Boolean = false,
 ) {
     val isSELinuxPermissive: Boolean
         get() = systemInfo.selinuxStatus == "Permissive"
+
 
     val showGkiWarning: Boolean
         get() = ksuVersion != null && lkmMode == false
@@ -58,19 +67,24 @@ data class HomeUiState(
         get() = isManager &&
                 lkmMode == true &&
                 isLkmBundled &&
-                ksuVersion?.toLong() != currentManagerVersionCode &&
+                // 内核报的 KERNEL_SU_VERSION 和这里的 baseVersionCode 现在取自同一个
+                // 文件（仓库根 version.properties），必须相等才算"内置 LKM 是最新的"。
+                // 历史上这两边各自独立算（内核 31000+提交数、管理器再乘十），不在一个
+                // 数域，一比就永远不等：首页永远挂"有 LKM 更新"，刷完还是挂着。
+                ksuVersion?.toLong() != baseVersionCode &&
                 !requiresNewKernel &&
                 !requiresNewManager
-
-    // Jailbreak mode runs on locked bootloaders, so flashing a boot image would brick the device.
-    val canInstallKernelUpdate: Boolean
-        get() = lkmMode == true && !isLateLoadMode
 
     val showCustomLkmBadge: Boolean
         get() = lkmMode == true && !isLkmBundled
 
     val showRootWarning: Boolean
-        get() = ksuVersion != null && !isRootAvailable
+        get() = ksuVersion != null && rootProbeSettled && !isRootAvailable
+
+    // 内核已加载但守护组件不在：内置模块的物化/provision 链条断在第一步，
+    // 所有"内置了却没效果"的问题都是这个形态，必须显式暴露而不是静默失败。
+    val showDaemonMissingWarning: Boolean
+        get() = ksuVersion != null && rootProbeSettled && !isDaemonPresent
 
     val showManagerPrBuildWarning: Boolean
         get() = isManager && isManagerPrBuild
@@ -87,8 +101,15 @@ data class HomeActions(
     val onInstallClick: () -> Unit,
     val onOpenUrl: (String) -> Unit,
     val onJailbreakClick: () -> Unit = {},
-    /** Pull-to-refresh and the header refresh button share this one callback. */
-    val onRefresh: () -> Unit = {},
+    /** 底栏第一页 → 第二页（超级用户）。 */
     val onOpenSuperuser: () -> Unit = {},
+    /** 授权记录（Sulog）。 */
     val onOpenSulog: () -> Unit = {},
+    /**
+     * 首页顶栏与设备分组的「刷新」。
+     *
+     * 2026-11-09 删掉「常用操作」面板后，首页曾经只剩下拉刷新可触发更新检查；
+     * 设计稿把刷新做成顶栏的一个图标按钮，这条回调就是它的落点。
+     */
+    val onRefresh: () -> Unit = {},
 )

@@ -8,6 +8,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import me.weishu.kernelsu.data.theme.ThemeResolver
 import me.weishu.kernelsu.ui.design.token.Xc
 import me.weishu.kernelsu.ui.design.token.XcBlockBackground
 import me.weishu.kernelsu.ui.theme.isInDarkTheme

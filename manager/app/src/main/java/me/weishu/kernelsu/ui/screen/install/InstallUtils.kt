@@ -24,6 +24,12 @@ internal sealed class InstallMethod : Parcelable {
         override val summary: String?
     ) : InstallMethod()
 
+    data class AnyKernel(
+        val uri: Uri? = null,
+        @get:StringRes override val label: Int = R.string.install_anykernel,
+        override val summary: String?
+    ) : InstallMethod()
+
     data object DirectInstall : InstallMethod() {
         override val label: Int
             get() = R.string.direct_install
@@ -33,6 +39,15 @@ internal sealed class InstallMethod : Parcelable {
         override val label: Int
             get() = R.string.install_inactive_slot
     }
+    /**
+     * KernelPatch 路线（5.10 以下的内核）：kptools 把 kpimg 打进 boot.img，
+     * 产物手动 fastboot/recovery 刷入。只在自动检测到非 GKI 内核时出现。
+     */
+    data class KernelPatch(
+        val uri: Uri? = null,
+        @get:StringRes override val label: Int = R.string.kernel_patch_install,
+        override val summary: String?
+    ) : InstallMethod()
 
     abstract val label: Int
 

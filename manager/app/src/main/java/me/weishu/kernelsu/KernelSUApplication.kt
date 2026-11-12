@@ -18,7 +18,7 @@ import java.util.Locale
 
 lateinit var ksuApp: KernelSUApplication
 
-class KernelSUApplication : Application(), ViewModelStoreOwner {
+open class KernelSUApplication : Application(), ViewModelStoreOwner {
 
     companion object {
         fun setEnableOnBackInvokedCallback(appInfo: ApplicationInfo, enable: Boolean) {
@@ -67,7 +67,7 @@ class KernelSUApplication : Application(), ViewModelStoreOwner {
                 .addInterceptor { block ->
                     block.proceed(
                         block.request().newBuilder()
-                            .header("User-Agent", "KernelSU/${BuildConfig.VERSION_CODE}")
+                            .header("User-Agent", "XECKernelPro/${BuildConfig.VERSION_CODE}")
                             .header("Accept-Language", Locale.getDefault().toLanguageTag()).build()
                     )
                 }.build()

@@ -4,7 +4,6 @@ import android.app.Activity
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -20,12 +19,13 @@ import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.dropUnlessResumed
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import me.weishu.kernelsu.R
 import me.weishu.kernelsu.getKernelVersion
-import me.weishu.kernelsu.ui.LocalUiMode
-import me.weishu.kernelsu.ui.UiMode
+import me.weishu.kernelsu.kpatch.KPatch
 import me.weishu.kernelsu.ui.component.choosekmidialog.ChooseKmiDialog
 import me.weishu.kernelsu.ui.component.dialog.DownloadDialog
 import me.weishu.kernelsu.ui.component.dialog.rememberLoadingDialog
@@ -46,9 +46,7 @@ import top.yukonga.miuix.kmp.basic.SnackbarHostState as MiuixSnackbarHostState
 fun InstallScreen() {
     val navigator = LocalNavigator.current
     val context = LocalContext.current
-    val snackbarHost = remember { SnackbarHostState() }
     val miuixSnackbarHost = remember { MiuixSnackbarHostState() }
-    val uiMode = LocalUiMode.current
     val scope = rememberCoroutineScope()
     val resources = LocalResources.current
     var probeJob by remember { mutableStateOf<Job?>(null) }
@@ -67,23 +65,75 @@ fun InstallScreen() {
     var enableAdb by rememberSaveable { mutableStateOf(false) }
     var forceBackup by rememberSaveable { mutableStateOf(false) }
 
-    val currentKmi by produceState(initialValue = "") { value = getCurrentKmi() }
-    val partitions by produceState(initialValue = emptyList()) { value = getAvailablePartitions() }
-    val defaultPartition by produceState(initialValue = "") { value = getDefaultPartition() }
-    val rootAvailable by produceState(initialValue = false) { value = rootAvailable() }
-    val isAbDevice by produceState(initialValue = false) { value = isAbDevice() }
-    val isGkiDevice by produceState(initialValue = false) { value = getKernelVersion().isGKI() }
+    val currentKmi by produceState(initialValue = "") { value = withContext(Dispatchers.IO) { getCurrentKmi() } }
+    val partitions by produceState(initialValue = emptyList()) {
+        value = withContext(Dispatchers.IO) { getAvailablePartitions() }
+    }
+    val defaultPartition by produceState(initialValue = "") {
+        value = withContext(Dispatchers.IO) { getDefaultPartition() }
+    }
+    // root 与 GKI 用 null 表示「尚未探测完成」：探测期间这几项按可用渲染，
+    // 结果回来后再决定是否降级成「可见但不可用」，避免首帧闪一下灰态。
+    val rootAvailable by produceState<Boolean?>(initialValue = null) {
+        value = withContext(Dispatchers.IO) { rootAvailable() }
+    }
+    val isAbDevice by produceState(initialValue = false) {
+        value = withContext(Dispatchers.IO) { isAbDevice() }
+    }
+    val isGkiDevice by produceState<Boolean?>(initialValue = null) { value = getKernelVersion().isGKI() }
+    // KernelPatch 载荷是否真的随这个 APK 打包（kptools 在 nativeLibraryDir 里）。
+    // 发版工作流会下载并校验 sha256；管理器单独构建的工作流（build-manager.yml）不会。
+    // 不探测就会在 5.10 以下设备上给出一个「点了必失败」的入口。
+    val kpatchAvailable by produceState<Boolean?>(initialValue = null) {
+        value = runCatching { KPatch.available(context) }.getOrDefault(false)
+    }
 
     val selectFileTip = stringResource(id = R.string.select_file_tip, defaultPartition)
     val selectFileTipNoGki = stringResource(id = R.string.select_file_tip_nogki)
     val downloadFileMsg = stringResource(id = R.string.download_dialog_msg)
-    val installMethodOptions = remember(rootAvailable, isAbDevice, isGkiDevice, selectFileTip, selectFileTipNoGki, downloadFileMsg) {
+    val anyKernelTip = stringResource(id = R.string.install_anykernel_tip)
+    val kernelPatchTip = stringResource(id = R.string.kernel_patch_summary)
+    val kernelPatchUnavailableTip = stringResource(id = R.string.kernel_patch_unavailable)
+    val rootModeTip = stringResource(id = R.string.root_mode_kernel)
+    val installRequiresRoot = stringResource(id = R.string.install_requires_root)
+    val installRequiresGki = stringResource(id = R.string.install_requires_gki)
+    // kpatch 补丁成品（cache 内），等待用户选保存位置。
+    var pendingPatchedFile by remember { mutableStateOf<java.io.File?>(null) }
+
+    // AnyKernel3 / 直接安装 / 安装到未使用槽位这三项以前被
+    // `rootAvailable && isGkiDevice` 在 buildList 阶段整体丢弃，条件不满足时
+    // 界面上不留任何痕迹，用户会以为这个版本干脆没有 GKI 功能。现在三项始终
+    // 入列，只在条件不满足时降级成「可见但不可用」，并把原因写进 summary。
+    // `null`（尚未探测完成）视为可用，避免首帧闪灰；只有明确探测出为 false 才降级。
+    // 这里用 `== false` 而不是 `!rootAvailable`：这两个值来自 produceState 的委托属性，
+    // 委托属性不支持 smart cast，取反后仍是 Boolean? 会编译不过。
+    val gatedInstallBlockedReason: String? = when {
+        rootAvailable == false -> installRequiresRoot
+        isGkiDevice == false -> installRequiresGki
+        else -> null
+    }
+    // KernelPatch 路线只在 5.10 以下的内核态（有 KSU 驱动，非挂载态）设备上出现；出现了
+    // 但 APK 里没有 kptools（载荷缺失）时把原因写到 summary 上并禁用，而不是让用户点到
+    // 一半才失败。
+    val kernelPatchBlockedReason: String? =
+        if (isGkiDevice == false && kpatchAvailable == false) {
+            kernelPatchUnavailableTip
+        } else {
+            null
+        }
+    // `isGkiDevice` 必须留在 key 里：探测完成时它从 null 变成 true/false，
+    // 下面 SelectFile 的 summary 要跟着从「非 GKI」提示换成 GKI 提示。
+    val installMethodOptions = remember(isAbDevice, isGkiDevice, kpatchAvailable, kernelPatchBlockedReason, selectFileTip, selectFileTipNoGki, downloadFileMsg, anyKernelTip, kernelPatchTip) {
         buildList {
-            add(InstallMethod.SelectFile(summary = if (isGkiDevice) selectFileTip else selectFileTipNoGki))
+            add(InstallMethod.SelectFile(summary = if (isGkiDevice == true) selectFileTip else selectFileTipNoGki))
             add(InstallMethod.DownloadFile(summary = downloadFileMsg))
-            if (rootAvailable && isGkiDevice) {
-                add(InstallMethod.DirectInstall)
-                if (isAbDevice) add(InstallMethod.DirectInstallToInactiveSlot)
+            add(InstallMethod.AnyKernel(summary = anyKernelTip))
+            add(InstallMethod.DirectInstall)
+            if (isAbDevice) add(InstallMethod.DirectInstallToInactiveSlot)
+            // 非 GKI（<5.10 但有 KSU 驱动）只剩 KernelPatch 通道。
+            // GKI 设备走上面的直刷。
+            if (isGkiDevice == false) {
+                add(InstallMethod.KernelPatch(summary = kernelPatchBlockedReason ?: kernelPatchTip))
             }
         }
     }
@@ -112,11 +162,7 @@ fun InstallScreen() {
 
     fun showMessage(message: String) {
         scope.launch {
-            if (uiMode == UiMode.Material) {
-                snackbarHost.showSnackbar(message)
-            } else {
-                miuixSnackbarHost.showSnackbar(message)
-            }
+            miuixSnackbarHost.showSnackbar(message)
         }
     }
 
@@ -131,7 +177,11 @@ fun InstallScreen() {
                             lkm = lkmSelection,
                             allowShell = allowShell,
                             enableAdb = enableAdb,
-                            backup = forceBackup
+                            // 备份开关只对 SelectFile 展示；其它 method 不再偷偷带上它。
+                            backup = method is InstallMethod.SelectFile && forceBackup
+                        )
+                        is InstallMethod.AnyKernel -> FlashIt.FlashAnyKernel(
+                            uri = method.uri ?: return@let
                         )
                         else -> FlashIt.FlashBoot(
                             boot = if (method is InstallMethod.SelectFile) method.uri else null,
@@ -213,7 +263,42 @@ fun InstallScreen() {
     ) {
         if (it.resultCode == Activity.RESULT_OK) {
             it.data?.data?.let { uri ->
-                installMethod = InstallMethod.SelectFile(uri, summary = if (isGkiDevice) selectFileTip else selectFileTipNoGki)
+                installMethod = InstallMethod.SelectFile(uri, summary = if (isGkiDevice == true) selectFileTip else selectFileTipNoGki)
+            }
+        }
+    }
+    val selectAnyKernelLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) {
+        if (it.resultCode == Activity.RESULT_OK) {
+            it.data?.data?.let { uri ->
+                installMethod = InstallMethod.AnyKernel(uri, summary = anyKernelTip)
+            }
+        }
+    }
+    val selectKpatchImageLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) {
+        if (it.resultCode == Activity.RESULT_OK) {
+            it.data?.data?.let { uri ->
+                installMethod = InstallMethod.KernelPatch(uri, summary = kernelPatchTip)
+            }
+        }
+    }
+    // kpatch 补丁产物保存：用户选位置后把 cache 里的成品拷过去。
+    val savePatchedLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/octet-stream")
+    ) { uri ->
+        val patched = pendingPatchedFile
+        if (uri != null && patched != null) {
+            runCatching {
+                context.contentResolver.openOutputStream(uri)?.use { out ->
+                    patched.inputStream().use { it.copyTo(out) }
+                } ?: error("cannot open $uri")
+            }.onSuccess {
+                showMessage(resources.getString(R.string.kernel_patch_saved))
+            }.onFailure {
+                showMessage(resources.getString(R.string.kernel_patch_failed, it.message ?: ""))
             }
         }
     }
@@ -228,6 +313,9 @@ fun InstallScreen() {
         currentKmi = currentKmi,
         slotSuffix = slotSuffix,
         installMethodOptions = installMethodOptions,
+        gatedInstallBlockedReason = gatedInstallBlockedReason,
+        kernelPatchBlockedReason = kernelPatchBlockedReason,
+        rootModeTip = rootModeTip,
         canSelectPartition = installMethod is InstallMethod.DirectInstall ||
             installMethod is InstallMethod.DirectInstallToInactiveSlot ||
             installMethod is InstallMethod.DownloadFile,
@@ -244,6 +332,12 @@ fun InstallScreen() {
         onSelectBootImage = {
             selectImageLauncher.launch(Intent(Intent.ACTION_GET_CONTENT).apply { type = "application/octet-stream" })
         },
+        onSelectAnyKernel = {
+            selectAnyKernelLauncher.launch(Intent(Intent.ACTION_GET_CONTENT).apply { type = "application/zip" })
+        },
+        onSelectBootImageForKpatch = {
+            selectKpatchImageLauncher.launch(Intent(Intent.ACTION_GET_CONTENT).apply { type = "application/octet-stream" })
+        },
         onUploadLkm = {
             selectLkmLauncher.launch(Intent(Intent.ACTION_GET_CONTENT).apply { type = "application/octet-stream" })
         },
@@ -253,25 +347,70 @@ fun InstallScreen() {
             val method = installMethod
             if (method is InstallMethod.DownloadFile) {
                 remotePartitionSelectionIndex = index
-                installMethod = method.copy(partition = remotePartitions.getOrNull(index))
+                val picked = remotePartitions.getOrNull(index)
+                if (picked == null) {
+                    // 越界时旧代码把分区置空，随后安装被 `?: return@let` 静默吃掉，
+                    // 用户只看到什么都没发生。这里给出提示并保持原选择。
+                    scope.launch { miuixSnackbarHost.showSnackbar("分区列表已变化，请重新选择安装包") }
+                } else {
+                    installMethod = method.copy(partition = picked)
+                }
             } else {
                 partitionSelectionIndex = index
             }
         },
         onNext = {
-            val isLkmSelected = lkmSelection != LkmSelection.KmiNone
-            val isKmiUnknown = currentKmi.isBlank()
-            val isKmiUnresolved = when (installMethod) {
-                // The download flow extracts the KMI itself; no manual
-                // selection needed.
-                is InstallMethod.DownloadFile -> false
-                is InstallMethod.SelectFile -> true
-                else -> isKmiUnknown
-            }
-            if (!isLkmSelected && isKmiUnresolved) {
-                showChooseKmiDialog.value = true
+            val method = installMethod
+            if (method is InstallMethod.KernelPatch) {
+                // KernelPatch 路线（<5.10）：选 boot.img → kptools 打 kpimg →
+                // 成品另存（fastboot/recovery 手动刷）。不进 Flash 流程。
+                val uri = method.uri
+                if (uri == null) {
+                    selectKpatchImageLauncher.launch(
+                        Intent(Intent.ACTION_GET_CONTENT).apply { type = "application/octet-stream" }
+                    )
+                } else {
+                    scope.launch {
+                        try {
+                            loadingDialog.showLoading()
+                            val bootFile = java.io.File(context.cacheDir, "kpatch_boot.img")
+                            context.contentResolver.openInputStream(uri)?.use { input ->
+                                bootFile.outputStream().use(input::copyTo)
+                            } ?: error("cannot open boot image")
+                            val result = KPatch.patch(context, bootFile) { }
+                            if (result.success && result.output != null) {
+                                pendingPatchedFile = result.output
+                                savePatchedLauncher.launch("boot-patched.img")
+                            } else {
+                                val tail = result.log.lineSequence()
+                                    .lastOrNull { it.isNotBlank() } ?: result.log.take(120)
+                                showMessage(resources.getString(R.string.kernel_patch_failed, tail))
+                            }
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            showMessage(resources.getString(R.string.kernel_patch_failed, e.message ?: ""))
+                        } finally {
+                            loadingDialog.hide()
+                        }
+                    }
+                }
             } else {
-                onInstall()
+                val isLkmSelected = lkmSelection != LkmSelection.KmiNone
+                val isKmiUnknown = currentKmi.isBlank()
+                val isKmiUnresolved = when (installMethod) {
+                    // The download flow extracts the KMI itself; no manual
+                    // selection needed.
+                    is InstallMethod.DownloadFile -> false
+                    is InstallMethod.SelectFile -> true
+                    is InstallMethod.AnyKernel -> false
+                    else -> isKmiUnknown
+                }
+                if (!isLkmSelected && isKmiUnresolved) {
+                    showChooseKmiDialog.value = true
+                } else {
+                    onInstall()
+                }
             }
         },
         onAdvancedOptionsClicked = {
@@ -285,11 +424,9 @@ fun InstallScreen() {
         },
         onSelectForceBackup = {
             forceBackup = it
-        }
+        },
+        onPrivilegeUpdate = {},
     )
 
-    when (LocalUiMode.current) {
-        UiMode.Miuix -> InstallScreenMiuix(state, actions, miuixSnackbarHost)
-        UiMode.Material -> InstallScreenMaterial(state, actions, snackbarHost)
-    }
+    InstallScreenMiuix(state, actions, miuixSnackbarHost)
 }

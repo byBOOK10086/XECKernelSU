@@ -8,7 +8,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -16,18 +15,16 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.core.net.toUri
 import kotlinx.coroutines.channels.ReceiveChannel
-import kotlinx.coroutines.launch
 import me.weishu.kernelsu.Natives
 import me.weishu.kernelsu.R
 import me.weishu.kernelsu.data.repository.SettingsRepositoryImpl
-import me.weishu.kernelsu.data.script.ScriptRepository
 import me.weishu.kernelsu.ksuApp
 import me.weishu.kernelsu.ui.component.dialog.rememberConfirmDialog
 import me.weishu.kernelsu.ui.screen.flash.FlashIt
-import me.weishu.kernelsu.ui.screen.scriptrun.ScriptRunArg
 import me.weishu.kernelsu.ui.util.DownloadService
 import me.weishu.kernelsu.ui.util.getFileName
-import me.weishu.kernelsu.ui.webui.WebUIActivity
+import com.xecpro.kernel.XecIntents
+import com.xecpro.kernel.XecWebUIActivity
 
 private const val SCHEME_KSU = "ksu"
 private const val HOST_ACTION = "action"
@@ -97,8 +94,6 @@ fun getDisplayName(uri: Uri): String {
     return uri.getFileName(ksuApp) ?: uri.lastPathSegment ?: "Unknown"
 }
 
-private val ZIP_MIME_TYPES = setOf("application/zip", "application/x-zip-compressed", "application/x-zip")
-
 /**
  * Resolve an intent snapshot into a [PendingAction].
  * Returns null if the intent carries no recognized action.
@@ -120,7 +115,7 @@ private fun resolveIntent(intent: Intent): PendingAction? {
 
     // File manager: open ZIP
     val viewUri = intent.data
-    if (viewUri != null && viewUri.scheme == "content" && intent.type in ZIP_MIME_TYPES) {
+    if (viewUri != null && viewUri.scheme == "content" && intent.type == "application/zip") {
         return PendingAction.InstallModule(
             uri = viewUri,
             displayName = getDisplayName(viewUri),
@@ -159,23 +154,12 @@ fun IntentDispatcher(intentChannel: ReceiveChannel<Intent>) {
     val isSafeMode = Natives.isSafeMode
     val isManager = Natives.isManager
     var pendingZipInstall by rememberSaveable(stateSaver = PendingAction.InstallModule.InstallModuleSaver) { mutableStateOf(null) }
-    val scope = rememberCoroutineScope()
-
-    // A one-shot script ZIP opens the run page, which also offers installing it as a module.
-    val openModuleZip: (Uri) -> Unit = { uri ->
-        scope.launch {
-            val script = ScriptRepository.peekOneshot(uri)
-            if (script != null) {
-                navigator.push(Route.ScriptRun(ScriptRunArg(uri, offerInstall = true, displayName = script.name)))
-            } else {
-                navigator.push(Route.Flash(FlashIt.FlashModules(listOf(uri))))
-            }
-        }
-    }
 
     val installDialog = rememberConfirmDialog(
         onConfirm = {
-            pendingZipInstall?.let { action -> openModuleZip(action.uri) }
+            pendingZipInstall?.let { action ->
+                navigator.push(Route.Flash(FlashIt.FlashModules(listOf(action.uri))))
+            }
             pendingZipInstall = null
         },
         onDismiss = { pendingZipInstall = null }
@@ -183,6 +167,7 @@ fun IntentDispatcher(intentChannel: ReceiveChannel<Intent>) {
 
     CollectIntentChannel(intentChannel) { intent ->
         if (!isManager) return@CollectIntentChannel
+        // Widget / Quick Settings tile: a one-shot token, not an exported action.
         val action = resolveIntent(intent) ?: return@CollectIntentChannel
 
         when (action) {
@@ -205,7 +190,7 @@ fun IntentDispatcher(intentChannel: ReceiveChannel<Intent>) {
                         )
                     )
                 } else {
-                    openModuleZip(action.uri)
+                    navigator.push(Route.Flash(FlashIt.FlashModules(listOf(action.uri))))
                 }
             }
 
@@ -214,7 +199,7 @@ fun IntentDispatcher(intentChannel: ReceiveChannel<Intent>) {
             }
 
             is PendingAction.OpenWebUI -> {
-                val webIntent = Intent(context, WebUIActivity::class.java)
+                val webIntent = Intent(context, XecWebUIActivity::class.java)
                     .setData(buildInternalWebUiUri(action.moduleId))
                 context.startActivity(webIntent)
             }

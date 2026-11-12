@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CheckCircleOutline
 import androidx.compose.material.icons.rounded.Cottage
 import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.Security
@@ -47,7 +48,7 @@ fun BottomBarMiuix(
     navigationBadge: NavigationBadgeState,
     modifier: Modifier,
 ) {
-    val fullFeatured = Natives.fullFeatured
+    val fullFeatured = Natives.isFullFeatured()
     if (!fullFeatured) return
 
     val mainState = LocalMainPagerState.current
@@ -64,7 +65,10 @@ fun BottomBarMiuix(
         BlurredBar(blurBackdrop) {
             NavigationBar(
                 modifier = modifier,
-                color = if (blurBackdrop != null) Color.Transparent else MiuixTheme.colorScheme.surface,
+                // 无模糊设备上会走这一支：直传 0.48 alpha 的 surface 同样会透出窗口底色，
+                // 底栏会变成一条近黑的横条，和 BlurredBar 内部 tint 的修正保持一致。
+                color = if (blurBackdrop != null) Color.Transparent
+                else MiuixTheme.colorScheme.surface.copy(alpha = 1f),
                 content = {
                     items.forEachIndexed { index, item ->
                         NavigationBarItem(
@@ -120,7 +124,7 @@ fun BottomBarMiuix(
                     }
                     Text(
                         text = item.label,
-                        fontSize = 11.sp,
+                        fontSize = 12.sp,
                         lineHeight = 14.sp,
                         maxLines = 1,
                         softWrap = false,
@@ -132,6 +136,13 @@ fun BottomBarMiuix(
     }
 }
 
+/**
+ * 底栏目的地。2026-10-06 收敛为 5 页、2026-10-26 检测页下线后为 4 页，
+ * 2026-11-08 按 MIUI 8 原型把检测页重新立起来，回到 5 页：
+ * Home / SuperUser / Module / Detect / Setting。
+ *
+ * 终端仍然不在底栏（它属于低频工具页，走设置页入口卡）。
+ */
 enum class BottomBarDestination(
     @get:StringRes val label: Int,
     val icon: ImageVector,
@@ -139,7 +150,8 @@ enum class BottomBarDestination(
     Home(R.string.home, Icons.Rounded.Cottage),
     SuperUser(R.string.superuser, Icons.Rounded.Security),
     Module(R.string.module, Icons.Rounded.Extension),
-    Setting(R.string.settings, Icons.Rounded.Settings)
+    Detect(R.string.home8_detect, Icons.Rounded.CheckCircleOutline),
+    Setting(R.string.settings, Icons.Rounded.Settings),
 }
 
 internal fun navigationBadgeFor(

@@ -1,16 +1,22 @@
 package me.weishu.kernelsu.ui.theme
 
 import android.app.Activity
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.core.view.WindowInsetsControllerCompat
 import com.materialkolor.dynamiccolor.ColorSpec
+import com.materialkolor.rememberDynamicColorScheme
+import me.weishu.kernelsu.ui.design.liquid.XcIndication
+import me.weishu.kernelsu.ui.design.token.Xc
 import me.weishu.kernelsu.ui.webui.MonetColorsProvider
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import top.yukonga.miuix.kmp.theme.LocalContentColor
@@ -18,6 +24,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.ThemeColorSpec
 import top.yukonga.miuix.kmp.theme.ThemeController
 import top.yukonga.miuix.kmp.theme.ThemePaletteStyle
+import top.yukonga.miuix.kmp.theme.defaultTextStyles
 
 @Composable
 fun MiuixKernelSUTheme(
@@ -29,6 +36,35 @@ fun MiuixKernelSUTheme(
     val darkTheme = appSettings.colorMode.isDark || (appSettings.colorMode.isSystem && systemDarkTheme)
     val colorStyle = appSettings.paletteStyle
     val colorSpec = appSettings.colorSpec
+    // XEC 语义色（由外层的 XcTheme 提供，已按 isDark / isAmoled 解析完毕）。
+    val xc = Xc.colors
+
+    // ── 字阶统一（设计图 方案 A）────────────────────────────────────────────
+    //
+    // miuix 自己的正文档是 17sp / 16sp（HyperOS 那套），而设计图定的是
+    // 「列表正文 14 / 550、辅助 12 / 500、分组标签 11 / 650」。只要 miuix 的
+    // Text 仍走它自己的默认档，用 miuix 组件的页面（超级用户 / 模块 / 仓库 /
+    // 权限 …）就会比扁平页（设备 / 工具 / 设置）整体大两档——同一台手机里
+    // 两种字号，就是"两套皮肤"最直观的来源。
+    //
+    // 这里把正文一系压到 Xc 字阶：main / paragraph / body1 / body2 / button /
+    // footnote* / headline*。标题档（title1..4）保持 miuix 原值不动，避免
+    // 顶栏标题和弹窗标题整站缩水一截。
+    // 2026-11-11 字体规范：Miuix 的字阶全部映射到 XcTypography 的 9 个角色。
+    // 上一版只是把正文压到 14sp，剩下的档位还是 miuix 默认（17/16sp），于是同一台
+    // 手机里"页面标题 24、分组标题 17、正文 14"三套节奏打架。
+    val xcTextStyles = defaultTextStyles(
+        main = Xc.typography.listTitle,
+        paragraph = Xc.typography.listTitle,
+        body1 = Xc.typography.listTitle,
+        body2 = Xc.typography.caption,
+        button = Xc.typography.listTitle.copy(fontWeight = FontWeight.Medium),
+        footnote1 = Xc.typography.caption,
+        footnote2 = Xc.typography.label,
+        headline1 = Xc.typography.section,
+        headline2 = Xc.typography.listTitle.copy(fontWeight = FontWeight.Medium),
+        subtitle = Xc.typography.listTitle,
+    )
 
     val miuixPaletteStyle = try {
         ThemePaletteStyle.valueOf(colorStyle.name)
@@ -42,14 +78,39 @@ fun MiuixKernelSUTheme(
         ThemeColorSpec.Spec2021
     }
 
-    val resolvedKeyColor: Color? = when {
+    // 强调色的种子。优先级：用户显式选色 > 系统 Monet 取色 > XEC teal。
+    // 这个值现在**任何档位**都会被真正消费（见下面的 accent 派生），
+    // 而不是像上游那样只在 Monet 档生效。
+    val accentSeed: Color = when {
         appSettings.keyColor != 0 -> Color(appSettings.keyColor)
         appSettings.colorMode.isMonet ->
             if (darkTheme) dynamicDarkColorScheme(context).primary
             else dynamicLightColorScheme(context).primary
 
-        else -> null
+        else -> xc.accent
     }
+
+    // ── 强调色系自己派生，不再依赖 miuix 的档位 ─────────────────────────────
+    //
+    // 这是"一眼看去还是 KernelSU"的第二个根因。miuix 的 ThemeController 只在
+    // 三个 Monet 档里消费 keyColor；默认档（SYSTEM / LIGHT / DARK）走的是它
+    // 内置的 lightColorScheme() / darkColorScheme()，强调色恒为上游那个蓝。
+    // 后果：全 App 的按钮、开关、滑块、选中态都是 KernelSU 蓝，
+    // 而且用户在调色屏选的 keyColor 在非 Monet 档下完全失效。
+    //
+    // miuix 自己的生成器 colorsFromSeed(...) 是 internal，跨模块拿不到；
+    // 但本模块本来就在用公开的 materialkolor（调色屏的预览卡就是它生成的），
+    // 于是这里用同一个种子自行派生整套强调色，再逐槽写回 Colors。
+    // 对比度由 materialkolor 保证，不需要我们再算一遍。
+    val accent = rememberDynamicColorScheme(
+        seedColor = accentSeed,
+        isDark = darkTheme,
+        style = colorStyle,
+        specVersion = colorSpec.effectiveFor(colorStyle),
+    )
+    // miuix 的禁用态强调色是"primary 38% 压在一个不透明的底上"。这里照做，
+    // 底换成 XEC 的面板色——直接用半透明色会透出背景图，糊成脏色。
+    val disabledAccent = accent.primary.over(xc.surface, 0.38f)
 
     val controller = ThemeController(
         when (appSettings.colorMode) {
@@ -60,7 +121,7 @@ fun MiuixKernelSUTheme(
             ColorMode.MONET_LIGHT -> ColorSchemeMode.MonetLight
             ColorMode.MONET_DARK, ColorMode.DARK_AMOLED -> ColorSchemeMode.MonetDark
         },
-        keyColor = resolvedKeyColor,
+        keyColor = accentSeed,
         isDark = darkTheme,
         paletteStyle = miuixPaletteStyle,
         colorSpec = miuixColorSpec,
@@ -69,19 +130,202 @@ fun MiuixKernelSUTheme(
     MiuixTheme(
         controller = controller,
         content = {
-            LaunchedEffect(darkTheme) {
-                val window = (context as? Activity)?.window ?: return@LaunchedEffect
-                WindowInsetsControllerCompat(window, window.decorView).apply {
-                    isAppearanceLightStatusBars = !darkTheme
-                    isAppearanceLightNavigationBars = !darkTheme
+            val scheme = MiuixTheme.colorScheme
+
+            // XEC 接管调色板。分两层覆写，顺序不能颠倒：先换强调色系，
+            // 再在其上盖中性色。
+            //
+            // miuix 只会算出"上游库默认皮肤"的那套灰阶，这是界面一眼看去像
+            // KernelSU 的根因；而它的 primary 一族在默认档恒为上游蓝，是这个
+            // 问题的第二面。两层都换掉之后才是一套完整的 XEC 皮肤。
+            //
+            // 第一层：强调色系，由 materialkolor 从 accentSeed 派生（见文件上方）。
+            val accented = scheme.copy(
+                primary = accent.primary,
+                onPrimary = accent.onPrimary,
+                // miuix 上游把这个槽位映射到 Material 的 primaryFixed（同族高对比
+                // 变体），M3 里与之对应的是 inversePrimary。它同时还是 WebUI 的
+                // --inversePrimary，所以不能不换。
+                primaryVariant = accent.inversePrimary,
+                primaryContainer = accent.primaryContainer,
+                onPrimaryContainer = accent.onPrimaryContainer,
+                disabledPrimary = disabledAccent,
+                disabledPrimaryButton = disabledAccent,
+                disabledPrimarySlider = disabledAccent,
+                disabledOnPrimary = accent.onPrimary.over(disabledAccent, 0.38f),
+                disabledOnPrimaryButton = accent.onPrimary.over(disabledAccent, 0.60f),
+                secondary = accent.secondary,
+                onSecondary = accent.onSecondary,
+                secondaryContainer = accent.secondaryContainer,
+                onSecondaryContainer = accent.onSecondaryContainer,
+                // miuix 的次级槽位（secondaryVariant 一族）上游是从 surfaceContainer
+                // 系派生的，不换掉会残留上游皮肤的蓝灰。
+                secondaryVariant = xc.surfaceMuted.copy(alpha = 0.70f),
+                onSecondaryVariant = xc.text,
+                secondaryContainerVariant = xc.surfaceMuted.copy(alpha = 0.82f),
+                onSecondaryContainerVariant = xc.textMuted,
+                tertiaryContainer = accent.tertiaryContainer,
+                onTertiaryContainer = accent.onTertiaryContainer,
+                tertiaryContainerVariant = accent.onTertiaryContainer,
+                error = accent.error,
+                onError = accent.onError,
+                errorContainer = accent.errorContainer,
+                onErrorContainer = accent.onErrorContainer,
+                // 滑块：圆点用强调色，滑轨用 20% 强调色压底。
+                sliderKeyPoint = accent.primary,
+                sliderKeyPointForeground = accent.surfaceContainerHigh,
+                sliderBackground = accent.primary.over(xc.surface, 0.20f),
+                // miuix 用这个槽位画 SmallTitle（设置页的分组小标题），
+                // 上游映射就是 primary，不换掉会是上游蓝。
+                onBackgroundVariant = accent.primary,
+            )
+
+            // 第二层：中性色。
+            //
+            // 「底」是全 App 唯一允许半透明的一层：它下面不是系统窗口，而是
+            // MainActivity 铺满全屏的那张背景图（`bg_light_1..4` 亮色原版 /
+            // `bg_dark_1..4` 深色适配版，每次冷启动随机抽一张，模式只决定取哪档调色）。
+            //
+            // 这里 alpha 取 0.80 是刻意的取舍：亮色档背景图的平均亮度都接近纯白
+            // （实测 luma 183–237），底全透明就变成"白底上的浅色字"，一个字都
+            // 读不清；底全不透明又会把背景图彻底盖死，等于把那个功能删了。
+            // 0.80 让背景图透出约两成，作为一层很淡的肌理存在，文字对比度仍然安全。
+            // 想让背景图更明显，只需要调这一个数字。深色档壁纸已自适应压暗到
+            // luma 73–82，半透明底压上去依然安全。
+            //
+            // AMOLED 档位例外：纯黑底是这个档位的全部意义，直接取实色把图盖掉。
+            val colors = if (darkTheme) {
+                accented.copy(
+                    // 扁平方案 A：整页实色，不再让壁纸透出来（之前的 0.80 会把
+                    // 底色调成一张"灰纸"，和设计稿的 #0B0B0E / #F5F5F7 对不上）。
+                    background = xc.backdrop,
+                    // 强调色钉死成设计稿那一个值：materialkolor 派生会把 #6B84FF
+                    // 拉成一族相近但不相同的蓝，按钮和设计稿就对不上了。
+                    primary = xc.accent,
+                    onPrimary = Color(0xFF0B0B0E),
+                    onBackground = xc.text,
+                    // 容器：全部实色，层级靠 1px 发丝线而不是半透明叠色。
+                    surface = xc.surface,
+                    surfaceVariant = xc.surfaceMuted,
+                    surfaceContainer = xc.surfaceMuted,
+                    surfaceContainerHigh = xc.surfaceMuted,
+                    surfaceContainerHighest = xc.surfaceMuted,
+                    // 注意：miuix 的 Colors 只提供上面这三档容器槽位，
+                    // **没有** Material 那套 surfaceContainerLow / surfaceContainerLowest /
+                    // surfaceDim / surfaceBright / surfaceTint。写进去是硬编译错误
+                    // （`No parameter with name ... found`，CI 已实测）。
+                    // 比 surfaceContainer 更低的层级由 XEC 自己的 XGlassSurface
+                    // 玻璃层来表达，不需要在这里补槽位。
+                    // 文本：三档灰阶统一到 XEC，避免混入上游默认灰。
+                    onSurface = xc.text,
+                    onSurfaceSecondary = xc.textSecondary,
+                    // miuix 没有单一的 onSurfaceVariant，只有下面这组细分槽位
+                    // （Summary / Actions 两档），这里用它们覆盖"次级文本"。
+                    onSurfaceVariantSummary = xc.textMuted,
+                    onSurfaceVariantActions = xc.textMuted.copy(alpha = 0.82f),
+                    onSurfaceContainer = xc.text,
+                    onSurfaceContainerHigh = xc.textSecondary,
+                    disabledOnSurface = xc.textMuted.copy(alpha = 0.38f),
+                    // 描边与分隔：用玻璃描边色，没有模糊的设备上也能分层。
+                    outline = xc.glassRim,
+                    dividerLine = xc.glassRim.copy(alpha = 0.55f),
+                    // 遮罩。（miuix 无 outlineVariant / inverseSurface / inverseOnSurface 槽位，
+                    // 描边档位统一收在 outline + dividerLine 这两条上。）
+                    windowDimming = xc.backdropScrim,
+                )
+            } else {
+                // 浅色档同样接管中性色，不再沿用 miuix 的灰阶。
+                //
+                // 上游那套浅色灰阶是"一眼看去还是 KernelSU"的第三个来源：它和
+                // 深色档出自同一套蓝灰偏色，只换强调色压不住——底、容器、分隔线、
+                // 次级文字全是从它派生的。XEC 的浅色取值（backdrop #F5F5F7 /
+                // surface 纯白 / text 近黑）与深色档共用同一套语义槽位，规则一致，
+                // 只是把值换掉，所以这里是深色分支的镜像，不是第二套设计。
+                accented.copy(
+                    background = xc.backdrop,
+                    primary = xc.accent,
+                    onPrimary = Color.White,
+                    onBackground = xc.text,
+                    surface = xc.surface,
+                    surfaceVariant = xc.surfaceMuted,
+                    surfaceContainer = xc.surfaceMuted,
+                    surfaceContainerHigh = xc.surfaceMuted,
+                    surfaceContainerHighest = xc.surfaceMuted,
+                    onSurface = xc.text,
+                    onSurfaceSecondary = xc.textSecondary,
+                    onSurfaceVariantSummary = xc.textMuted,
+                    onSurfaceVariantActions = xc.textMuted.copy(alpha = 0.82f),
+                    onSurfaceContainer = xc.text,
+                    onSurfaceContainerHigh = xc.textSecondary,
+                    disabledOnSurface = xc.textMuted.copy(alpha = 0.38f),
+                    outline = xc.glassRim,
+                    dividerLine = xc.glassRim.copy(alpha = 0.55f),
+                    windowDimming = xc.backdropScrim,
+                )
+            }
+            MiuixTheme(
+                colors = colors,
+                textStyles = xcTextStyles,
+                content = {
+                    LaunchedEffect(darkTheme) {
+                        val window = (context as? Activity)?.window ?: return@LaunchedEffect
+                        WindowInsetsControllerCompat(window, window.decorView).apply {
+                            isAppearanceLightStatusBars = !darkTheme
+                            isAppearanceLightNavigationBars = !darkTheme
+                        }
+                    }
+                    MonetColorsProvider.UpdateCss()
+                    // 用 XEC 的侧角凹陷反馈顶掉 miuix 默认那个方块高光。
+                    // 必须在 MiuixTheme 的 content 里下发——miuix 自己会在
+                    // 主题内部重新 provide 一次 LocalIndication，在外面覆盖会被冲掉。
+                    //
+                    // 凹陷强度按明暗档分开给：深色档玻璃本体就是黑的，阴影要更重
+                    // （0.34）才压得住黑液态玻璃；浅色档 0.17 就够，再多会读成一块脏斑。
+                    // 折射亮环反过来——浅色档玻璃亮，亮环要更实才看得见。
+                    val indicationColor = Xc.colors.text
+                    val pressRadius = Xc.shapes.pressRadius
+                    val indicationDark = Xc.colors.isDark
+                    // MIUI 8 的按下反馈只有"压暗一档"：没有液态高光（sheenAlpha = 0），
+                    // 阴影也压到很浅——之前在深色档给 0.34、浅色档给 0.17 是为了托住
+                    // 玻璃介质，现在面板是不透明的白/近黑实色，那么重的阴影会让每次点击
+                    // 都在行内糊出一块灰斑。
+                    val indication = remember(indicationColor, pressRadius, indicationDark) {
+                        XcIndication(
+                            color = indicationColor,
+                            radius = pressRadius,
+                            shadeAlpha = if (indicationDark) 0.22f else 0.12f,
+                            sheenAlpha = 0f,
+                        )
+                    }
+                    // miuix 的 Card 自带 16dp 圆角，而我们自己的面板族是 4dp。
+                    //
+                    // 这里**没法**像最初设想的那样一行压平全站：`CardDefaults.CornerRadius`
+                    // 是 `val`（0.9.3 实测，赋值得编译错 "'val' cannot be reassigned"），
+                    // 只能逐个调用点传 `cornerRadius = XcRadius.md`。八十多处调用点留给
+                    // 各页面的重排批次按需处理，全局默认值这条捷径不通。
+                    CompositionLocalProvider(
+                        LocalIndication provides indication,
+                        LocalContentColor provides MiuixTheme.colorScheme.onBackground,
+                    ) {
+                        content()
+                    }
                 }
-            }
-            MonetColorsProvider.UpdateCss()
-            CompositionLocalProvider(
-                LocalContentColor provides MiuixTheme.colorScheme.onBackground,
-            ) {
-                content()
-            }
+            )
         }
     )
 }
+
+/**
+ * 把 [this] 按 [alpha] 压到一个不透明的底上，返回一个本身不透明的颜色。
+ *
+ * 用途：miuix 的禁用态强调色（`disabledPrimary` 一族）语义上是"primary 38%
+ * 压在不透明的底上"。如果直接用 `primary.copy(alpha = 0.38f)`，底色会被
+ * 换成卡片自己的半透明容器，再往下还有背景图——混合出来的颜色不可控，
+ * 深浅档表现还不一致。所以这里真的做一次合算，把结果钉成实色。
+ */
+private fun Color.over(base: Color, alpha: Float): Color = Color(
+    red = red * alpha + base.red * (1f - alpha),
+    green = green * alpha + base.green * (1f - alpha),
+    blue = blue * alpha + base.blue * (1f - alpha),
+    alpha = 1f,
+)

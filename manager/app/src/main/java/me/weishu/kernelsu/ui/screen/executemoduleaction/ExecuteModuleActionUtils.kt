@@ -95,7 +95,6 @@ fun ExecuteModuleActionEffect(
 fun saveLog(
     logContent: StringBuilder,
     scope: CoroutineScope,
-    fileNamePrefix: String = "KernelSU_module_action_log",
     showMessage: (String) -> Unit
 ): () -> Unit {
     return {
@@ -104,7 +103,7 @@ fun saveLog(
             val date = format.format(Date())
             val file = File(
                 Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
-                "${fileNamePrefix}_${date}.log"
+                "XECKernelPro_module_action_log_${date}.log"
             )
             file.writeText(logContent.toString())
             showMessage("Log saved to ${file.absolutePath}")

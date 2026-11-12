@@ -1,23 +1,20 @@
 package me.weishu.kernelsu.ui.navigation3
 
 import android.os.Parcelable
+import androidx.navigation3.runtime.NavKey
 import kotlinx.parcelize.Parcelize
 import kotlinx.serialization.Serializable
 import me.weishu.kernelsu.ui.screen.flash.FlashIt
 import me.weishu.kernelsu.ui.screen.modulerepo.RepoModuleArg
-import me.weishu.kernelsu.ui.screen.scriptrun.ScriptRunArg
 import me.weishu.kernelsu.ui.util.FlashItSerializer
 import me.weishu.kernelsu.ui.util.RepoModuleArgSerializer
-import me.weishu.kernelsu.ui.util.ScriptRunArgSerializer
 import me.weishu.kernelsu.ui.util.TemplateInfoSerializer
 import me.weishu.kernelsu.ui.viewmodel.TemplateViewModel
-import top.yukonga.miuix.kmp.nav.core.NavKey
 
 /**
- * Type-safe navigation keys for miuix-nav.
+ * Type-safe navigation keys for Navigation3.
  * Each destination is a NavKey (data object/data class) and can be saved/restored in the back stack.
  */
-@Serializable
 sealed interface Route : NavKey, Parcelable {
     @Parcelize
     @Serializable
@@ -50,6 +47,29 @@ sealed interface Route : NavKey, Parcelable {
     @Parcelize
     @Serializable
     data object ColorPalette : Route
+
+    /**
+     * 自定义背景：本机私有目录里的浅/深两档壁纸。
+     *
+     * 单独一条路由而不是塞进调色屏，是因为这两件事的"生效面"不同——主题改的是玻璃令牌，
+     * 背景改的是全应用玻璃的折射源，且要跑相册选图 + 重编码，塞在一起会让调色屏
+     * 背一个它不需要的 ActivityResult 生命周期。
+     */
+    @Parcelize
+    @Serializable
+    data object Wallpaper : Route
+
+    /**
+     * 主题：商城 / 我的主题 / 编辑器三合一。
+     *
+     * 用 `data object` 而不是带参数的 route：导航参数会被 marshall 成 ByteArray 走
+     * `rememberSaveable`（进程死亡时进 Binder，约 1MB 上限），而主题包可以有背景图。
+     * 屏内按 id 读 [me.weishu.kernelsu.data.theme.ThemeRepository] 即可，参数只带一个
+     * "进来先看哪个 Tab"这种小东西也没必要 —— Tab 状态是可丢弃的 UI 状态。
+     */
+    @Parcelize
+    @Serializable
+    data object Themes : Route
 
     @Parcelize
     @Serializable
@@ -85,53 +105,25 @@ sealed interface Route : NavKey, Parcelable {
     @Parcelize
     @Serializable
     data class ExecuteModuleAction(val moduleId: String, val fromShortcut: Boolean = false) : Route
-
     @Parcelize
     @Serializable
-    data class ScriptRun(@Serializable(with = ScriptRunArgSerializer::class) val arg: ScriptRunArg) : Route
+    data object RemoteAssistant : Route
 
-    /**
-     * Themes: store / mine / editor in one screen.
-     *
-     * A plain object rather than a parameterised route: a theme package can carry background
-     * images, and navigation arguments are marshalled through `rememberSaveable` (Binder, ~1MB
-     * when the process dies). The screen reads what it needs from
-     * [me.weishu.kernelsu.data.theme.ThemeRepository] by id instead.
-     */
-    @Parcelize
-    @Serializable
-    data object Themes : Route
-
-    /** Custom background: one light and one dark image in the app's private directory. */
-    @Parcelize
-    @Serializable
-    data object Wallpaper : Route
-
-    /** Terminal plus the file-manager tab, reached from the toolbox. */
+    /** 终端：原底栏第 7 页，现从设置页入口卡进入（底栏 7 页收敛为 5 页）。 */
     @Parcelize
     @Serializable
     data object Terminal : Route
 
-    /** Toolbox: terminal / external modules (and later the stealth entrance) in one place. */
+    /** 工具箱：终端 / 安全锁（超级密钥）/ 隐身入口的统一菜单（从设置页进入）。 */
     @Parcelize
     @Serializable
     data object Tools : Route
 
     /**
-     * Optional add-ons: the TEE engine and TA enhancement built by this project, plus a
-     * link-out to ReZygisk (third-party, AGPL-3.0-or-later, never bundled).
+     * 扩展模块：TEE 引擎 / TA 增强（本项目构建、管理器内安装）与
+     * Zygisk（ReZygisk，第三方 AGPL-3.0-or-later，只跳转上游 Releases，不内置）。
      */
     @Parcelize
     @Serializable
     data object ExternalModules : Route
-
-    /** Remote module assistant: generate, sign and fetch modules through our own server. */
-    @Parcelize
-    @Serializable
-    data object RemoteAssistant : Route
-
-    /** Hiding the launcher icon, including the way back in (tile / adb). */
-    @Parcelize
-    @Serializable
-    data object Stealth : Route
 }

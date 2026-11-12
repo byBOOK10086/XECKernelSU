@@ -285,13 +285,21 @@ fun Xc8Loading(
     modifier: Modifier = Modifier,
     size: androidx.compose.ui.unit.Dp = 22.dp,
 ) {
-    val transition = rememberInfiniteTransition(label = "xc8Loading")
-    val angle by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(tween(900, easing = LinearEasing)),
-        label = "xc8LoadingAngle",
-    )
+    // §九：减少动态效果时不要转圈。转圈是"正在加载"的唯一视觉线索，所以不能
+    // 直接不画（那样会变成一块空白）——把它停在 0°，圆弧本身仍然可见。
+    val reduced = me.weishu.kernelsu.ui.design.token.LocalXcReducedMotion.current
+    val angle: Float
+    if (reduced) {
+        angle = 0f
+    } else {
+        val transition = rememberInfiniteTransition(label = "xc8Loading")
+        angle = transition.animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(tween(900, easing = LinearEasing)),
+            label = "xc8LoadingAngle",
+        ).value
+    }
     // 同上：Canvas 的绘制 lambda 不是 @Composable。
     val arcColor = Xc.colors.accent
     Canvas(
@@ -379,7 +387,7 @@ fun Xc8Badge(
     ) {
         Text(
             text = if (count > 99) "99+" else count.toString(),
-            fontSize = 10.sp,
+            fontSize = 12.sp,
             fontWeight = FontWeight.Medium,
             color = Color.White,
             maxLines = 1,
@@ -413,14 +421,14 @@ fun Xc8TextField(
         keyboardOptions = keyboardOptions,
         textStyle = TextStyle(
             color = Xc.colors.text,
-            fontSize = 14.sp,
+            fontSize = 15.sp,
         ),
         cursorBrush = SolidColor(Xc.colors.accent),
         decorationBox = { inner ->
             if (value.isEmpty() && placeholder != null) {
                 Text(
                     text = placeholder,
-                    fontSize = 14.sp,
+                    fontSize = 15.sp,
                     color = Xc.colors.textMuted,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -459,13 +467,13 @@ fun Xc8SearchBar(
             onValueChange = onQueryChange,
             modifier = Modifier.weight(1f),
             singleLine = true,
-            textStyle = TextStyle(color = Xc.colors.text, fontSize = 13.5.sp),
+            textStyle = TextStyle(color = Xc.colors.text, fontSize = 13.sp),
             cursorBrush = SolidColor(Xc.colors.accent),
             decorationBox = { inner ->
                 if (query.isEmpty() && placeholder != null) {
                     Text(
                         text = placeholder,
-                        fontSize = 13.5.sp,
+                        fontSize = 13.sp,
                         color = Xc.colors.textMuted,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,

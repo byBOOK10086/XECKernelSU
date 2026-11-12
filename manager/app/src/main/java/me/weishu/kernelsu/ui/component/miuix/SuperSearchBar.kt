@@ -14,12 +14,6 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.gestures.draggable
-import androidx.compose.foundation.gestures.rememberDraggableState
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,6 +27,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
@@ -47,6 +42,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.res.stringResource
@@ -68,6 +64,9 @@ import androidx.navigationevent.NavigationEventInfo
 import androidx.navigationevent.compose.NavigationBackHandler
 import androidx.navigationevent.compose.rememberNavigationEventState
 import me.weishu.kernelsu.ui.component.SearchStatus
+import me.weishu.kernelsu.ui.design.glass.xGlassBody
+import me.weishu.kernelsu.ui.design.liquid.xWaterDropClick
+import me.weishu.kernelsu.ui.design.token.XcRadius
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.InputField
 import top.yukonga.miuix.kmp.basic.Text
@@ -145,14 +144,14 @@ fun SearchStatus.SearchPager(
             .semantics { onClick { false } }
             .then(
                 if (!searchStatus.isCollapsed()) {
-                    Modifier
-                        .pointerInput(Unit) {
-                            detectTapGestures { }
+                    Modifier.pointerInput(Unit) {
+                        awaitPointerEventScope {
+                            while (true) {
+                                val event = awaitPointerEvent(PointerEventPass.Final)
+                                event.changes.forEach { it.consume() }
+                            }
                         }
-                        .draggable(
-                            state = rememberDraggableState { },
-                            orientation = Orientation.Horizontal,
-                        )
+                    }
                 } else Modifier
             )
     ) {
@@ -161,8 +160,15 @@ fun SearchStatus.SearchPager(
                 .fillMaxWidth()
                 .padding(top = topPadding)
                 .then(
-                    if (!searchStatus.isCollapsed()) Modifier.background(colorScheme.surface)
-                    else Modifier
+                    if (!searchStatus.isCollapsed()) {
+                        // The expanded input and its result layer share one frame.
+                        // Round all corners so the frame encloses the whole search header.
+                        Modifier
+                            .xGlassBody(
+                                backdrop = null,
+                                shape = RoundedCornerShape(XcRadius.xl),
+                            )
+                    } else Modifier
                 ),
             horizontalArrangement = Arrangement.Start,
             verticalAlignment = Alignment.CenterVertically,
@@ -171,7 +177,6 @@ fun SearchStatus.SearchPager(
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .background(colorScheme.surface)
                 ) {
                     expandBar(searchStatus, onSearchStatusChange, searchBarTopPadding)
                 }
@@ -187,10 +192,8 @@ fun SearchStatus.SearchPager(
                     color = colorScheme.primary,
                     modifier = Modifier
                         .padding(start = 4.dp, end = 16.dp, top = searchBarTopPadding, bottom = 6.dp)
-                        .clickable(
-                            interactionSource = null,
+                        .xWaterDropClick(
                             enabled = searchStatus.isExpand(),
-                            indication = null
                         ) {
                             onSearchStatusChange(
                                 searchStatus.copy(
@@ -259,7 +262,7 @@ fun SearchBar(
         singleLine = true,
         textStyle = TextStyle(
             fontWeight = FontWeight.Medium,
-            fontSize = 17.sp,
+            fontSize = 15.sp,
             color = colorScheme.onSurface
         ),
         cursorBrush = SolidColor(colorScheme.primary),
@@ -269,7 +272,12 @@ fun SearchBar(
             .padding(horizontal = 12.dp)
             .padding(top = searchBarTopPadding, bottom = 6.dp)
             .heightIn(min = 45.dp)
-            .background(colorScheme.surfaceContainerHigh, CircleShape)
+            .xGlassBody(
+                backdrop = null,
+                shape = CircleShape,
+                // 输入胶囊压在头部玻璃上，介质色比头部重一档才分得出层次
+                tint = colorScheme.surfaceContainerHigh.copy(alpha = 0.6f),
+            )
             .focusRequester(focusRequester),
         decorationBox = { innerTextField ->
             Row(
@@ -299,10 +307,7 @@ fun SearchBar(
                         modifier = Modifier
                             .size(44.dp)
                             .padding(start = 8.dp, end = 16.dp)
-                            .clickable(
-                                interactionSource = null,
-                                indication = null
-                            ) {
+                            .xWaterDropClick {
                                 textFieldValue = TextFieldValue("")
                                 onSearchStatusChange(searchStatus.copy(searchText = ""))
                             },

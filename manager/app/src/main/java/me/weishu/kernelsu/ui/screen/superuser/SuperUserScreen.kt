@@ -11,9 +11,6 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.compose.ui.unit.Dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import me.weishu.kernelsu.ui.component.SearchStatus
-import me.weishu.kernelsu.ui.LocalUiMode
-import me.weishu.kernelsu.ui.UiMode
 import me.weishu.kernelsu.ui.navigation3.Navigator
 import me.weishu.kernelsu.ui.navigation3.Route
 import me.weishu.kernelsu.ui.viewmodel.SuperUserViewModel
@@ -36,8 +33,6 @@ fun SuperUserPager(
                 viewModel.initializePreferences()
                 viewModel.loadAppList()
             }
-        } else if (!uiState.searchStatus.isCollapsed()) {
-            viewModel.updateSearchStatus(uiState.searchStatus.copy(searchText = "", current = SearchStatus.Status.COLLAPSED))
         }
     }
 
@@ -80,17 +75,10 @@ fun SuperUserPager(
         onOpenProfile = onOpenProfile,
     )
 
-    when (LocalUiMode.current) {
-        UiMode.Miuix -> SuperUserPagerMiuix(
-            uiState = uiState,
-            actions = actions,
-            bottomInnerPadding = bottomInnerPadding,
-        )
-
-        UiMode.Material -> SuperUserPagerMaterial(
-            uiState = uiState,
-            actions = actions,
-            bottomInnerPadding = bottomInnerPadding,
-        )
-    }
+    SuperUserPagerMiuix(
+        uiState = uiState,
+        actions = actions,
+        bottomInnerPadding = bottomInnerPadding,
+    )
 }
+

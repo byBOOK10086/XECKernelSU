@@ -2,68 +2,170 @@ package me.weishu.kernelsu.ui
 
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.os.SystemClock
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.only
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.animation.togetherWith
+import androidx.navigation3.ui.NavDisplayTransitionEffects
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.res.painterResource
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.platform.UriHandler
-import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Density
-import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
+import androidx.navigation3.runtime.entryProvider
+import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
+import androidx.navigation3.ui.NavDisplay
+import androidx.navigationevent.NavigationEventInfo
+import androidx.navigationevent.compose.NavigationBackHandler
+import androidx.navigationevent.compose.rememberNavigationEventState
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 import me.weishu.kernelsu.Natives
 import me.weishu.kernelsu.R
-import me.weishu.kernelsu.privilege.StealthEntrance
+import me.weishu.kernelsu.ui.component.bottombar.BottomBar
+import me.weishu.kernelsu.ui.component.bottombar.MainPagerState
+import me.weishu.kernelsu.ui.component.bottombar.NavigationBadgeState
+import me.weishu.kernelsu.ui.component.bottombar.SideRail
+import me.weishu.kernelsu.ui.component.bottombar.rememberMainPagerState
+import me.weishu.kernelsu.ui.component.bottombar.useNavigationRail
+import me.weishu.kernelsu.ui.component.dialog.LocalXDialogBackdrop
+import me.weishu.kernelsu.ui.component.dialog.LocalXDialogHost
+import me.weishu.kernelsu.ui.component.dialog.XDialogHost
+import me.weishu.kernelsu.ui.component.dialog.XDialogHostState
+import me.weishu.kernelsu.ui.design.clear.LocalWallpaperBackdrop
+import me.weishu.kernelsu.ui.design.liquid.XDropletHost
+import me.weishu.kernelsu.ui.design.panel.Xc8Dock
+import me.weishu.kernelsu.ui.design.token.Xc
 import me.weishu.kernelsu.ui.design.token.XcTheme
+import me.weishu.kernelsu.ui.design.token.xcPageEnter
+import me.weishu.kernelsu.ui.design.token.xcPageExit
 import me.weishu.kernelsu.ui.navigation3.IntentDispatcher
-import me.weishu.kernelsu.ui.navigation3.KernelSuNavHost
 import me.weishu.kernelsu.ui.navigation3.LocalNavigator
+import me.weishu.kernelsu.ui.navigation3.Navigator
 import me.weishu.kernelsu.ui.navigation3.Route
 import me.weishu.kernelsu.ui.navigation3.rememberNavigator
-import me.weishu.kernelsu.ui.screen.safe.SafeUiPage
-import me.weishu.kernelsu.ui.util.BootTrace
+import me.weishu.kernelsu.ui.screen.about.AboutScreen
+import me.weishu.kernelsu.ui.screen.appprofile.AppProfileScreen
+import me.weishu.kernelsu.ui.screen.colorpalette.ColorPaletteScreen
+import me.weishu.kernelsu.ui.screen.executemoduleaction.ExecuteModuleActionScreen
+import me.weishu.kernelsu.ui.screen.extmodules.ExternalModulesScreen
+import me.weishu.kernelsu.ui.screen.flash.FlashScreen
+import me.weishu.kernelsu.ui.screen.detect.DetectPager
+import me.weishu.kernelsu.ui.screen.home.HomePager
+import me.weishu.kernelsu.ui.screen.remote.RemoteAssistantScreen
+import me.weishu.kernelsu.ui.screen.terminal.TerminalScreen
+import me.weishu.kernelsu.ui.screen.tools.ToolsScreen
+import me.weishu.kernelsu.ui.screen.theme.ThemeScreen
+import me.weishu.kernelsu.ui.screen.install.InstallScreen
+import me.weishu.kernelsu.ui.screen.module.ModuleActionSheet
+import me.weishu.kernelsu.ui.screen.module.ModulePager
+import me.weishu.kernelsu.ui.screen.module.ModuleSheetState
+import me.weishu.kernelsu.ui.screen.modulerepo.ModuleRepoDetailScreen
+import me.weishu.kernelsu.ui.screen.modulerepo.ModuleRepoScreen
+import me.weishu.kernelsu.ui.screen.settings.SettingPager
+import me.weishu.kernelsu.ui.screen.sulog.SulogScreen
+import me.weishu.kernelsu.ui.screen.superuser.SuperUserPager
+import me.weishu.kernelsu.ui.screen.template.AppProfileTemplateScreen
+import me.weishu.kernelsu.ui.screen.templateeditor.TemplateEditorScreen
+import me.weishu.kernelsu.ui.screen.wallpaper.WallpaperScreen
 import me.weishu.kernelsu.ui.theme.KernelSUTheme
+import me.weishu.kernelsu.ui.theme.isInDarkTheme
+
+import kotlin.random.Random
 import me.weishu.kernelsu.ui.theme.LocalColorMode
 import me.weishu.kernelsu.ui.theme.LocalEnableBlur
 import me.weishu.kernelsu.ui.theme.LocalEnableFloatingBottomBar
 import me.weishu.kernelsu.ui.theme.LocalEnableFloatingBottomBarBlur
 import me.weishu.kernelsu.ui.theme.LocalEnableNavigationBadge
-import me.weishu.kernelsu.ui.theme.LocalModuleDescriptionMaxLines
+import me.weishu.kernelsu.ui.util.getSuperuserCount
 import me.weishu.kernelsu.ui.util.install
+import me.weishu.kernelsu.ui.util.rememberBlurBackdrop
+import me.weishu.kernelsu.ui.util.rememberContentReady
+import me.weishu.kernelsu.ui.util.WallpaperStore
 import me.weishu.kernelsu.ui.viewmodel.MainActivityViewModel
+import me.weishu.kernelsu.ui.viewmodel.MainPagerConfig
+import me.weishu.kernelsu.ui.viewmodel.ModuleViewModel
+import me.weishu.kernelsu.ui.viewmodel.SuperUserViewModel
 import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.nav.transition.NavSwipeDirection
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import me.weishu.kernelsu.ui.MainScreen
+import top.yukonga.miuix.kmp.blur.layerBackdrop
+import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
- * `open` because [StealthLaunchActivity] extends it: hiding the launcher icon disables this
- * component, and a disabled component cannot be started, so the way back in has to be a
- * second activity that *is* the same UI.
+ * 壁纸池：亮色原版与深色适配版各四张（`bg_light_1..4` / `bg_dark_1..4`，暗版由
+ * 亮版自适应压暗到同一亮度带生成）。每次冷启动随机抽一张，深浅模式只决定取
+ * 哪一档调色，不改变抽中的那张。
  */
+private const val WALLPAPER_COUNT = 4
+
+
+private val BG_LIGHT_DRAWABLES = intArrayOf(
+    R.drawable.bg_light_1,
+    R.drawable.bg_light_2,
+    R.drawable.bg_light_3,
+    R.drawable.bg_light_4,
+)
+
+private val BG_DARK_DRAWABLES = intArrayOf(
+    R.drawable.bg_dark_1,
+    R.drawable.bg_dark_2,
+    R.drawable.bg_dark_3,
+    R.drawable.bg_dark_4,
+)
+
 open class MainActivity : ComponentActivity() {
 
     private val intentChannel = Channel<Intent>(capacity = Channel.BUFFERED)
@@ -77,53 +179,34 @@ open class MainActivity : ComponentActivity() {
         val splashScreen = installSplashScreen()
         splashStartedAt = SystemClock.uptimeMillis()
         super.onCreate(savedInstanceState)
+        // 隐身入口自愈：第一版曾误停基础 MainActivity 组件（图标点击弹回桌面、
+        // 内部重启流程全断），这里无条件拉回 ENABLED。XecMainActivity 继承本类，
+        // 从图标打开也会走到这里。
+        me.weishu.kernelsu.privilege.StealthEntrance.repair(this)
+        // 自定义背景的解码只用到应用上下文：拿 Activity 会让 produceState 的闭包
+        // 跨重组持有 Activity 引用，转屏时白留一份窗口。
+        val appContext = applicationContext
         splashScreen.setKeepOnScreenCondition {
             !contentReady || SystemClock.uptimeMillis() - splashStartedAt < splashAnimationDurationMs
         }
 
-        BootTrace.installCrashHandler()
-        BootTrace.log("onCreate start")
-
-        // The kernel/root handshake is blocking (it starts a `su` shell), so it runs on a
-        // worker and composition only reads the published value. It also has to run again on
-        // resume: the manager may be granted root while it is in the background.
-        probeKernelAsync()
-
-        // Reconcile the "icon hidden" expectation with what the package manager reports, and
-        // make sure the hidden-state entry exists. Cheap, idempotent, and it is what keeps the
-        // stealth screen from claiming a state the device is not actually in.
-        StealthEntrance.repair(this)
+        val isManager = Natives.isManager
+        if (isManager && Natives.kernelUAPIVersion == Natives.managerUAPIVersion) install()
 
         if (savedInstanceState == null) intent?.let { intentChannel.trySend(it) }
 
         setContent {
-            // Safety net for the splash: it is kept up until contentReady flips, and the flip
-            // lives at the very end of the main content. Any composition that cannot reach
-            // that point (a throwing layer, a page gated off, no kernel to talk to) used to
-            // leave the splash - and its artwork - on screen forever, which reads as "the
-            // manager does not open". Bounded wait, then show whatever composed.
+            var showBootSplash by rememberSaveable { mutableStateOf(true) }
             LaunchedEffect(Unit) {
-                delay(1500)
-                contentReady = true
-            }
-            // Second safety net: if the pages have not composed a few seconds in, open the
-            // plain safe page in its own window. A blank window then still tells the user (and
-            // the log) what the manager sees.
-            var showSafe by remember { mutableStateOf(false) }
-            LaunchedEffect(Unit) {
-                BootTrace.log("setContent composed")
-            }
-            LaunchedEffect(Unit) {
-                delay(3000)
-                val drawn = BootTrace.pagesDrawn.value
-                BootTrace.log("safe check pagesDrawn=$drawn")
-                showSafe = !drawn
+                if (showBootSplash) {
+                    delay(900)
+                    showBootSplash = false
+                }
             }
             val viewModel = viewModel<MainActivityViewModel>()
             val uiState by viewModel.uiState.collectAsStateWithLifecycle()
             val selectedMainPage by viewModel.selectedMainPage.collectAsStateWithLifecycle()
             val appSettings = uiState.appSettings
-            val uiMode = uiState.uiMode
             val darkMode = appSettings.colorMode.isDark || (appSettings.colorMode.isSystem && isSystemInDarkTheme())
 
             DisposableEffect(darkMode) {
@@ -142,152 +225,607 @@ open class MainActivity : ComponentActivity() {
             }
 
             val navigator = rememberNavigator(Route.Main)
-            val context = LocalContext.current
-            val uriHandler = LocalUriHandler.current
             val systemDensity = LocalDensity.current
             val density = remember(systemDensity, uiState.pageScale) {
                 Density(systemDensity.density * uiState.pageScale, systemDensity.fontScale)
             }
 
-            // The first state that can explain an invisible UI: a zero page scale makes every
-            // dp zero (nodes drop out of the accessibility tree), and a wrong ui mode picks a
-            // theme that may not be there.
-            LaunchedEffect(uiState.pageScale, uiMode) {
-                BootTrace.log(
-                    "uiState pageScale=${uiState.pageScale} uiMode=$uiMode theme=${uiState.theme?.id} " +
-                        "componentTransparent=${uiState.componentTransparent} " +
-                        "density=${density.density}x${density.fontScale}"
-                )
-            }
-
             CompositionLocalProvider(
-                LocalUriHandler provides object : UriHandler {
-                    override fun openUri(uri: String) {
-                        try {
-                            uriHandler.openUri(uri)
-                        } catch (_: IllegalArgumentException) {
-                            Toast.makeText(context, R.string.external_link_open_failed, Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                },
                 LocalNavigator provides navigator,
                 LocalDensity provides density,
                 LocalColorMode provides appSettings.colorMode.value,
-                LocalEnableBlur provides uiState.enableBlur,
+                // MIUI 8 全盘替换：界面语言从"流体玻璃"改成"白色分组面板 + 1px 分隔线"，
+                // 模糊不再参与渲染。设置里的开关仍然保留（写进状态、读得出来），只是这一层
+                // 不再把它下发给任何玻璃表面 —— 否则用户随手一开，整个界面又回到旧的形态。
+                LocalEnableBlur provides false,
                 LocalEnableFloatingBottomBar provides uiState.enableFloatingBottomBar,
                 LocalEnableFloatingBottomBarBlur provides uiState.enableFloatingBottomBarBlur,
                 LocalEnableNavigationBadge provides uiState.enableNavigationBadge,
-                LocalModuleDescriptionMaxLines provides uiState.moduleDescriptionMaxLines,
-                LocalUiMode provides uiMode,
             ) {
-                // The XEC design tokens have to sit OUTSIDE the miuix theme: miuix
-                // re-provides LocalIndication internally, and our glass highlights only
-                // reach it when provided from the outside. With no theme applied these
-                // tokens equal the built-in defaults, so the look does not change.
+                // XcTheme 必须包在 KernelSUTheme 外面：miuix 主题内部会重新下发
+                // 一次 LocalIndication，圆角高光只有在它之内才覆盖得住。
                 XcTheme(
-                    isDark = darkMode,
+                    isDark = isInDarkTheme(),
                     isAmoled = appSettings.colorMode.isAmoled,
                     theme = uiState.theme,
+                    // 设置里的「组件透明」：0f = 全透明（只留 1px 描边与文字），
+                    // 1f = 不透明。它乘在主题 `XcGlass.surfaceAlpha` 上面，
+                    // 所以主题自带的不透明度不会被这个开关抹掉。
                     componentAlpha = if (uiState.componentTransparent) 0f else 1f,
                 ) {
-                    KernelSUTheme(appSettings = appSettings, uiMode = uiMode) {
-                        IntentDispatcher(intentChannel = intentChannel)
-                        val swipeDismiss = if (uiState.enableSwipeDismiss) {
-                            if (LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl) {
-                                NavSwipeDirection.RightToLeft
-                            } else {
-                                NavSwipeDirection.LeftToRight
-                            }
-                        } else {
-                            NavSwipeDirection.None
-                        }
-                        val mainScreenEntry = @Composable {
-                            MainScreen(
-                                initialPage = selectedMainPage,
-                                pagerInterceptionMode = uiState.pagerInterceptionMode,
-                                onPageChanged = viewModel::setSelectedMainPage,
-                            )
-                        }
-
-                        val navDisplay = @Composable {
-                            KernelSuNavHost(
-                                navigator = navigator,
-                                swipeDismiss = swipeDismiss,
-                                mainScreenEntry = mainScreenEntry,
-                            )
-                        }
-
-                        when (uiMode) {
-                            UiMode.Material -> androidx.compose.material3.Scaffold(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainer
-                            ) { navDisplay() }
-
-                            UiMode.Miuix -> Scaffold { navDisplay() }
-                        }
-                        SideEffect { contentReady = true }
+                    // 窗口底色跟"应用解析后的主题"走，不能交给 values / values-night：
+                    // 资源里的那套只认系统深浅，而本应用的主题是用户在设置里单独选的。
+                    // 系统深色 + 应用浅色时，窗口底会停在 values-night 的近黑
+                    // (#0B0B0E)，页面转场、首帧、任何一层没被 Compose 盖住的边角
+                    // 露出来就是一圈黑边——这是淡入淡出转场看起来"黑框"的根源。
+                    // 这里每次重组都把窗口底刷成当前档的纸色，资源值只当兜底。
+                    val windowBackdrop = Xc.colors.backdrop
+                    SideEffect {
+                        window.setBackgroundDrawable(ColorDrawable(windowBackdrop.toArgb()))
                     }
-                }
-            }
-            // Outside the theme and the density override on purpose: if either of them is what
-            // makes the main content invisible, the safe page has to be immune to it. A Dialog
-            // lives in its own window, so nothing the theme does hides it.
-            if (showSafe) {
-                Dialog(onDismissRequest = { showSafe = false }) {
-                    SafeUiPage(
-                        diagnose = bootDiagnose(uiState.pageScale, uiMode.name),
-                        onDismiss = { showSafe = false },
-                    )
+                    KernelSUTheme(appSettings = appSettings) {
+                        // 对话框的玻璃要采"整个窗口"的图层，所以 backdrop 只能建在根层：
+                        // 各页自己的 rememberBlurBackdrop 只覆盖那一页，而对话框宿主是
+                        // 5 个 nav entry（Main / Home / SuperUser / Module / Settings）
+                        // 共用的，拿不到任何单独一页的采样源。
+                        // MIUI 8 换装后玻璃消费方已全部置 null（`LocalXDialogBackdrop` / `LocalWallpaperBackdrop`），
+                        // 再按用户开关建 backdrop 只会白录一层帧。这里直接关掉，省掉每次重绘的录制开销。
+                        val dialogBackdrop = rememberBlurBackdrop(false)
+                        // 壁纸：每次冷启动随机抽一张（rememberSaveable 保证转屏/重建
+                        // Activity 不重抽）；深浅模式只决定取这张的亮色原版还是深色
+                        // 适配版——"此次进入用哪张"与"该不该调色"是两个独立决定，
+                        // 会话中途切换模式时壁纸保持同一张、只换调色档。
+                        val wallpaperIndex = rememberSaveable {
+                            mutableIntStateOf(Random.nextInt(WALLPAPER_COUNT))
+                        }
+                        val wallpaperDark = isInDarkTheme()
+                        val wallpaperRes = remember(wallpaperIndex.intValue, wallpaperDark) {
+                            if (wallpaperDark) {
+                                BG_DARK_DRAWABLES[wallpaperIndex.intValue]
+                            } else {
+                                BG_LIGHT_DRAWABLES[wallpaperIndex.intValue]
+                            }
+                        }
+                        // 自定义背景：按当前深浅档取对应槽位，空串表示该档仍然走内置随机池。
+                        // 抽签结果 wallpaperIndex 与"用不用自定义图"是两个独立决定——切深浅模式
+                        // 只换调色档，内置池抽中的那张不变，这一点对自定义图同样成立（两档各一张）。
+                        val customWallpaperName = if (wallpaperDark) {
+                            uiState.wallpaperDark
+                        } else {
+                            uiState.wallpaperLight
+                        }
+                        // 纯色档（纯白 / 纯黑）：不落盘也不解码，直接铺一层纯色。选了纯色就是
+                        // "这一档固定住"——内置池的抽签结果仍然存在，但不再参与绘制，也就是
+                        // 用户要的"不再在背景池里轮换"。
+                        val solidWallpaper = remember(customWallpaperName) {
+                            WallpaperStore.solidArgb(customWallpaperName)?.let { Color(it) }
+                        }
+                        // 背景模糊：百分比 → 解码最长边（见 WallpaperStore.displayEdgeFor）。
+                        // 刻意不用 Modifier.blur：根层壁纸是全应用玻璃的采样源，RenderEffect
+                        // 会让每次采样都重跑全屏模糊，滚动直接掉帧；降采样只在换图/松手时算一次。
+                        val wallpaperEdge = WallpaperStore.displayEdgeFor(uiState.wallpaperBlur)
+                        // 解码放在 IO 线程：produceState 的初始值是 null，也就是先显示内置壁纸，
+                        // 解码完成后换成自定义图。冷启动时这一跳被 splash 盖住；页面内换图
+                        // 也只是瞬间切换，不会卡住主线程。
+                        val customWallpaper by produceState<ImageBitmap?>(
+                            initialValue = null,
+                            key1 = customWallpaperName,
+                            key2 = wallpaperEdge,
+                        ) {
+                            value = if (customWallpaperName.isEmpty() || WallpaperStore.isSolid(customWallpaperName)) {
+                                null
+                            } else {
+                                withContext(Dispatchers.IO) {
+                                    WallpaperStore.decode(
+                                        WallpaperStore.fileOf(appContext, customWallpaperName),
+                                        wallpaperEdge,
+                                    )?.asImageBitmap()
+                                }
+                            }
+                        }
+                        // 内置池那张同样按模糊强度降采样解码；不模糊时保持 null，继续走
+                        // painterResource（省掉一张全尺寸位图，行为与改动前一致）。
+                        val builtinWallpaper by produceState<ImageBitmap?>(
+                            initialValue = null,
+                            key1 = wallpaperRes,
+                            key2 = wallpaperEdge,
+                        ) {
+                            value = if (wallpaperEdge >= WallpaperStore.DISPLAY_MAX_EDGE) {
+                                null
+                            } else {
+                                withContext(Dispatchers.IO) {
+                                    WallpaperStore.decodeResource(
+                                        appContext,
+                                        wallpaperRes,
+                                        wallpaperEdge,
+                                    )?.asImageBitmap()
+                                }
+                            }
+                        }
+                        // 壁纸采样源：挂在下面壁纸 Image 上的独立 backdrop。卡体、按钮、面板
+                        // 都通过 [LocalWallpaperBackdrop] 采它——壁纸的录制子树里只有壁纸，
+                        // 谁采都不会自采样成环（页面级 backdrop 录的是滚动内容，卡体在里面，
+                        // 采它会成环）。跟随同一个 enableBlur 开关，关模糊即全应用退实色档。
+                        // MIUI 8 换装后玻璃消费方已全部置 null（`LocalXDialogBackdrop` / `LocalWallpaperBackdrop`），
+                        // 再按用户开关建 backdrop 只会白录一层帧。这里直接关掉，省掉每次重绘的录制开销。
+                        val wallpaperBackdrop = rememberBlurBackdrop(false)
+                        val dialogHostState = remember { XDialogHostState() }
+
+                        CompositionLocalProvider(
+                            LocalXDialogHost provides dialogHostState,
+                            // MIUI 8：不再下发任何"玻璃采样源"。两个 backdrop 置空之后，
+                            // XGlassSurface 的 active 分支（glassEnabled && backdrop != null）
+                            // 自动落到 `background(solidTint) + 1px rim` 那一支 —— 88 处
+                            // 玻璃卡体一次性变成白底分组面板，不用逐个改调用点。
+                            LocalXDialogBackdrop provides null,
+                            LocalWallpaperBackdrop provides null,
+                        ) {
+                            XDropletHost {
+                                IntentDispatcher(intentChannel = intentChannel)
+                                val mainScreenEntry = @Composable {
+                                    MainScreen(
+                                        initialPage = selectedMainPage,
+                                        onPageChanged = viewModel::setSelectedMainPage,
+                                    )
+                                }
+
+                                val navDisplay = @Composable {
+                                    // 转场只能在这里先算好：transitionSpec 的 lambda 不是
+                                    // @Composable，里面调不了 xcPageEnter()（它要读 density
+                                    // 才能把 8dp 换算成像素）。外层捕获是唯一干净的接法。
+                                    val pageEnter = xcPageEnter()
+                                    val pageExit = xcPageExit()
+                                    NavDisplay(
+                                        backStack = navigator.backStack,
+                                        // 2026-11-11 第三轮：显式接管转场。
+                                        // 不传的话走 miuix-navigation3-ui 的默认值 ——
+                                        // 500ms 横向滑动 + 背景压暗 0.5 + 圆角裁切，
+                                        // 三个数都不是我们的设计稿。设计要求是
+                                        // 220–300ms + 6–10dp 的**纵向**位移。
+                                        transitionSpec = { pageEnter togetherWith pageExit },
+                                        popTransitionSpec = { pageEnter togetherWith pageExit },
+                                        // 2026-11-11：必须显式关掉库默认的转场特效。
+                                        //
+                                        // `NavDisplayTransitionEffects.Default` 的四个默认值
+                                        // （字节码实证，见 NavDisplayTransitionEffects 的
+                                        // 掩码构造器）是：
+                                        //   enableCornerClip = true
+                                        //   dimAmount = 0.5f   ← 一层 50% 的黑纱
+                                        //   blockInputDuringTransition = true
+                                        //   popDirectionFollowsSwipeEdge = false
+                                        // 这层黑纱的边界 = NavDisplay 的场景容器 = 页面内容区，
+                                        // 生命周期 = 转场时长。用户报的「每次切页都出现、
+                                        // 黑色区域跟随内容区、不到 1 秒自己消失」就是它。
+                                        //
+                                        // 之前库默认还是 500ms 横滑，黑纱被"内容在横向移动"
+                                        // 掩盖成景深；换成 260ms 淡入淡出之后没有任何位移线索，
+                                        // 它就显形为一块静止的黑矩形 + 旧页残影。
+                                        //
+                                        // 只关黑纱与圆角裁切，**保留** blockInputDuringTransition：
+                                        // 转场期间挡输入是正确行为，去掉会让快速连点穿透到新页面。
+                                        transitionEffects = NavDisplayTransitionEffects(
+                                            enableCornerClip = false,
+                                            dimAmount = 0f,
+                                            blockInputDuringTransition = true,
+                                        ),
+                                        entryDecorators = listOf(
+                                            rememberSaveableStateHolderNavEntryDecorator(),
+                                            rememberViewModelStoreNavEntryDecorator()
+                                        ),
+                                        onBack = {
+                                            when (val top = navigator.current()) {
+                                                is Route.TemplateEditor -> {
+                                                    if (!top.readOnly) {
+                                                        navigator.setResult("template_edit", true)
+                                                    } else {
+                                                        navigator.pop()
+                                                    }
+                                                }
+
+                                                else -> navigator.pop()
+                                            }
+                                        },
+                                        entryProvider = entryProvider {
+                                            entry<Route.Main> { mainScreenEntry() }
+                                            entry<Route.About> { AboutScreen() }
+                                            entry<Route.Sulog> { SulogScreen() }
+                                            entry<Route.ColorPalette> { ColorPaletteScreen() }
+                                            entry<Route.Wallpaper> { WallpaperScreen() }
+                entry<Route.Themes> { ThemeScreen() }
+                                            entry<Route.AppProfileTemplate> { AppProfileTemplateScreen() }
+                                            entry<Route.TemplateEditor> { key -> TemplateEditorScreen(key.template, key.readOnly) }
+                                            entry<Route.AppProfile> { key -> AppProfileScreen(key.uid) }
+                                            entry<Route.ModuleRepo> { ModuleRepoScreen() }
+                                            entry<Route.ModuleRepoDetail> { key -> ModuleRepoDetailScreen(key.module) }
+                                            entry<Route.Install> { InstallScreen() }
+                                            entry<Route.Flash> { key -> FlashScreen(key.flashIt) }
+                                            entry<Route.ExecuteModuleAction> { key -> ExecuteModuleActionScreen(key.moduleId, key.fromShortcut) }
+                                            entry<Route.RemoteAssistant> { RemoteAssistantScreen() }
+                                            entry<Route.Terminal> { TerminalScreen() }
+                                            entry<Route.Tools> { ToolsScreen() }
+                                            entry<Route.ExternalModules> { ExternalModulesScreen() }
+                                            entry<Route.Home> { mainScreenEntry() }
+                                            entry<Route.SuperUser> { mainScreenEntry() }
+                                            entry<Route.Module> { mainScreenEntry() }
+                                            entry<Route.Settings> { mainScreenEntry() }
+                                        }
+                                    )
+                                }
+
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        // 根层 backdrop 的采样源 = 壁纸 + 全部导航内容。
+                                        // 对话框**不**放进这个 Box，免得把自己也采进采样源、
+                                        // 出现自采样把背景糊成一团。
+                                        .then(
+                                            if (dialogBackdrop != null) {
+                                                Modifier.layerBackdrop(dialogBackdrop)
+                                            } else {
+                                                Modifier
+                                            }
+                                        ),
+                                ) {
+                                    // 壁纸这一张就是全应用液态玻璃的折射源（下面挂的
+                                    // wallpaperBackdrop 由 LocalWallpaperBackdrop 下发）。
+                                    // 自定义图与内置图只换"画哪张"，采样源、缩放方式、
+                                    // 底的 0.80 半透明叠加全部沿用，玻璃观感不会两套逻辑。
+                                    // 壁纸这一层就是全应用玻璃的采样源；模糊已经在解码阶段做完
+                                    // （解小 + 放大绘制），所以这里不再挂任何 RenderEffect——
+                                    // 采样端每帧拿到的就是"看起来糊掉"的那张图。
+                                    val wallpaperModifier = Modifier
+                                        .fillMaxSize()
+                                        .then(
+                                            if (wallpaperBackdrop != null) {
+                                                Modifier.layerBackdrop(wallpaperBackdrop)
+                                            } else {
+                                                Modifier
+                                            }
+                                        )
+                                    val currentSolid = solidWallpaper
+                                    val customWallpaperBitmap = customWallpaper
+                                    val builtinWallpaperBitmap = builtinWallpaper
+                                    when {
+                                        // 纯色档优先：它就是"这一档的最终答案"，内置池不再参与。
+                                        currentSolid != null -> Box(
+                                            modifier = wallpaperModifier.background(currentSolid)
+                                        )
+
+                                        // 自定义图（用户在壁纸页选过的那张）。
+                                        customWallpaperBitmap != null -> Image(
+                                            bitmap = customWallpaperBitmap,
+                                            contentDescription = null,
+                                            modifier = wallpaperModifier,
+                                            contentScale = ContentScale.Crop,
+                                        )
+
+                                        // 内置壁纸池：**空名字就是"内置"**（壁纸页的缩略图也写着
+                                        // 「内置」），所以槽位没设过、或用户点过"清除"都落到这里。
+                                        // 2026-11-08 曾在这里插过一支平色底把内置池整个顶掉，
+                                        // 结果是壁纸页选"内置"点了没反应 —— 已回退，不再拦。
+                                        builtinWallpaperBitmap != null -> Image(
+                                            bitmap = builtinWallpaperBitmap,
+                                            contentDescription = null,
+                                            modifier = wallpaperModifier,
+                                            contentScale = ContentScale.Crop,
+                                        )
+
+                                        // 内置图还没解码完的那一两帧：直接画资源原图，
+                                        // 不留白底闪一下（也兜住解码失败的情况）。
+                                        else -> Image(
+                                            painter = painterResource(wallpaperRes),
+                                            contentDescription = null,
+                                            modifier = wallpaperModifier,
+                                            contentScale = ContentScale.Crop,
+                                        )
+                                    }
+                                    // 扁平方案 A：整页实色底，壁纸层不再参与视觉。
+                                    // 画在壁纸之后 = 盖住它；壁纸的解码链路保留（设置里
+                                    // 那套入口还在），下一批连同设置项一起清理。
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(Xc.colors.backdrop),
+                                    )
+                                    // 2026-11-10：导航宿主自己也铺一层实色底。页面过渡是
+                                    // 交叉淡入淡出，两条 entry 同时半透明时，露出来的必须是
+                                    // 纸色 —— 以前露的是 windowBackground(#0B0F10)，看起来
+                                    // 就是每次转场都闪一圈黑框。
+                                    Scaffold(containerColor = Xc.colors.backdrop) {
+                                        navDisplay()
+                                    }
+                                }
+
+                                // 同窗口浮层靠绘制顺序盖住内容，所以必须排在 Box 之后；
+                                // 排在这里才有意义——此时根层 backdrop 里已经录好了
+                                // "对话框背后的那一帧"。
+                                //
+                                // 模块长按操作面板也挂在根层（视口固定）：它此前渲染在
+                                // pager 第 2 页的子树里，会被翻页几何带走/错位——表现为
+                                // "长按后不出现、切到相邻页才冒出来、按钮点不中"。
+                                // 根层渲染保证面板永远盖在"当前可见的模块页"上。
+                                ModuleActionSheet(
+                                    module = ModuleSheetState.module,
+                                    updateUrl = ModuleSheetState.updateUrl,
+                                    // MIUI 8：面板改成实色 + 1px 描边，不再采玻璃
+                                    backdrop = null,
+                                    bottomInnerPadding = bottomBarClearPadding(),
+                                    onDismissRequest = { ModuleSheetState.hide() },
+                                    onExecuteAction = {
+                                        ModuleSheetState.onExecuteAction?.invoke()
+                                        ModuleSheetState.hide()
+                                    },
+                                    onOpenWebUi = {
+                                        ModuleSheetState.onOpenWebUi?.invoke()
+                                        ModuleSheetState.hide()
+                                    },
+                                    onUpdate = {
+                                        ModuleSheetState.onUpdate?.invoke()
+                                        ModuleSheetState.hide()
+                                    },
+                                    onUninstall = {
+                                        ModuleSheetState.onUninstall?.invoke()
+                                        ModuleSheetState.hide()
+                                    },
+                                    onUndoUninstall = {
+                                        ModuleSheetState.onUndoUninstall?.invoke()
+                                        ModuleSheetState.hide()
+                                    },
+                                    onAddActionShortcut = { type ->
+                                        ModuleSheetState.onAddActionShortcut?.invoke(type)
+                                    },
+                                )
+                                XDialogHost(
+                                    state = dialogHostState,
+                                    // MIUI 8：对话框实色，不采背景
+                                    backdrop = null,
+                                )
+                                XecBootSplash(visible = showBootSplash)
+                                SideEffect { contentReady = true }
+                            }
+                        }
+                    }
                 }
             }
         }
     }
 
-    override fun onResume() {
-        super.onResume()
-        probeKernelAsync()
-    }
-
-    /**
-     * One background probe of the kernel/root handshake.
-     *
-     * `Natives.isFullFeatured()` calls `rootAvailable()`, which starts a root shell: it blocks
-     * until `su` answers. Composition used to call it (several composables per frame), so on a
-     * device where this manager had just been granted root the window stayed white and stopped
-     * responding. The result is published to [Natives.fullFeatured] for composition to read.
-     */
-    private fun probeKernelAsync() {
-        Thread {
-            val fullFeatured = runCatching { Natives.isFullFeatured() }.getOrDefault(false)
-            Natives.publishFullFeatured(fullFeatured)
-            val isManager = runCatching { Natives.isManager }.getOrDefault(false)
-            val sameUapi = runCatching {
-                Natives.kernelUAPIVersion == Natives.managerUAPIVersion
-            }.getOrDefault(false)
-            BootTrace.lastProbe =
-                "fullFeatured=$fullFeatured isManager=$isManager sameUapi=$sameUapi"
-            BootTrace.log("probe " + BootTrace.lastProbe)
-            if (isManager && sameUapi) {
-                Handler(Looper.getMainLooper()).post { install() }
-            }
-        }.apply {
-            name = "xec-kernel-probe"
-            isDaemon = true
-        }.start()
-    }
-
-    private fun bootDiagnose(pageScale: Float, uiMode: String): String = buildString {
-        val version = runCatching {
-            packageManager.getPackageInfo(packageName, 0).versionName
-        }.getOrDefault("?")
-        appendLine("version: $version")
-        appendLine("uiMode: $uiMode   pageScale: $pageScale")
-        appendLine("probe: ${BootTrace.lastProbe}")
-        appendLine("pagesDrawn: ${BootTrace.pagesDrawn.value}")
-        appendLine("log: Android/data/$packageName/files/xec-boot.log")
-    }
-
-    override fun onNewIntent(intent: Intent) {        super.onNewIntent(intent)
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
         setIntent(intent)
         intentChannel.trySend(intent)
     }
+}
+
+val LocalMainPagerState = staticCompositionLocalOf<MainPagerState> { error("LocalMainPagerState not provided") }
+
+@SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
+@Composable
+fun MainScreen(
+    initialPage: Int = 0,
+    onPageChanged: (Int) -> Unit = {},
+) {
+    val navController = LocalNavigator.current
+    val enableBlur = LocalEnableBlur.current
+    val enableFloatingBottomBar = LocalEnableFloatingBottomBar.current
+    val enableFloatingBottomBarBlur = LocalEnableFloatingBottomBarBlur.current
+    val useNavigationRail = useNavigationRail(enableFloatingBottomBar)
+    // 旧版本存过的 selected_main_page 可能越界（7 页时代存了 5/6），读出侧夹回。
+    val pagerState = rememberPagerState(
+        initialPage = initialPage.coerceIn(0, MainPagerConfig.LAST_PAGE_INDEX),
+        pageCount = { MainPagerConfig.PAGE_COUNT },
+    )
+    val mainPagerState = rememberMainPagerState(
+        pagerState = pagerState,
+        animatePageChanges = !useNavigationRail,
+    )
+    val isFullFeatured = Natives.isFullFeatured()
+    var userScrollEnabled by remember(isFullFeatured) { mutableStateOf(isFullFeatured) }
+
+    val enableNavigationBadge = LocalEnableNavigationBadge.current
+    val badgeEnabled = enableNavigationBadge && isFullFeatured
+    val moduleViewModel = viewModel<ModuleViewModel>()
+    val moduleUiState by moduleViewModel.uiState.collectAsStateWithLifecycle()
+
+    val superUserViewModel = viewModel<SuperUserViewModel>()
+    val grantedUidCount by remember(superUserViewModel) {
+        superUserViewModel.uiState
+            .map { state -> state.groupedApps.count { it.anyAllowSu } }
+            .distinctUntilChanged()
+    }.collectAsStateWithLifecycle(0)
+
+    var startupPreloadStarted by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(isFullFeatured) {
+        if (!isFullFeatured || startupPreloadStarted) {
+            return@LaunchedEffect
+        }
+
+        // 受限授权（exec 白名单）与 per-app uname 身份开机重放：内核表重启
+        // 即空，从持久层推回。幂等；失败（老内核不认识 ioctl）不阻塞启动流程。
+        // ksuApp：此处上下文不是 Activity 接收者，applicationContext 解析不到。
+        runCatching { me.weishu.kernelsu.privilege.ExecPolicyStore.pushAll(me.weishu.kernelsu.ksuApp) }
+        runCatching { me.weishu.kernelsu.privilege.UtsSpoofStore.pushAll(me.weishu.kernelsu.ksuApp) }
+
+        moduleViewModel.initializePreferences()
+        val moduleState = moduleViewModel.uiState.value
+        if (!moduleState.hasLoaded) {
+            if (!moduleState.isRefreshing) moduleViewModel.fetchModuleList()
+            moduleViewModel.uiState.first { it.hasLoaded }
+        }
+        moduleViewModel.syncModuleUpdateInfo(moduleViewModel.uiState.value.modules)
+
+        val superUserState = superUserViewModel.uiState.value
+        if (!superUserState.hasLoaded) {
+            superUserViewModel.initializePreferences()
+            if (superUserState.isRefreshing) {
+                superUserViewModel.uiState.first { it.hasLoaded }
+            } else {
+                superUserViewModel.loadAppList().join()
+            }
+        }
+
+        startupPreloadStarted = true
+    }
+
+    // Loading the app list just for a badge is too expensive; read the kernel allowlist instead.
+    var superuserCount by remember { mutableIntStateOf(0) }
+    LaunchedEffect(badgeEnabled, grantedUidCount) {
+        superuserCount = if (badgeEnabled) withContext(Dispatchers.IO) { getSuperuserCount() } else 0
+    }
+
+    val navigationBadge = if (badgeEnabled) {
+        NavigationBadgeState(
+            superuserCount = superuserCount,
+            moduleEnabledCount = moduleUiState.modules.count { it.enabled },
+            moduleUpdatableCount = moduleUiState.updateInfo.count { it.value.downloadUrl.isNotBlank() },
+        )
+    } else {
+        NavigationBadgeState()
+    }
+    val surfaceColor = MiuixTheme.colorScheme.surface.copy(alpha = 1f)
+    val blurBackdrop = rememberBlurBackdrop(enableBlur)
+
+    val backdrop = rememberLayerBackdrop {
+        drawRect(surfaceColor)
+        drawContent()
+    }
+
+    val settledPage = mainPagerState.pagerState.settledPage
+    LaunchedEffect(settledPage) {
+        onPageChanged(settledPage)
+    }
+
+    val currentPage = mainPagerState.pagerState.currentPage
+    LaunchedEffect(currentPage) {
+        mainPagerState.syncPage()
+    }
+
+    // 底栏实测高度（px）。见下方 pagerContent 处的说明：内容区底部余量要用它兜底。
+    var dockHeightPx by remember { mutableIntStateOf(0) }
+
+
+    MainScreenBackHandler(mainPagerState, navController)
+
+    // 工具箱这类 NavDisplay 独立 entry 通过事件通道请求切主分页（见 MainPagerBus）：
+    // 它们读不到 LocalMainPagerState，所以只能发请求、由这里真正执行。
+    // 2026-11-10：通道改成"粘滞待办"——工具箱压在上面时本页已退出组合，旧 SharedFlow
+    // 会把请求丢掉，回到主分页后仍停在原页（真机故障：XEC SCORE 卡点了没反应）。
+    LaunchedEffect(mainPagerState) {
+        MainPagerBus.pending.collect { page ->
+            if (page != null) {
+                mainPagerState.animateToPage(page)
+                MainPagerBus.consume()
+            }
+        }
+    }
+
+    CompositionLocalProvider(
+        LocalMainPagerState provides mainPagerState
+    ) {
+        val contentReady = rememberContentReady()
+        val pagerContent = @Composable { bottomInnerPadding: Dp ->
+            Box(modifier = if (blurBackdrop != null) Modifier.layerBackdrop(blurBackdrop) else Modifier) {
+                    HorizontalPager(
+                        modifier = Modifier
+                            .then(if (enableFloatingBottomBar && enableFloatingBottomBarBlur) Modifier.layerBackdrop(backdrop) else Modifier),
+                        state = mainPagerState.pagerState,
+                        beyondViewportPageCount = if (contentReady) 3 else 0,
+                        overscrollEffect = null,
+                        userScrollEnabled = userScrollEnabled && !mainPagerState.isGestureLocked,
+                    ) { page ->
+                    val isCurrentPage = page == settledPage
+                    when (page) {
+                        0 -> if (contentReady || isCurrentPage) HomePager(navController, bottomInnerPadding, isCurrentPage)
+                        1 -> if (contentReady || isCurrentPage) SuperUserPager(navController, bottomInnerPadding, isCurrentPage)
+                        2 -> if (contentReady || isCurrentPage) ModulePager(bottomInnerPadding, isCurrentPage)
+                        3 -> if (contentReady || isCurrentPage) DetectPager(bottomInnerPadding, isCurrentPage)
+                        4 -> if (contentReady || isCurrentPage) SettingPager(navController, bottomInnerPadding, isCurrentPage)
+                    }
+                }
+            }
+        }
+
+        if (useNavigationRail) {
+            val startInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout)
+                .only(WindowInsetsSides.Start)
+            val navBarBottomPadding = WindowInsets.systemBars.asPaddingValues().calculateBottomPadding()
+
+            Scaffold(containerColor = Color.Transparent) { _ ->
+                Row {
+                    SideRail(navigationBadge)
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .consumeWindowInsets(startInsets)
+                    ) {
+                        pagerContent(navBarBottomPadding)
+                    }
+                }
+            }
+        } else {
+            val bottomBar = @Composable {
+                Box(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    // 2026-11-08：五格等宽 tab → 两席 + 控制台（见 Xc8Dock）。
+                    // 页面索引不动，所以超级用户 / 检测 / 设置仍然可达，只是入口收进控制台。
+                    Xc8Dock(
+                        selectedPage = mainPagerState.selectedPage,
+                        onSelectPage = { page -> mainPagerState.animateToPage(page) },
+                        moduleBadge = navigationBadge.moduleUpdatableCount
+                            .takeIf { it > 0 } ?: navigationBadge.moduleEnabledCount,
+                        superuserCount = navigationBadge.superuserCount,
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .onSizeChanged { dockHeightPx = it.height },
+                    )
+                }
+            }
+
+            Scaffold(
+                bottomBar = bottomBar,
+                containerColor = Color.Transparent,
+            ) { innerPadding ->
+                // 2026-11-11 第三轮：内容区底部安全余量取「Scaffold 给的值」与
+                // 「底栏实测高度」的**较大者**。
+                //
+                // 悬浮底栏是自绘的：理论上 Scaffold 的 bottomBar 槽已经把它算进
+                // innerPadding，但这条链只要有一环不成立（Scaffold 实现差异、
+                // bottomBar 里套了 align/offset 之类的装饰），最后一行就会被压在
+                // 托盘下面 —— 而且**从代码上看不出来是哪儿算错了**。真机反馈的
+                // 「安全状态列表被挡」就是这一类。直接把高度量一次，依赖就断了。
+                val measured = with(LocalDensity.current) { dockHeightPx.toDp() }
+                pagerContent(maxOf(innerPadding.calculateBottomPadding(), measured))
+            }
+        }
+    }
+}
+
+
+/** 模块操作面板贴底时为底栏让位：导航栏 inset + 底栏高度（含悬浮 margin）的安全余量。 */
+@Composable
+private fun bottomBarClearPadding(): Dp =
+    // 2026-11-11：96dp 在悬浮底栏下会让最后一行被压在导航条上（安全状态列表被挡）。
+    // 悬浮栏本体 56–64dp + 上下留白，112dp 才能保证滚到底时最后一项完整可见。
+    WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 112.dp
+
+@Composable
+private fun MainScreenBackHandler(
+    mainState: MainPagerState,
+    navController: Navigator,
+) {    val isPagerBackHandlerEnabled by remember {
+        derivedStateOf {
+            navController.current() is Route.Main && navController.backStackSize() == 1 && mainState.selectedPage != 0
+        }
+    }
+
+    val navEventState = rememberNavigationEventState(NavigationEventInfo.None)
+
+    NavigationBackHandler(
+        state = navEventState,
+        isBackEnabled = isPagerBackHandlerEnabled,
+        onBackCompleted = {
+            mainState.animateToPage(0)
+        }
+    )
 }

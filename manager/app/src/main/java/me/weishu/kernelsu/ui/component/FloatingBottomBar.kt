@@ -1,4 +1,5 @@
-// Adapted from compose-miuix-ui example (IosLiquidGlassNavigationBar) — Apache 2.0.
+// Adapted from the compose-miuix-ui example (IosLiquidGlassNavigationBar) — Apache 2.0:
+// https://github.com/yukonga/miuix
 
 package me.weishu.kernelsu.ui.component
 
@@ -316,6 +317,7 @@ fun FloatingBottomBar(
     val interactiveHighlight = remember(animationScope, tabWidthPx, dampedDragAnimation) {
         InteractiveHighlight(
             animationScope = animationScope,
+            shape = pillShape,
             position = { size, _ ->
                 Offset(
                     if (isLtr) (dampedDragAnimation.value + 0.5f) * tabWidthPx + panelOffset
@@ -360,7 +362,7 @@ fun FloatingBottomBar(
                             effects = {
                                 padding = maxOf(padding, 40.dp.toPx())
                                 vibrancy()
-                                blur(4.dp.toPx(), 4.dp.toPx())
+                                blur(2.dp.toPx(), 2.dp.toPx())
                                 lens(
                                     refractionHeight = 24.dp.toPx(),
                                     refractionAmount = 24.dp.toPx(),
@@ -412,7 +414,7 @@ fun FloatingBottomBar(
                             shape = { pillShape },
                             effects = {
                                 vibrancy()
-                                blur(4.dp.toPx(), 4.dp.toPx())
+                                blur(2.dp.toPx(), 2.dp.toPx())
                                 lens(
                                     refractionHeight = 24.dp.toPx(),
                                     refractionAmount = 24.dp.toPx(),

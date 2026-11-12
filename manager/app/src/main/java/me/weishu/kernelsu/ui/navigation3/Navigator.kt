@@ -1,34 +1,34 @@
 package me.weishu.kernelsu.ui.navigation3
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.navigation3.runtime.NavKey
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
-import top.yukonga.miuix.kmp.nav.core.NavBackStack
-import top.yukonga.miuix.kmp.nav.core.NavKey
-import top.yukonga.miuix.kmp.nav.core.rememberNavBackStack
 
 /**
- * Simple navigation helper that owns a miuix-nav back stack.
- * Supports push/replace/pop/popUntil over the shared [NavBackStack].
+ * Simple navigation helper that owns a back stack and result channels.
+ * Supports push/replace/pop/popUntil and result APIs: navigateForResult/setResult/observeResult/clearResult.
  */
 @Suppress("unused")
 class Navigator(
-    val backStack: NavBackStack,
+    initialKey: NavKey
 ) {
+    val backStack: SnapshotStateList<NavKey> = mutableStateListOf(initialKey)
 
     private val resultBus = mutableMapOf<String, MutableSharedFlow<Any>>()
 
     /**
-     * Push a key onto the back stack, idempotently: a double tap pushing the same route value
-     * twice is a duplicate contentKey (rejected by the runtime), so skip keys already present.
-     * Routes needing multiple live instances carry unique values instead.
+     * Push a key onto the back stack.
      */
     fun push(key: NavKey) {
-        if (key !in backStack) {
-            backStack.add(key)
-        }
+        backStack.add(key)
     }
 
     /**
@@ -60,16 +60,14 @@ class Navigator(
      * Pop the top key if present.
      */
     fun pop() {
-        if (backStack.size > 1) {
-            backStack.removeLastOrNull()
-        }
+        backStack.removeLastOrNull()
     }
 
     /**
      * Pop until predicate matches the top key.
      */
     fun popUntil(predicate: (NavKey) -> Boolean) {
-        while (backStack.size > 1 && !predicate(backStack.last())) {
+        while (backStack.isNotEmpty() && !predicate(backStack.last())) {
             backStack.removeAt(backStack.lastIndex)
         }
     }
@@ -109,31 +107,40 @@ class Navigator(
     /**
      * Get current NavKey on the back stack.
      */
-    fun current() = backStack.lastOrNull()
+    fun current(): NavKey? {
+        return backStack.lastOrNull()
+    }
 
     /**
      * Get current size of back stack.
      */
-    fun backStackSize() = backStack.size
+    fun backStackSize(): Int {
+        return backStack.size
+    }
 
     private fun ensureChannel(key: String): MutableSharedFlow<Any> {
         return resultBus.getOrPut(key) { MutableSharedFlow(replay = 1, extraBufferCapacity = 0) }
     }
 
+    companion object {
+        val Saver: Saver<Navigator, Any> = listSaver(save = { navigator ->
+            navigator.backStack.toList()
+        }, restore = { savedList ->
+            val initialKey = savedList.firstOrNull() ?: Route.Home
+            val navigator = Navigator(initialKey)
+            navigator.backStack.clear()
+            navigator.backStack.addAll(savedList)
+            navigator
+        })
+    }
 }
 
+
 @Composable
-fun rememberNavigator(startRoute: Route): Navigator {
-    val backStack = rememberNavBackStack<Route>(startRoute)
-    // Restored state can come back empty (the saved stack is a plain list), and an empty stack
-    // renders nothing at all: the window shows the ComposeView with no entries, which is
-    // exactly the white screen measured on a device. Guarantee a start destination.
-    androidx.compose.runtime.LaunchedEffect(backStack) {
-        if (backStack.isEmpty()) {
-            backStack.add(startRoute)
-        }
+fun rememberNavigator(startRoute: NavKey): Navigator {
+    return rememberSaveable(startRoute, saver = Navigator.Saver) {
+        Navigator(startRoute)
     }
-    return androidx.compose.runtime.remember(backStack) { Navigator(backStack) }
 }
 
 val LocalNavigator = staticCompositionLocalOf<Navigator> {

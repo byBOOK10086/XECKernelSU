@@ -4,227 +4,118 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import androidx.compose.runtime.Immutable
-import me.weishu.kernelsu.ui.MainActivity
-import me.weishu.kernelsu.ui.StealthLaunchActivity
-import me.weishu.kernelsu.ui.StealthTileService
+import com.topjohnwu.superuser.Shell
+import me.weishu.kernelsu.ui.util.getKsuDaemonPath
 
 /**
- * Hiding the launcher icon, rewritten so that the state on disk is never the truth.
+ * 隐身入口（寄生在「激活开发者选项」原生手势上）的管理器侧开关。
  *
- * The previous implementation had six defects worth naming, because each one drove a design
- * decision here:
+ * 第一版的教训（用户实测）：launcher 组件是品牌壳 `XecMainActivity`
+ * （MainActivity 的子类），且**已停用的组件无法被 am start**——守卫指向被
+ * 停用的组件等于入口自杀；反之停用基础 `MainActivity` 又拦不住内部重启流程。
  *
- * 1. it shelled out to `ksud stealth start --component …` - a daemon that no longer exists;
- * 2. it needed `getKsuDaemonPath()`, which lives in the removed userspace layer;
- * 3. it disabled *every* component that answered MAIN/LAUNCHER, including the one it then told
- *    the user to start (a disabled component cannot be started, even explicitly);
- * 4. "restore" only existed inside the same screen that became unreachable once hidden;
- * 5. the truth was a boolean in SharedPreferences, so a state that drifted on disk still read
- *    back as "hidden";
- * 6. failures were swallowed: the shell result was checked, the component writes were not.
- *
- * This version therefore:
- *
- * * writes components through [PackageManager] only - no root, no daemon, no shell;
- * * keeps [StealthLaunchActivity] permanently enabled and *never* touches it, so there is
- *   always an entry that `adb shell am start` can reach;
- * * derives the truth from [PackageManager] on every read ([State.iconHidden]), and treats the
- *   stored preference as an expectation that gets corrected by reality, not the other way;
- * * verifies every write by reading it back, and rolls the whole operation back when a
- *   verification step fails, so "hidden" and "half hidden" cannot be confused.
+ * 第二版的组件账：
+ *  - 图标组件 = 运行时发现（MAIN/LAUNCHER intent 查询本包），发现即记进
+ *    prefs；隐身后 queryIntentActivities 查不到停用组件，恢复全靠 prefs。
+ *  - 守卫落点 = [STEALTH_ENTRY]（StealthLaunchActivity，无 LAUNCHER filter、
+ *    永不停用、exported）——图标藏了它照样能被 am start。
+ *  - 开启顺序仍是安全关键：守卫武装成功才藏图标；关闭先恢复图标。
+ *  - 自愈：开启/关闭/管理器启动都会把基础 MainActivity 拉回 ENABLED，
+ *    修复第一版留下的坏状态。
  */
 object StealthEntrance {
 
+    private const val BASE_MAIN = "me.weishu.kernelsu.ui.MainActivity"
+    private const val STEALTH_ENTRY = "me.weishu.kernelsu.ui.StealthLaunchActivity"
     private const val PREFS = "stealth_entrance"
-    private const val KEY_SAVED_LAUNCHERS = "saved_launchers"
-    private const val KEY_EXPECTED_HIDDEN = "expected_hidden"
-    private const val KEY_LAST_ERROR = "last_error"
-
-    /**
-     * What the device looks like right now.
-     *
-     * [iconHidden] and [entryEnabled] are read from the package manager, [expectedHidden] is
-     * what the last operation asked for. A mismatch means something else changed our components
-     * (a restore from a backup, another manager, a factory reset of the setting) and
-     * [repair] has already re-synchronised it.
-     */
-    @Immutable
-    data class State(
-        val iconHidden: Boolean,
-        val entryEnabled: Boolean,
-        val expectedHidden: Boolean,
-        val lastError: String?,
-    )
+    private const val KEY_ACTIVE = "active"
+    private const val KEY_LAUNCHERS = "launchers" // '\n' 分隔的 className 列表
 
     private fun prefs(context: Context) =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    fun mainComponent(context: Context) = ComponentName(context, MainActivity::class.java)
+    private fun baseMain(context: Context) = ComponentName(context.packageName, BASE_MAIN)
 
-    /** The entry that always stays enabled; opening it opens the manager itself. */
-    fun entryComponent(context: Context) = ComponentName(context, StealthLaunchActivity::class.java)
+    /** 守卫 am start 的常开落点。 */
+    fun stealthComponent(context: Context) =
+        ComponentName(context.packageName, STEALTH_ENTRY)
 
-    fun tileComponent(context: Context) = ComponentName(context, StealthTileService::class.java)
-
-    /**
-     * Components of this package that currently put an icon in the launcher.
-     *
-     * Disabled components are not returned, which is exactly why this cannot be used to restore:
-     * the list is recorded *before* hiding and kept in [KEY_SAVED_LAUNCHERS] for that.
-     */
-    private fun launcherComponents(context: Context): List<ComponentName> {
+    /** 当前真正挂着桌面图标的组件（隐身后查不到，历史值在 prefs）。 */
+    private fun queryLauncherComponents(context: Context): List<ComponentName> {
         val intent = Intent(Intent.ACTION_MAIN)
             .addCategory(Intent.CATEGORY_LAUNCHER)
             .setPackage(context.packageName)
         return context.packageManager.queryIntentActivities(intent, 0)
-            .mapNotNull { it.activityInfo?.let { info -> ComponentName(info.packageName, info.name) } }
+            .mapNotNull { info -> info.activityInfo?.let { ComponentName(it.packageName, it.name) } }
             .distinct()
     }
 
-    fun isEnabled(context: Context, component: ComponentName): Boolean =
-        context.packageManager.getComponentEnabledSetting(component) !=
-            PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+    private fun savedLaunchers(context: Context): List<ComponentName> =
+        prefs(context).getString(KEY_LAUNCHERS, null)
+            ?.split('\n')
+            ?.mapNotNull { it.trim().takeIf { s -> s.isNotEmpty() } }
+            ?.map { ComponentName(context.packageName, it) }
+            .orEmpty()
 
-    /**
-     * Enable or disable one of *our own* components.
-     *
-     * `DONT_KILL_APP` matters: the caller is usually the app itself and killing it mid-way would
-     * leave the operation half applied with nobody left to roll it back.
-     */
-    private fun setEnabled(context: Context, component: ComponentName, enabled: Boolean) {
-        context.packageManager.setComponentEnabledSetting(
-            component,
-            if (enabled) {
-                PackageManager.COMPONENT_ENABLED_STATE_ENABLED
-            } else {
-                PackageManager.COMPONENT_ENABLED_STATE_DISABLED
-            },
-            PackageManager.DONT_KILL_APP,
-        )
-    }
-
-    private fun canStart(context: Context, component: ComponentName): Boolean =
-        isEnabled(context, component) &&
-            runCatching { context.packageManager.getActivityInfo(component, 0) }.isSuccess
-
-    private fun savedLaunchers(context: Context): List<ComponentName> {
-        val raw = prefs(context).getString(KEY_SAVED_LAUNCHERS, null) ?: return emptyList()
-        return raw.split('\n')
-            .mapNotNull { it.trim().takeIf { name -> name.isNotEmpty() } }
-            .map { ComponentName(context.packageName, it) }
-    }
-
-    fun state(context: Context): State = State(
-        iconHidden = launcherComponents(context).isEmpty(),
-        entryEnabled = canStart(context, entryComponent(context)),
-        expectedHidden = prefs(context).getBoolean(KEY_EXPECTED_HIDDEN, false),
-        lastError = prefs(context).getString(KEY_LAST_ERROR, null),
-    )
-
-    /**
-     * Reconcile stored expectation with reality and make sure the always-on entry is usable.
-     *
-     * Called from the manager's own start-up path and from the settings screen. Reality wins:
-     * if a launcher component is visible again (user restored a backup, another manager
-     * re-enabled us, a system update re-declared the component) then the stored flag is
-     * corrected instead of the UI claiming "hidden" while an icon sits in the drawer.
-     */
-    fun repair(context: Context): State {
-        if (!canStart(context, entryComponent(context))) {
-            // The entry is the only way back in; leaving it disabled would be a one-way door.
-            runCatching { setEnabled(context, entryComponent(context), true) }
-        }
-        val hidden = launcherComponents(context).isEmpty()
-        prefs(context).edit().putBoolean(KEY_EXPECTED_HIDDEN, hidden).apply()
-        return state(context)
-    }
-
-    /** @return success only when the icon is verifiably gone and the entry is verifiably usable. */
-    fun hide(context: Context): Result<Unit> {
-        val entry = entryComponent(context)
-        if (!canStart(context, entry)) {
-            runCatching { setEnabled(context, entry, true) }
-            if (!canStart(context, entry)) {
-                return fail(context, "入口组件无法启用，已放弃隐藏（否则无法再次打开）")
-            }
-        }
-        val launchers = launcherComponents(context)
-        if (launchers.isEmpty()) {
-            // Already hidden (or never visible): nothing to disable, but the expectation has to
-            // say so, otherwise the screen shows a warning forever.
-            prefs(context).edit()
-                .putBoolean(KEY_EXPECTED_HIDDEN, true)
-                .remove(KEY_LAST_ERROR)
-                .apply()
-            return Result.success(Unit)
-        }
-
-        prefs(context).edit()
-            .putString(KEY_SAVED_LAUNCHERS, launchers.joinToString("\n") { it.className })
-            .apply()
-
-        val touched = launchers + mainComponent(context)
-        touched.forEach { runCatching { setEnabled(context, it, false) } }
-
-        val stillVisible = launcherComponents(context)
-        if (stillVisible.isNotEmpty()) {
-            rollback(context, touched)
-            return fail(
-                context,
-                "仍有桌面组件可见：${stillVisible.joinToString { it.className }}，已全部恢复",
+    private fun setEnabled(context: Context, comp: ComponentName, enabled: Boolean) {
+        runCatching {
+            context.packageManager.setComponentEnabledSetting(
+                comp,
+                if (enabled) {
+                    PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+                } else {
+                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+                },
+                PackageManager.DONT_KILL_APP,
             )
         }
-        if (!canStart(context, entry)) {
-            rollback(context, touched)
-            return fail(context, "隐藏后入口不可启动，已全部恢复")
+    }
+
+    private fun isEnabled(context: Context, comp: ComponentName): Boolean =
+        context.packageManager.getComponentEnabledSetting(comp) !=
+            PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+
+    /** 管理器每次启动都调：修复第一版误停的基础 MainActivity。 */
+    fun repair(context: Context) {
+        if (!isEnabled(context, baseMain(context))) {
+            setEnabled(context, baseMain(context), true)
         }
-        prefs(context).edit()
-            .putBoolean(KEY_EXPECTED_HIDDEN, true)
-            .remove(KEY_LAST_ERROR)
-            .apply()
-        return Result.success(Unit)
     }
 
-    /** Put the icon back. Works from the always-on entry as well as from a visible manager. */
-    fun restore(context: Context): Result<Unit> {
-        val targets = (savedLaunchers(context) + mainComponent(context)).distinct()
-        targets.forEach { runCatching { setEnabled(context, it, true) } }
-        // The entry stays enabled on purpose: it is harmless while visible and is still the
-        // fallback if the icon write above failed on a locked-down ROM.
-        runCatching { setEnabled(context, entryComponent(context), true) }
+    /** 隐身是否生效（prefs 是事实源；图标隐藏后组件查不到，不能现场查）。 */
+    fun isIconHidden(context: Context): Boolean = prefs(context).getBoolean(KEY_ACTIVE, false)
 
-        if (launcherComponents(context).isEmpty()) {
-            return fail(context, "已尝试恢复，但系统仍没有报告桌面图标；请重启一次管理器再试")
+    /** @return 守卫已武装且图标组件已全部停用。 */
+    fun enable(context: Context): Boolean {
+        val target = stealthComponent(context)
+        val arg = "${target.packageName}/${target.className}"
+        val result = Shell.cmd("${getKsuDaemonPath()} stealth start --component '$arg'").exec()
+        if (!result.isSuccess) {
+            return false
         }
+        // 先把图标组件记下来再停用（停用后 queryIntentActivities 查不到）。
+        val launchers = queryLauncherComponents(context)
         prefs(context).edit()
-            .putBoolean(KEY_EXPECTED_HIDDEN, false)
-            .remove(KEY_SAVED_LAUNCHERS)
-            .remove(KEY_LAST_ERROR)
+            .putString(KEY_LAUNCHERS, launchers.joinToString("\n") { it.className })
+            .putBoolean(KEY_ACTIVE, true)
             .apply()
-        return Result.success(Unit)
+        repair(context)
+        launchers.forEach { setEnabled(context, it, false) }
+        return true
     }
 
-    private fun rollback(context: Context, components: List<ComponentName>) {
-        components.forEach { runCatching { setEnabled(context, it, true) } }
-        prefs(context).edit().putBoolean(KEY_EXPECTED_HIDDEN, false).apply()
+    /** 先恢复图标与基础组件，再停守卫清配置。 */
+    fun disable(context: Context): Boolean {
+        savedLaunchers(context).forEach { setEnabled(context, it, true) }
+        setEnabled(context, baseMain(context), true)
+        prefs(context).edit().putBoolean(KEY_ACTIVE, false).apply()
+        Shell.cmd("${getKsuDaemonPath()} stealth stop").submit()
+        return true
     }
 
-    private fun fail(context: Context, message: String): Result<Unit> {
-        prefs(context).edit().putString(KEY_LAST_ERROR, message).apply()
-        return Result.failure(IllegalStateException(message))
-    }
-
-    fun clearError(context: Context) {
-        prefs(context).edit().remove(KEY_LAST_ERROR).apply()
-    }
-
-    /**
-     * `am start` line for the confirmation dialog: typing this into a computer terminal is the
-     * last-resort way back when the tile was not added and the icon is gone.
-     */
+    /** adb 兜底命令（确认对话框里展示给用户抄；隐身态下也有效）。 */
     fun adbFallback(context: Context): String {
-        val entry = entryComponent(context)
-        return "adb shell am start -n ${entry.packageName}/${entry.className}"
+        val comp = stealthComponent(context)
+        return "adb shell am start -n ${comp.packageName}/${comp.className}"
     }
 }

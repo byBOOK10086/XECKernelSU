@@ -20,7 +20,7 @@ import java.util.Locale
  * 用户的要求是「不改模块源码」——这一条直接决定了实现方式：**不去改 install.sh，
  * 也不去 hook 脚本，而是在接收端伪造"真的有人按了音量键"这件事**。方法是以 root
  * 身份往音量键所在的那个 input 设备节点写原始事件（`sendevent`），这正是
- * `getevent` / Magisk `--keycheck` / 直接读 `/dev/input/event*` 的脚本看到的
+ * `getevent` / `--keycheck` / 直接读 `/dev/input/event*` 的脚本看到的
  * 同一份数据——对模块来说，它和一次真实按键无法区分。
  *
  * ## 脚本语法

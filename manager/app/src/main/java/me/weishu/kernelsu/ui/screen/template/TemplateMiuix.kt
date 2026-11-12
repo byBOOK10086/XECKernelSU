@@ -34,10 +34,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Fingerprint
-import androidx.compose.material.icons.outlined.Group
-import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Fingerprint
+import androidx.compose.material.icons.rounded.Group
+import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -64,10 +64,13 @@ import me.weishu.kernelsu.R
 import me.weishu.kernelsu.data.model.TemplateInfo
 import me.weishu.kernelsu.ui.component.ListPopupDefaults
 import me.weishu.kernelsu.ui.component.miuix.DropdownItem
+import me.weishu.kernelsu.ui.design.glass.xGlassBody
+import me.weishu.kernelsu.ui.design.token.Xc
 import me.weishu.kernelsu.ui.theme.LocalEnableBlur
 import me.weishu.kernelsu.ui.util.BlurredBar
 import me.weishu.kernelsu.ui.util.rememberBlurBackdrop
 import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.FloatingActionButton
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Icon
@@ -96,6 +99,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
+import me.weishu.kernelsu.ui.design.token.XcRadius
 
 /**
  * @author weishu
@@ -142,9 +146,10 @@ fun AppProfileTemplateScreenMiuix(
     val enableBlur = LocalEnableBlur.current
     val backdrop = rememberBlurBackdrop(enableBlur)
     val blurActive = backdrop != null
-    val barColor = if (blurActive) Color.Transparent else colorScheme.surface
+    val barColor = if (blurActive) Color.Transparent else colorScheme.surface.copy(alpha = 1f)
 
     Scaffold(
+        containerColor = Color.Transparent,
         topBar = {
             TopBar(
                 onBack = actions.onBack,
@@ -203,7 +208,7 @@ fun AppProfileTemplateScreenMiuix(
             ) {
                 if (state.offline) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(text = stringResource(R.string.network_offline), color = colorScheme.onSurfaceVariantSummary, fontSize = 16.sp)
+                        Text(text = stringResource(R.string.network_offline), color = colorScheme.onSurfaceVariantSummary, fontSize = 15.sp)
                         Spacer(Modifier.height(12.dp))
                         TextButton(
                             modifier = Modifier
@@ -256,6 +261,7 @@ fun AppProfileTemplateScreenMiuix(
                         TemplateItem(
                             template = app,
                             onClick = { actions.onOpenTemplate(app) },
+                            backdrop = backdrop,
                         )
                     }
                     item {
@@ -276,9 +282,11 @@ fun AppProfileTemplateScreenMiuix(
 private fun TemplateItem(
     template: TemplateInfo,
     onClick: () -> Unit,
+    backdrop: LayerBackdrop? = null,
 ) {
-    Card(
-        modifier = Modifier.padding(bottom = 12.dp),
+    Card(cornerRadius = XcRadius.md, 
+        modifier = Modifier.padding(bottom = 12.dp).xGlassBody(backdrop = backdrop, shape = Xc.shapes.md),
+        colors = CardDefaults.defaultColors(color = Color.Transparent),
         onClick = onClick,
         showIndication = true,
         pressFeedbackType = PressFeedbackType.Sink
@@ -318,7 +326,7 @@ private fun TemplateItem(
             Text(
                 text = "${template.id}${if (template.author.isEmpty()) "" else " by @${template.author}"}",
                 modifier = Modifier.padding(top = 1.dp),
-                fontSize = 12.sp,
+                fontSize = 13.sp,
                 fontWeight = FontWeight(550),
                 color = colorScheme.onSurfaceVariantSummary,
             )
@@ -327,7 +335,7 @@ private fun TemplateItem(
 
             Text(
                 text = template.description,
-                fontSize = 14.sp,
+                fontSize = 15.sp,
                 color = colorScheme.onSurfaceVariantSummary,
             )
 
@@ -341,15 +349,15 @@ private fun TemplateItem(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 InfoChip(
-                    icon = Icons.Outlined.Fingerprint,
+                    icon = Icons.Rounded.Fingerprint,
                     text = "UID: ${template.uid}"
                 )
                 InfoChip(
-                    icon = Icons.Outlined.Group,
+                    icon = Icons.Rounded.Group,
                     text = "GID: ${template.gid}"
                 )
                 InfoChip(
-                    icon = Icons.Outlined.Shield,
+                    icon = Icons.Rounded.Shield,
                     text = template.context
                 )
             }
@@ -369,7 +377,7 @@ private fun InfoChip(icon: ImageVector, text: String) {
         Text(
             modifier = Modifier.padding(start = 4.dp),
             text = text,
-            fontSize = 12.sp,
+            fontSize = 13.sp,
             fontWeight = FontWeight(550),
             color = colorScheme.onSurfaceSecondary
         )

@@ -1,6 +1,5 @@
 package me.weishu.kernelsu.ui.component.miuix
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.FocusInteraction
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -29,6 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
+import me.weishu.kernelsu.ui.design.liquid.xWaterDropClick
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme
@@ -55,14 +55,9 @@ fun EditText(
 
     Box(
         modifier = modifier
-            .clickable(
-                indication = null,
-                interactionSource = null
-            ) {
-                if (enabled) {
-                    coroutineScope.launch {
-                        interactionSource.emit(FocusInteraction.Focus())
-                    }
+            .xWaterDropClick(enabled = enabled) {
+                coroutineScope.launch {
+                    interactionSource.emit(FocusInteraction.Focus())
                 }
             }
             .heightIn(min = 56.dp)
