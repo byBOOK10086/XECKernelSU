@@ -15,6 +15,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
@@ -27,6 +28,7 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import me.weishu.kernelsu.Natives
 import me.weishu.kernelsu.R
 import me.weishu.kernelsu.privilege.StealthEntrance
@@ -36,7 +38,6 @@ import me.weishu.kernelsu.ui.navigation3.KernelSuNavHost
 import me.weishu.kernelsu.ui.navigation3.LocalNavigator
 import me.weishu.kernelsu.ui.navigation3.Route
 import me.weishu.kernelsu.ui.navigation3.rememberNavigator
-import me.weishu.kernelsu.ui.screen.home.KernelMissingPage
 import me.weishu.kernelsu.ui.theme.KernelSUTheme
 import me.weishu.kernelsu.ui.theme.LocalColorMode
 import me.weishu.kernelsu.ui.theme.LocalEnableBlur
@@ -75,20 +76,6 @@ open class MainActivity : ComponentActivity() {
         }
 
         val isManager = Natives.isManager
-        if (!isManager) {
-            // This build is not the manager of the kernel that is running (different package
-            // or signature, or no KernelSU kernel at all). Every layer below - theme, nav
-            // host, view models, the root shell - assumes a kernel it can talk to; on a real
-            // Android 16 device that combination produced an empty window with no crash and
-            // no text. Render one plain page instead of a themed tree that cannot work.
-            //
-            // contentReady has to be released here as well: the main content is what normally
-            // flips it, and without it the splash stays on screen forever (measured: the page
-            // was in the accessibility tree while the screenshot still showed the splash).
-            contentReady = true
-            setContent { KernelMissingPage() }
-            return
-        }
         if (isManager && Natives.kernelUAPIVersion == Natives.managerUAPIVersion) install()
 
         // Reconcile the "icon hidden" expectation with what the package manager reports, and
@@ -99,6 +86,15 @@ open class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) intent?.let { intentChannel.trySend(it) }
 
         setContent {
+            // Safety net for the splash: it is kept up until contentReady flips, and the flip
+            // lives at the very end of the main content. Any composition that cannot reach
+            // that point (a throwing layer, a page gated off, no kernel to talk to) used to
+            // leave the splash - and its artwork - on screen forever, which reads as "the
+            // manager does not open". Bounded wait, then show whatever composed.
+            LaunchedEffect(Unit) {
+                delay(1500)
+                contentReady = true
+            }
             val viewModel = viewModel<MainActivityViewModel>()
             val uiState by viewModel.uiState.collectAsStateWithLifecycle()
             val selectedMainPage by viewModel.selectedMainPage.collectAsStateWithLifecycle()
