@@ -36,6 +36,7 @@ import me.weishu.kernelsu.ui.navigation3.KernelSuNavHost
 import me.weishu.kernelsu.ui.navigation3.LocalNavigator
 import me.weishu.kernelsu.ui.navigation3.Route
 import me.weishu.kernelsu.ui.navigation3.rememberNavigator
+import me.weishu.kernelsu.ui.screen.home.KernelMissingPage
 import me.weishu.kernelsu.ui.theme.KernelSUTheme
 import me.weishu.kernelsu.ui.theme.LocalColorMode
 import me.weishu.kernelsu.ui.theme.LocalEnableBlur
@@ -74,6 +75,15 @@ open class MainActivity : ComponentActivity() {
         }
 
         val isManager = Natives.isManager
+        if (!isManager) {
+            // This build is not the manager of the kernel that is running (different package
+            // or signature, or no KernelSU kernel at all). Every layer below - theme, nav
+            // host, view models, the root shell - assumes a kernel it can talk to; on a real
+            // Android 16 device that combination produced an empty window with no crash and
+            // no text. Render one plain page instead of a themed tree that cannot work.
+            setContent { KernelMissingPage() }
+            return
+        }
         if (isManager && Natives.kernelUAPIVersion == Natives.managerUAPIVersion) install()
 
         // Reconcile the "icon hidden" expectation with what the package manager reports, and
