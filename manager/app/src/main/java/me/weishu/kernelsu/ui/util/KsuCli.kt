@@ -157,6 +157,22 @@ object KsuCli {
      * app needs it - the manager can be started by a broadcast before the root
      * provider is ready.
      */
+    /**
+     * 立刻重探一次 root，忽略退避冷却。
+     *
+     * 用户刚在 KSU 里点了"允许"之后，缓存里那个非 root shell 还在冷却期，首页
+     * 就会继续显示"ROOT 未就绪"。首页每次刷新前先调这里，授权一落定当帧可见。
+     */
+    fun retryRootNow() {
+        synchronized(shellLock) {
+            normalSlot.retryCount = 0
+            normalSlot.retryAtElapsedMs = 0L
+            globalMountSlot.retryCount = 0
+            globalMountSlot.retryAtElapsedMs = 0L
+        }
+        noteProbe("retryRootNow")
+    }
+
     val SHELL: Shell
         get() = getOrRetryShell(globalMnt = false)
 

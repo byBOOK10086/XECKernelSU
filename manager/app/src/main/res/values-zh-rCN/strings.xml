@@ -1114,4 +1114,5 @@ XEC 项目组
     <string name="home_hero_ready_install">已准备就绪，可以直接安装</string>
     <string name="home_hero_ready_title">已准备就绪</string>
     <string name="home_hero_ready_subtitle">系统环境正常，可以开始安装</string>
+    <string name="home_hero_ready_need_root">可以直接安装，点击开始（会先申请 root 权限）</string>
 </resources>

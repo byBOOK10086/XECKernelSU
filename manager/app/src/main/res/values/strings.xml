@@ -1112,4 +1112,5 @@ See the log below for details.</string>
     <string name="home_hero_ready_install">Ready to install</string>
     <string name="home_hero_ready_title">Ready to go</string>
     <string name="home_hero_ready_subtitle">System environment is healthy — installation can start</string>
+    <string name="home_hero_ready_need_root">Ready to install. Tap to install; it will ask for root first.</string>
 </resources>

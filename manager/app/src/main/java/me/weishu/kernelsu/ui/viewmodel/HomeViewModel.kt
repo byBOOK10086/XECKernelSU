@@ -85,6 +85,8 @@ class HomeViewModel(
         refreshJob = viewModelScope.launch {
             _uiState.update { it.copy(isRefreshing = true) }
             try {
+            // 授权可能刚好落在上一次探测之后：先强制重探一次，再取状态。
+            if (!_uiState.value.isRootAvailable) KsuCli.retryRootNow()
             val baseState = withContext(Dispatchers.IO) { buildState() }
             _uiState.update {
                 // 审计 P2：baseState 是新建的 HomeUiState，isRefreshing 默认 false；
@@ -96,7 +98,13 @@ class HomeViewModel(
             val latestVersionInfo = withContext(Dispatchers.IO) { checkNewVersion() }
             _uiState.update { it.copy(latestVersionInfo = latestVersionInfo) }
             publishWidgetState(_uiState.value)
+            } catch (t: Throwable) {
+                // 探测链里任何一步抛异常都不能让首页停在首帧占位状态：
+                // 那样 rootProbeSettled 永远是 false，页面会一直卡在加载态。
+                _uiState.update { it.copy(rootProbeSettled = true, isRefreshing = false) }
+                android.util.Log.w("XecHome", ": home refresh failed", t)
             } finally {
+
                 // 失败也要收指示器：宁可让用户看到"没刷出来"，也不要一直转圈。
                 _uiState.update { it.copy(isRefreshing = false) }
             }

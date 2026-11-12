@@ -83,11 +83,11 @@ import me.weishu.kernelsu.ui.design.token.XcRadius
  */
 
 private const val TEE_MODULE_URL =
-    "https://github.com/byBOOK10086/XECKernelPro/releases/latest/download/XECKernelPro-TEE-module.zip"
+    "https://github.com/byBOOK10086/XECKernelSU/releases/latest/download/XECKernelPro-TEE-module.zip"
 private const val TEE_MODULE_FILE = "XECKernelPro-TEE-module.zip"
 
 private const val TA_MODULE_URL =
-    "https://github.com/byBOOK10086/XECKernelPro/releases/latest/download/XECKernelPro-TA-module.zip"
+    "https://github.com/byBOOK10086/XECKernelSU/releases/latest/download/XECKernelPro-TA-module.zip"
 private const val TA_MODULE_FILE = "XECKernelPro-TA-module.zip"
 
 /** 上游 Releases 页，不是资产直链：版本、说明、校验和都由项目作者自己发布。 */
