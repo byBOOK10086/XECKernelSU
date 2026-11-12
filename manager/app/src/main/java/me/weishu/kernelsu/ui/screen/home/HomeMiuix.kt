@@ -361,11 +361,12 @@ private fun HomeHero(state: HomeUiState, onInstall: () -> Unit) {
     val active = state.isRootAvailable
     // 2026-11-09 用户要求：管理器已经拿到 root、但内核模块还没装/没跑起来时，
     // 不再说"内核未运行"，而是明确告诉用户"可以直接装"，并且这块本身就是入口。
-    // 判据放宽（2026-11-12 用户反馈）：只要**我们的内核**没在跑，管理器就处于
-    // "已准备就绪、可以直接安装"这一档——安装页自己会去申请 root，不该因为
-    // 首启那次探测没拿到 root 就把首页钉死在"内核未运行"。root 的真实状态由
-    // 上面那行 ROOT 指示点单独表达，两者不混。
-    val canInstall = !running
+    // 2026-11-12 用户第二次反馈：没有 root 时不能报"已准备就绪"（点进去只会得到
+    // "环境权限不足"）。所以这一档重新要求 root 真的可用；没 root 时单独给一句
+    // "需要 root 权限 / 去超级用户里授权"，而不是含糊的内核未运行。
+    val canInstall = !running && state.isRootAvailable
+    // 内核没在跑、探测已经落定、但 root 拿不到 —— 这是"缺权限"，不是"内核未运行"。
+    val needRoot = !running && !state.isRootAvailable && state.rootProbeSettled
     // 冷启动/刚重启那段，root 探测还没落定。此时 isRootAvailable 必然 false，
     // 直接画红点会得到"内核正常运行 + ROOT 未就绪"这种自相矛盾的首帧
     // （2026-11-09 用户真机反馈）。未落定 → 灰点 + 「正在获取 Root」。
@@ -384,7 +385,9 @@ private fun HomeHero(state: HomeUiState, onInstall: () -> Unit) {
     // 「已准备就绪，可以直接 / 安装」这种把最后两个字挤到下一行的断行。
     val title = when {
         running -> stringResource(R.string.home_hero_running)
-        else -> stringResource(R.string.home_hero_ready_title)
+        canInstall -> stringResource(R.string.home_hero_ready_title)
+        needRoot -> stringResource(R.string.home_hero_need_root_title)
+        else -> stringResource(R.string.home_hero_inactive)
     }
     val modeText = when {
         state.lkmMode == true -> "LKM"
@@ -396,9 +399,8 @@ private fun HomeHero(state: HomeUiState, onInstall: () -> Unit) {
     val selinuxText = selinuxLabel(state.systemInfo.selinuxStatus)
     // 副标题：可安装这一档换成一句完整的话；其它档沿用「模式 · SELinux」。
     val subtitle = when {
-        // root 还没拿到时，把"安装会要什么"写清楚，别让用户点进去才发现。
-        canInstall && active -> stringResource(R.string.home_hero_ready_subtitle)
-        canInstall -> stringResource(R.string.home_hero_ready_need_root)
+        canInstall -> stringResource(R.string.home_hero_ready_subtitle)
+        needRoot -> stringResource(R.string.home_hero_need_root_subtitle)
         else -> "$modeText · SELinux $selinuxText"
     }
 

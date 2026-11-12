@@ -1113,4 +1113,6 @@ See the log below for details.</string>
     <string name="home_hero_ready_title">Ready to go</string>
     <string name="home_hero_ready_subtitle">System environment is healthy — installation can start</string>
     <string name="home_hero_ready_need_root">Ready to install. Tap to install; it will ask for root first.</string>
+    <string name="home_hero_need_root_subtitle">Grant XECKernel Pro root in Superuser, then come back - this page refreshes itself</string>
+    <string name="home_hero_need_root_title">Root permission required</string>
 </resources>

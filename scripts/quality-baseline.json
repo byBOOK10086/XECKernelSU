@@ -115,8 +115,8 @@
       "reason": "ported file: split candidate, no reason recorded yet"
     },
     "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/home/HomeMiuix.kt": {
-      "lines": 878,
-      "reason": "root-probe ordering + hero copy changes (2026-11-12); may only shrink from here"
+      "lines": 880,
+      "reason": "home hero gained the explicit need-root state (2026-11-12); may only shrink from here"
     },
     "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/install/InstallMiuix.kt": {
       "lines": 416,
