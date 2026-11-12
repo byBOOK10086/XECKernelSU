@@ -75,6 +75,12 @@ pub fn run(package_name: &String, kmi: Option<String>, allow_shell: bool) -> Res
     // happens at module init time. Any failure here degrades to "no SUSFS", never to "no root".
     load_susfs_lkm_for_current_kmi();
 
+    // Late-load activates the kernel without a patched init_boot, so the boot-state
+    // pass has to run here as well (it is idempotent).
+    crate::bootstate::apply();
+    crate::bootstate::harden_readability();
+    crate::bootstate::apply_bootparam_overlay();
+
     // We need to reset stdin/stdout/stderr; otherwise, sending file descriptors via cmd transactions
     // will be blocked by SELinux because its fsec->sid is still u:r:su:s0 instead of u:r:ksu:s0.
     utils::reset_std()?;

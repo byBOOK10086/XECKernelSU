@@ -1,3 +1,5 @@
+import java.io.File
+
 plugins {
     alias(libs.plugins.agp.app) apply false
     alias(libs.plugins.kotlin) apply false
@@ -35,22 +37,29 @@ fun getVersionCode(): Int {
     return getBaseVersionCode()
 }
 
-/**
- * 公开版本码，必须和内核 `KERNEL_SU_VERSION` 同口径。
- *
- * 本仓库（XECKernelSU）的 `kernel/Kbuild` 用的是
- * `30000 + $(git rev-list --count HEAD)`，所以管理器也用同一条规则——
- * 两边报出同一个号，首页才不会永远提示「LKM 可更新」。
- *
- * 注意：CI 必须 `fetch-depth: 0`（build-manager.yml 已经是），否则浅克隆下
- * 提交数为 1，版本码会退化成 30001。
- */
-fun getBaseVersionCode(): Int {
-    return 30000 + getGitCommitCount()
+/** 版本文件：仓库根的 `version.properties`，内核 `KSU_VERSION` 读的是同一份。 */
+private fun versionFile(): File {
+    val candidates = listOf(
+        rootProject.file("version.properties"),
+        rootProject.file("../version.properties"),
+    )
+    return candidates.firstOrNull { it.isFile }
+        ?: error("缺少 version.properties（找过 ${candidates.joinToString(" 和 ") { it.path }}）")
 }
 
+private fun versionValue(key: String): String {
+    val file = versionFile()
+    val line = file.readLines().firstOrNull { it.trimStart().startsWith(key) }
+        ?: error("${file.path} 里没有 $key")
+    return line.substringAfter('=').trim()
+}
+
+fun getBaseVersionCode(): Int =
+    versionValue("versionCode").toIntOrNull()
+        ?: error("version.properties 的 versionCode 不是整数")
+
 fun getVersionName(): String {
-    // 必须带 v 前缀，让 APK 文件名形如 XECKernelPro_v<ver>_<code>-release.apk。
-    val desc = getGitDescribe()
-    return if (desc.startsWith("v")) desc else "v$desc"
+    // 名字也来自同一个文件，避免「内核 30001 / 管理器 v1.1.0-…」两套号。
+    val name = versionValue("versionName")
+    return if (name.startsWith("v")) name else "v$name"
 }

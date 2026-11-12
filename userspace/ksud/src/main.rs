@@ -16,6 +16,7 @@ mod assets;
 // The built-in module installer materialises trees into /data/adb/modules and uses
 // module/utils/sepolicy, which only exist in the Android build.
 mod boot_patch;
+mod bootstate;
 #[cfg(target_os = "android")]
 mod builtin;
 #[cfg(target_os = "android")]

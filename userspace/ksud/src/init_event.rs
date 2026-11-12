@@ -18,6 +18,13 @@ pub fn on_post_fs_data() -> Result<()> {
 
     utils::umask(0);
 
+    // Locked-view properties first: the module scripts below (and every integrity
+    // check that follows) read them, and zygote snapshots Build.* from the same
+    // property area once post-fs-data returns.
+    crate::bootstate::apply();
+    crate::bootstate::harden_readability();
+    crate::bootstate::apply_bootparam_overlay();
+
     // Clear all temporary module configs early
     if let Err(e) = crate::module_config::clear_all_temp_configs() {
         warn!("clear temp configs failed: {e}");
