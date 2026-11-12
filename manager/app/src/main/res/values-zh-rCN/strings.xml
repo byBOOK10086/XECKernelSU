@@ -3,6 +3,8 @@
     <string name="home">主页</string>
     <string name="home_not_installed">未安装</string>
     <string name="home_click_to_install">点击安装</string>
+    <string name="manager_kernel_missing_title">未检测到内核模块</string>
+    <string name="manager_kernel_missing_hint">请先刷入本机 KMI 对应的 kernelsu.ko（或从发布页安装），然后重新打开管理器。当运行中的内核不把本应用认作管理器时，会显示这一页。</string>
     <string name="home_working">工作中</string>
     <string name="home_working_version">版本：%s</string>
     <string name="home_lkm_update_available">内嵌 LKM 有可用更新，点击更新</string>

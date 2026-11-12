@@ -43,13 +43,13 @@ fun KernelMissingPage() {
                 color = MaterialTheme.colorScheme.onBackground,
             )
             Text(
-                text = stringResource(R.string.home_not_installed),
+                text = stringResource(R.string.manager_kernel_missing_title),
                 style = MaterialTheme.typography.titleMedium,
                 textAlign = TextAlign.Center,
                 color = MaterialTheme.colorScheme.onBackground,
             )
             Text(
-                text = stringResource(R.string.home_click_to_install),
+                text = stringResource(R.string.manager_kernel_missing_hint),
                 style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Center,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
