@@ -243,9 +243,9 @@ void __init ksu_app_profile_init(void)
 #if NEED_BACKPORT_COMPAT
     unsigned long size = 0;
     int ret;
-    void *raw_spin_lock_irq_sym = find_kernel_symbol_exact("_raw_spin_lock_irq");
-    void *seccomp_filter_release_sym = find_kernel_symbol_exact("seccomp_filter_release");
-    ret = kallsyms_lookup_size_offset(seccomp_filter_release_sym, &size, NULL);
+    void *raw_spin_lock_irq_sym = (void *)find_kernel_symbol_exact("_raw_spin_lock_irq");
+    void *seccomp_filter_release_sym = (void *)find_kernel_symbol_exact("seccomp_filter_release");
+    ret = kallsyms_lookup_size_offset((unsigned long)seccomp_filter_release_sym, &size, NULL);
     if (!ret || !size) {
         pr_err("failed to get size of seccomp_filter_release: %d, use 128\n", ret);
         size = 128;

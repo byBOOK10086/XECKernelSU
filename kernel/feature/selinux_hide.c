@@ -420,18 +420,19 @@ static int ksu_selinux_hide_enable()
         pr_err("no backup sepolicy available, please save feature and reboot to retry!\n");
         return -EAGAIN;
     }
-    selinux_write_op = find_kernel_symbol_exact("write_op");
+    selinux_write_op = (typeof(selinux_write_op))find_kernel_symbol_exact("write_op");
     if (!selinux_write_op) {
         pr_err("selinux_hide: no write_op found!\n");
         return -ENOSYS;
     }
     hook_selinux_status_open();
 
-    security_dump_masked_av_fn = find_kernel_symbol_exact("security_dump_masked_av");
+    security_dump_masked_av_fn = (typeof(security_dump_masked_av_fn))find_kernel_symbol_exact("security_dump_masked_av");
     if (!security_dump_masked_av_fn) {
         pr_warn("security_dump_masked_av not found!\n");
     }
-    context_struct_compute_av_fn = find_kernel_symbol_exact("context_struct_compute_av");
+    context_struct_compute_av_fn =
+        (typeof(context_struct_compute_av_fn))find_kernel_symbol_exact("context_struct_compute_av");
     if (!context_struct_compute_av_fn) {
         pr_warn("context_struct_compute_av not found!\n");
     }
@@ -565,7 +566,7 @@ static void hook_selinux_status_open()
     if (orig_sel_open_handle_status)
         return;
     if (!sel_open_handle_status_slot) {
-        struct file_operations *ops = find_kernel_symbol_exact("sel_handle_status_ops");
+        struct file_operations *ops = (struct file_operations *)find_kernel_symbol_exact("sel_handle_status_ops");
         if (!ops) {
             pr_err("selinux_hide: sel_handle_status_ops not found, fake status will not work\n");
             return;
