@@ -16,6 +16,8 @@ mod assets;
 // The built-in module installer materialises trees into /data/adb/modules and uses
 // module/utils/sepolicy, which only exist in the Android build.
 mod boot_patch;
+// Android-only: the host-side builds have no property area and no sepolicy engine.
+#[cfg(target_os = "android")]
 mod bootstate;
 #[cfg(target_os = "android")]
 mod builtin;

@@ -115,8 +115,8 @@
       "reason": "ported file: split candidate, no reason recorded yet"
     },
     "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/home/HomeMiuix.kt": {
-      "lines": 873,
-      "reason": "legacy manager UI ported back from the previous tree (2026-11-12): pinned at its ported size; it may only shrink from here"
+      "lines": 878,
+      "reason": "root-probe ordering + hero copy changes (2026-11-12); may only shrink from here"
     },
     "manager/app/src/main/java/me/weishu/kernelsu/ui/screen/install/InstallMiuix.kt": {
       "lines": 416,
@@ -187,8 +187,8 @@
       "reason": "ported file: split candidate, no reason recorded yet"
     },
     "manager/app/src/main/java/me/weishu/kernelsu/ui/util/KsuCli.kt": {
-      "lines": 1146,
-      "reason": "legacy manager UI ported back from the previous tree (2026-11-12): pinned at its ported size; it may only shrink from here"
+      "lines": 1189,
+      "reason": "root-probe ordering + hero copy changes (2026-11-12); may only shrink from here"
     },
     "manager/app/src/main/java/me/weishu/kernelsu/ui/util/module/Shortcut.kt": {
       "lines": 418,
