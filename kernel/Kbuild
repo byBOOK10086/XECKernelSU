@@ -239,9 +239,9 @@ $(info -- KSU_NEW_DCACHE_FLUSH: $(KSU_NEW_DCACHE_FLUSH))
 
 KSU_IS_PR_BUILD ?= 0
 ifneq ($(KSU_IS_PR_BUILD),0)
-KSU_PACKAGE_NAME ?= me.weishu.kernelsu.pr
+KSU_PACKAGE_NAME ?= www.xeckernel.pro.pr
 else
-KSU_PACKAGE_NAME ?= me.weishu.kernelsu
+KSU_PACKAGE_NAME ?= www.xeckernel.pro
 endif
 # The manager is recognised by the signing certificate of its APK (apk_sign.c hashes the
 # certificate out of the v2 signature block and compares it with these two values), so they

@@ -209,6 +209,57 @@ def check_string_escapes():
                 break
 
 
+PACKAGE_NAME_FILES = {
+    "manager": ROOT / "manager/app/build.gradle.kts",
+    "kernel": ROOT / "kernel/Kbuild",
+    "ksud": ROOT / "userspace/ksud/build.rs",
+    "tricky": ROOT / "third_party/tricky-addon-enhanced/rust/src/automation/watcher.rs",
+}
+
+
+def check_package_identity():
+    """The manager's applicationId is spelled out in four places; they have to agree.
+
+    Measured cost of one drift: the kernel scans /data/app for KSU_PACKAGE_NAME, ksud builds
+    its `am start <package>/<activity>` from its own copy, and the vendored tricky-addon
+    force-stops the manager by name. One wrong copy means the app installs, talks to the
+    kernel and still is not recognised as the manager - which reads like "root is broken",
+    not like "a string is stale".
+    """
+    def text(path):
+        return path.read_text(encoding="utf-8", errors="replace")
+
+    manager_text = text(PACKAGE_NAME_FILES["manager"])
+    match = re.search(r'defaultManagerPackageName = if \(isPrBuild\) "([^"]+)" else "([^"]+)"', manager_text)
+    if not match:
+        problems.append("%s: defaultManagerPackageName not found" % rel(PACKAGE_NAME_FILES["manager"]))
+        return
+    pr_name, base_name = match.group(1), match.group(2)
+    if pr_name != base_name + ".pr":
+        problems.append("%s: PR package `%s` is not `<package>.pr`"
+                        % (rel(PACKAGE_NAME_FILES["manager"]), pr_name))
+
+    kernel_names = set(re.findall(r"KSU_PACKAGE_NAME \?= (\S+)", text(PACKAGE_NAME_FILES["kernel"])))
+    if kernel_names != {base_name, pr_name}:
+        problems.append("%s: KSU_PACKAGE_NAME defaults %s, manager says %s"
+                        % (rel(PACKAGE_NAME_FILES["kernel"]), sorted(kernel_names),
+                           sorted({base_name, pr_name})))
+
+    ksud_match = re.search(r"rustc-env=KSU_PACKAGE_NAME=(\S+)\"", text(PACKAGE_NAME_FILES["ksud"]))
+    if not ksud_match:
+        problems.append("%s: rustc-env=KSU_PACKAGE_NAME not found" % rel(PACKAGE_NAME_FILES["ksud"]))
+    elif ksud_match.group(1) != base_name:
+        problems.append("%s: default package `%s`, manager says `%s`"
+                        % (rel(PACKAGE_NAME_FILES["ksud"]), ksud_match.group(1), base_name))
+
+    tricky_match = re.search(r'"KSU" => "([^"]+)"', text(PACKAGE_NAME_FILES["tricky"]))
+    if not tricky_match:
+        problems.append("%s: root-manager package mapping not found" % rel(PACKAGE_NAME_FILES["tricky"]))
+    elif tricky_match.group(1) != base_name:
+        problems.append("%s: restart package `%s`, manager says `%s`"
+                        % (rel(PACKAGE_NAME_FILES["tricky"]), tricky_match.group(1), base_name))
+
+
 def main():
     check_file_sizes()
     check_locales()
@@ -216,6 +267,7 @@ def main():
     check_swallowed_errors()
     check_line_endings()
     check_string_escapes()
+    check_package_identity()
     if problems:
         print("quality gates failed (%d):" % len(problems))
         for p in problems:

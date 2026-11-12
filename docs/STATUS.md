@@ -167,5 +167,6 @@ gantt
 | `ksud-aarch64` 产物 | 23.9 MB（zip，含两套内置引擎 + 内核模块）|
 | 发布 APK | 23,934,800 B · sha256 `e3e244011c4fc105f49e60ac71393e34677f948be3481fb517d066f64977b376` |
 | 管理器签名 pin | cert `0x053f` / sha256 `8f983688359382f2e75dd72cd59398d7a0c45ed22dd1410138b34b5321a05819`（与 `kernel/Kbuild` 一致，已实测发布包） |
+| 包名 / 应用名 | applicationId `www.xeckernel.pro`、应用名 `XECKernel Pro`（PR 构建 `www.xeckernel.pro.pr` / `XECKernel Pro PR`），四处同名由 `check_quality.py` 的 package identity 门禁看守 |
 | SUSFS 代码 | 合并进 `kernelsu.ko`：`android12-5.10` 416 KB → 1.3 MB（`llvm-strip -d` 后，8 个 KMI 同量级）；独立 payload 实测 44.1 MB → strip 后 23.8 MB，**不进 APK** |
 | 仓库体积 | 1413 文件 / 16.9 MB |

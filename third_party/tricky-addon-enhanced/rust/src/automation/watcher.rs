@@ -84,11 +84,11 @@ pub fn cleanup_dead_apps() -> anyhow::Result<u32> {
 
 pub fn refresh_root_manager(manager: &str) {
     // XEC fork patch（上游这里写的是 KernelSU 官方管理器的包名）：我们的管理器
-    // applicationId 是 com.xecpro.kernel，重启 root 管理器时 force-stop 的必须是
-    // 它，否则刷完模块后管理器界面不会自己刷新。守卫 scripts/check_package_identity.py
-    // 会盯住这一行，换包名时两处要一起改。
+    // applicationId 是 www.xeckernel.pro，重启 root 管理器时 force-stop 的必须是
+    // 它，否则刷完模块后管理器界面不会自己刷新。守卫 scripts/check_quality.py 的
+    // package identity 一栏会盯住这一行，换包名时几处要一起改。
     let pkg = match manager {
-        "KSU" => "com.xecpro.kernel",
+        "KSU" => "www.xeckernel.pro",
         "APATCH" => "me.bmax.apatch",
         "MAGISK" => "com.topjohnwu.magisk",
         _ => return,
