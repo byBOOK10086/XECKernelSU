@@ -508,6 +508,14 @@ pub struct BootPatchArgs {
     /// Patching ramdisk instead of boot image. This is used for AVD ramdisk
     #[arg(long, default_value = "false")]
     ramdisk: bool,
+
+    /// Deprecated no-op, accepted for compatibility with the manager builds
+    /// already in the field: they still pass --force, which the previous tree
+    /// used to drop a stale boot transaction. This tree has no boot
+    /// transactions, and clap would otherwise abort the whole patch with
+    /// "unexpected argument '--force' found".
+    #[arg(long, default_value = "false", hide = true)]
+    pub force: bool,
 }
 
 /// KernelSU module params, stored in ramdisk `/ksu_config` (boot-patch) or the

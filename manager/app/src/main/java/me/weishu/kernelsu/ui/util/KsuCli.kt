@@ -762,7 +762,11 @@ private fun bootPatchFlags(
     // 用户就此卡死。--force 只丢掉那条陈旧事务（备份文件留在磁盘上不删），随后按当前
     // 状态重建一份新事务，所以这次写的镜像照样有回滚网。
     // OTA 与"只下载不刷写"不传：前者要保留上一次刷写的回滚凭证，后者根本不写分区。
-    if (forceFlash) append(" --force")
+    // 新 ksud 没有 --force（它没有 boot 事务这个概念）：传了会被 clap 直接拒掉，
+    // 日志就是 unexpected argument '--force' found，于是「直接安装」和
+    // 「修补 KMI」双双失败。这里保留参数只为调用方兼容，不再拼进命令行。
+    @Suppress("UNUSED_EXPRESSION")
+    forceFlash
 }
 
 fun installBoot(
