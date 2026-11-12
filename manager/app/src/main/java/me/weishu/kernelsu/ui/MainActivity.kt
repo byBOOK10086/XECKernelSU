@@ -19,6 +19,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -26,6 +27,7 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.window.Dialog
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -40,6 +42,8 @@ import me.weishu.kernelsu.ui.navigation3.KernelSuNavHost
 import me.weishu.kernelsu.ui.navigation3.LocalNavigator
 import me.weishu.kernelsu.ui.navigation3.Route
 import me.weishu.kernelsu.ui.navigation3.rememberNavigator
+import me.weishu.kernelsu.ui.screen.safe.SafeUiPage
+import me.weishu.kernelsu.ui.util.BootTrace
 import me.weishu.kernelsu.ui.theme.KernelSUTheme
 import me.weishu.kernelsu.ui.theme.LocalColorMode
 import me.weishu.kernelsu.ui.theme.LocalEnableBlur
@@ -77,6 +81,9 @@ open class MainActivity : ComponentActivity() {
             !contentReady || SystemClock.uptimeMillis() - splashStartedAt < splashAnimationDurationMs
         }
 
+        BootTrace.installCrashHandler()
+        BootTrace.log("onCreate start")
+
         // The kernel/root handshake is blocking (it starts a `su` shell), so it runs on a
         // worker and composition only reads the published value. It also has to run again on
         // resume: the manager may be granted root while it is in the background.
@@ -98,6 +105,16 @@ open class MainActivity : ComponentActivity() {
             LaunchedEffect(Unit) {
                 delay(1500)
                 contentReady = true
+            }
+            // Second safety net: if the pages have not composed a few seconds in, open the
+            // plain safe page in its own window. A blank window then still tells the user (and
+            // the log) what the manager sees.
+            var showSafe by remember { mutableStateOf(false) }
+            LaunchedEffect(Unit) {
+                delay(3000)
+                val drawn = BootTrace.pagesDrawn.value
+                BootTrace.log("safe check pagesDrawn=$drawn")
+                showSafe = !drawn
             }
             val viewModel = viewModel<MainActivityViewModel>()
             val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -127,6 +144,17 @@ open class MainActivity : ComponentActivity() {
             val systemDensity = LocalDensity.current
             val density = remember(systemDensity, uiState.pageScale) {
                 Density(systemDensity.density * uiState.pageScale, systemDensity.fontScale)
+            }
+
+            // The first state that can explain an invisible UI: a zero page scale makes every
+            // dp zero (nodes drop out of the accessibility tree), and a wrong ui mode picks a
+            // theme that may not be there.
+            LaunchedEffect(uiState.pageScale, uiMode) {
+                BootTrace.log(
+                    "uiState pageScale=${uiState.pageScale} uiMode=$uiMode theme=${uiState.theme?.id} " +
+                        "componentTransparent=${uiState.componentTransparent} " +
+                        "density=${density.density}x${density.fontScale}"
+                )
             }
 
             CompositionLocalProvider(
@@ -197,6 +225,17 @@ open class MainActivity : ComponentActivity() {
                     }
                 }
             }
+            // Outside the theme and the density override on purpose: if either of them is what
+            // makes the main content invisible, the safe page has to be immune to it. A Dialog
+            // lives in its own window, so nothing the theme does hides it.
+            if (showSafe) {
+                Dialog(onDismissRequest = { showSafe = false }) {
+                    SafeUiPage(
+                        diagnose = bootDiagnose(uiState.pageScale, uiMode.name),
+                        onDismiss = { showSafe = false },
+                    )
+                }
+            }
         }
     }
 
@@ -221,6 +260,9 @@ open class MainActivity : ComponentActivity() {
             val sameUapi = runCatching {
                 Natives.kernelUAPIVersion == Natives.managerUAPIVersion
             }.getOrDefault(false)
+            BootTrace.lastProbe =
+                "fullFeatured=$fullFeatured isManager=$isManager sameUapi=$sameUapi"
+            BootTrace.log("probe " + BootTrace.lastProbe)
             if (isManager && sameUapi) {
                 Handler(Looper.getMainLooper()).post { install() }
             }
@@ -228,6 +270,17 @@ open class MainActivity : ComponentActivity() {
             name = "xec-kernel-probe"
             isDaemon = true
         }.start()
+    }
+
+    private fun bootDiagnose(pageScale: Float, uiMode: String): String = buildString {
+        val version = runCatching {
+            packageManager.getPackageInfo(packageName, 0).versionName
+        }.getOrDefault("?")
+        appendLine("version: $version")
+        appendLine("uiMode: $uiMode   pageScale: $pageScale")
+        appendLine("probe: ${BootTrace.lastProbe}")
+        appendLine("pagesDrawn: ${BootTrace.pagesDrawn.value}")
+        appendLine("log: Android/data/$packageName/files/xec-boot.log")
     }
 
     override fun onNewIntent(intent: Intent) {        super.onNewIntent(intent)

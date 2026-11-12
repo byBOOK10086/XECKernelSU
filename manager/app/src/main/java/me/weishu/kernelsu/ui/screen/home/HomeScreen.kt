@@ -27,6 +27,7 @@ import me.weishu.kernelsu.ui.UiMode
 import me.weishu.kernelsu.ui.component.dialog.rememberLoadingDialog
 import me.weishu.kernelsu.ui.navigation3.Navigator
 import me.weishu.kernelsu.ui.navigation3.Route
+import me.weishu.kernelsu.ui.util.BootTrace
 import me.weishu.kernelsu.ui.viewmodel.HomeViewModel
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -46,6 +47,12 @@ fun HomePager(
     val initialResumeHandled = rememberSaveable { mutableStateOf(false) }
 
     var hasActivated by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (!BootTrace.pagesDrawn.value) {
+            BootTrace.pagesDrawn.value = true
+            BootTrace.log("home page composed (state.isRootAvailable=${uiState.isRootAvailable})")
+        }
+    }
     LaunchedEffect(isCurrentPage) {
         if (isCurrentPage && !hasActivated) {
             hasActivated = true
