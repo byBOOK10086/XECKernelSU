@@ -172,6 +172,12 @@ fun MainScreen(
     }
 
     val currentPage = mainPagerState.pagerState.currentPage
+    // settledPage is -1 until the pager settles for the first time. The pages below are gated
+    // on `contentReady || isCurrentPage`, so a pager that never reports a settled page (or a
+    // nav transition that never finishes) used to leave every page gated off: a bottom bar
+    // over an empty pager, i.e. a blank screen with no crash. Fall back to the pager's current
+    // page so there is always exactly one page that renders.
+    val activePage = if (settledPage >= 0) settledPage else currentPage
     LaunchedEffect(currentPage) {
         mainPagerState.syncPage()
     }
@@ -182,6 +188,11 @@ fun MainScreen(
         LocalMainPagerState provides mainPagerState
     ) {
         val contentReady = rememberContentReady()
+        LaunchedEffect(contentReady) {
+            // One line on the boot path: if a device ever shows an empty pager again, this
+            // says whether it was the readiness gate or the page index.
+            android.util.Log.i("XecBoot", "main screen ready=$contentReady active=$activePage")
+        }
         val pagerContent = @Composable { bottomInnerPadding: Dp ->
             Box(modifier = if (blurBackdrop != null) Modifier.layerBackdrop(blurBackdrop) else Modifier) {
                 HorizontalPager(
@@ -209,7 +220,7 @@ fun MainScreen(
                         snapAnimationSpec = PagerNavigationSpringSpec,
                     ),
                 ) { page ->
-                    val isCurrentPage = page == settledPage
+                    val isCurrentPage = page == activePage
                     when (page) {
                         0 -> if (contentReady || isCurrentPage) HomePager(navController, bottomInnerPadding, isCurrentPage)
                         1 -> if (contentReady || isCurrentPage) SuperUserPager(navController, bottomInnerPadding, isCurrentPage)
