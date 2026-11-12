@@ -353,6 +353,20 @@ fun SettingPagerMiuix(
                                     )
                                 },
                             )
+                            // 内置 TEE/TS 引擎总开关。只关伪造的证明链，不动 root：
+                            // 引擎是纯用户态注入，LKM、su、模块、隐藏全部照常。
+                            Xc8Row(
+                                title = stringResource(id = R.string.settings_tee_engine),
+                                subtitle = stringResource(id = R.string.settings_tee_engine_summary),
+                                leading = Icons.Rounded.AdminPanelSettings,
+                                onClick = { actions.onSetTeeEngineEnabled(!uiState.isTeeEngineEnabled) },
+                                trailing = {
+                                    Xc8Switch(
+                                        checked = uiState.isTeeEngineEnabled,
+                                        onCheckedChange = actions.onSetTeeEngineEnabled,
+                                    )
+                                },
+                            )
                             // late-load 下软重启不可用（内核还没接管），开关与整行一起禁用。
                             val softRebootEnabled = !uiState.isLateLoadMode
                             Xc8Row(
