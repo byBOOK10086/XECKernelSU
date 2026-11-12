@@ -786,6 +786,26 @@ private fun bootPatchFlags(
     forceFlash
 }
 
+/**
+ * 交给 ksud 的是不是能解析的镜像。
+ *
+ * Android boot/init_boot/vendor_boot 都是 `ANDROID!` 开头；OTA payload 是 `CrAU`；
+ * OTA zip 是 `PK`。读分区失败或读错分区时写出来的是 0 字节 / 别的内容，ksud 只会
+ * 报一句 "invalid boot image"，用户根本看不出是空文件还是分区不对。
+ */
+private fun looksLikeFlashableImage(file: java.io.File): Boolean {
+    if (!file.isFile || file.length() < 8L) return false
+    val head = ByteArray(8)
+    val read = runCatching {
+        file.inputStream().use { it.read(head) }
+    }.getOrDefault(0)
+    if (read < 8) return false
+    val magic = String(head, Charsets.US_ASCII)
+    return magic.startsWith("ANDROID!") ||
+        magic.startsWith("CrAU") ||
+        magic.startsWith("PK\u0003\u0004")
+}
+
 fun installBoot(
     bootUri: Uri?,
     lkm: LkmSelection,
@@ -799,24 +819,32 @@ fun installBoot(
 ): FlashResult {
     val resolver = ksuApp.contentResolver
 
+    // 每次用唯一文件名：固定名 cache/boot.img 会让上一次失败的空文件污染这一次。
     val bootFile = bootUri?.let { uri ->
         with(resolver.openInputStream(uri)) {
-            val bootFile = File(ksuApp.cacheDir, "boot.img")
-            bootFile.outputStream().use { output ->
-                this?.copyTo(output)
-            }
-
-            bootFile
+            val target = File.createTempFile("xec-boot-", ".img", ksuApp.cacheDir)
+            target.outputStream().use { output -> this?.copyTo(output) }
+            target
         }
+    }
+
+    // 交给 ksud 之前先自己看一眼：不是 boot 镜像就别喂过去。
+    var usableBoot = bootFile?.takeIf { looksLikeFlashableImage(it) }
+    if (bootFile != null && usableBoot == null) {
+        onStderr(
+            "- 选中的镜像不是 Android boot 镜像（${bootFile.length()} 字节）" +
+                "，改由 ksud 直接读取分区"
+        )
+        bootFile.delete()
     }
 
     var cmd = "boot-patch"
 
-    cmd += if (bootFile == null) {
-        // no boot.img, use -f to flash
+    cmd += if (usableBoot == null) {
+        // no usable boot.img, let ksud read the partition itself
         " -f"
     } else {
-        " -b ${bootFile.absolutePath}"
+        " -b ${usableBoot.absolutePath}"
     }
     // 直接安装（写当前槽）强制；OTA 换槽刷写保留 fail-closed，理由见 bootPatchFlags。
     cmd += bootPatchFlags(allowShell, enableAdb, forceBackup, forceFlash = !ota)
@@ -851,6 +879,7 @@ fun installBoot(
 
     bootFile?.delete()
     lkmFile?.delete()
+    usableBoot?.delete()
 
     // if boot uri is empty, it is direct install, when success, we should show reboot button
     val showReboot = bootUri == null && result.isSuccess // we create a temporary val here, to avoid calc showReboot double
@@ -920,6 +949,18 @@ fun downloadBoot(
     if (autoKmi == null && lkm is LkmSelection.KmiNone) {
         bootFile.delete()
         return FlashResult(-1, "Failed to determine KMI from the package", false)
+    }
+
+    // 下载解出来的东西也可能不是 boot 镜像（分区选错、包里没有 init_boot 等）。
+    // 直接喂给 ksud 只会得到一句 invalid boot image，这里先把原因说清楚。
+    if (!looksLikeFlashableImage(bootFile)) {
+        val size = bootFile.length()
+        bootFile.delete()
+        return FlashResult(
+            -1,
+            "下载的镜像里没有可用的 $partition（解出 $size 字节，不是 Android boot 镜像）",
+            false,
+        )
     }
 
     var cmd = "${getKsuDaemonPath()} boot-patch -b ${bootFile.absolutePath}"
