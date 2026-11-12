@@ -1,5 +1,6 @@
 #include <linux/capability.h>
 #include <linux/cred.h>
+#include <linux/jiffies.h>
 #include <linux/kallsyms.h>
 #include <linux/mm.h>
 #include <linux/ratelimit.h>
@@ -22,6 +23,7 @@
 #include "runtime/ksud_boot.h"
 #include "feature/kernel_umount.h"
 #include "manager/manager_identity.h"
+#include "manager/throne_tracker.h"
 #include "selinux/selinux.h"
 #include "infra/file_wrapper.h"
 #include "hook/tp_marker.h"
@@ -47,9 +49,36 @@ static int do_grant_root(void __user *arg)
     return ret;
 }
 
+/*
+ * A manager installed after boot is never seen by the boot-time scan, and the
+ * package observer can miss the change (it may arm before /data is readable).
+ * get_info is always_allow and every manager refresh calls it, so retry the
+ * crowning here, rate-limited to one scan per 5s and only while unknown: with no
+ * appid the manager is an ordinary app, so profile writes, allow-list updates
+ * and sepolicy calls are all refused and root can never be granted.
+ */
+static void ksu_recrown_manager_if_needed(void)
+{
+    static unsigned long last_track;
+    unsigned long now;
+
+    if (ksu_is_manager_appid_valid()) {
+        return;
+    }
+
+    now = jiffies;
+    if (last_track && !time_after(now, last_track + 5 * HZ)) {
+        return;
+    }
+    last_track = now;
+    track_throne(false);
+}
+
 static int do_get_info(void __user *arg)
 {
     struct ksu_get_info_cmd cmd = { .version = KERNEL_SU_VERSION, .flags = 0 };
+
+    ksu_recrown_manager_if_needed();
 
 #ifdef MODULE
     cmd.flags |= KSU_GET_INFO_FLAG_LKM;
@@ -85,6 +114,8 @@ static int do_get_info(void __user *arg)
 static int do_get_info_legacy(void __user *arg)
 {
     struct ksu_get_info_legacy_cmd cmd = { .version = KERNEL_SU_VERSION, .flags = 0 };
+
+    ksu_recrown_manager_if_needed();
 
 #ifdef MODULE
     cmd.flags |= KSU_GET_INFO_FLAG_LKM;
