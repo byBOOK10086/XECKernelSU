@@ -187,8 +187,8 @@
       "reason": "ported file: split candidate, no reason recorded yet"
     },
     "manager/app/src/main/java/me/weishu/kernelsu/ui/util/KsuCli.kt": {
-      "lines": 1189,
-      "reason": "root-probe ordering + hero copy changes (2026-11-12); may only shrink from here"
+      "lines": 1193,
+      "reason": "dropped the obsolete --force flag (2026-11-12); may only shrink from here"
     },
     "manager/app/src/main/java/me/weishu/kernelsu/ui/util/module/Shortcut.kt": {
       "lines": 418,
@@ -219,8 +219,8 @@
       "reason": "ported file: split candidate, no reason recorded yet"
     },
     "userspace/ksud/src/boot_patch.rs": {
-      "lines": 1231,
-      "reason": "upstream boot image patcher"
+      "lines": 1241,
+      "reason": "accepts the manager's legacy --force as a no-op (2026-11-12); may only shrink from here"
     },
     "userspace/ksud/src/builtin.rs": {
       "lines": 967,

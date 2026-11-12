@@ -658,6 +658,8 @@ pub fn patch(args: BootPatchArgs) -> Result<()> {
             #[cfg(not(target_os = "android"))]
             arch,
             ramdisk,
+            // accepted for compatibility with older managers; nothing to do with it
+            force: _,
         } = args;
 
         println!(include_str!("banner"));
