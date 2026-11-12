@@ -200,11 +200,9 @@ object KsuCli {
         get() = getOrRetryShell(globalMnt = true)
 
     /**
-     * libsu 6's builder checks `isRoot()` on the shell it just started: when `su`
-     * runs but has no root yet it discards that candidate and returns a plain
-     * `sh` instead of throwing. So a single early build can hand back a live
-     * non-root shell, and caching it forever means the manager keeps reporting
-     * "no root" even after the provider finishes loading.
+     * Root providers may be unavailable during early boot. createRootShell
+     * explicitly validates candidates and returns sh when none has root;
+     * caching that fallback forever would hide a provider that becomes ready later.
      *
      * Reuse a live root shell; reuse a non-root one only until the cooldown
      * expires, then probe again. A replacement is installed only once a root
@@ -445,40 +443,12 @@ fun Uri.getFileName(context: Context): String? {
     return fileName
 }
 
-/**
- * 不经过 libsu 的一次快速 root 判定：`/system/bin/su -c id -u` 是否为 0。
- *
- * libsu 的 shell build 在个别内核上会拿到"su 起了但没有 root"的壳；这条直接问
- * su 要结果，几毫秒就能分清"没授权"和"授权了但壳没搭好"。
- */
-fun directRootCheck(timeoutMs: Long = 4_000L): Boolean {
-    for (path in SU_CLIENT_PATHS) {
-        val ok = runCatching {
-            val process = ProcessBuilder(path, "-c", "id -u")
-                .redirectErrorStream(true)
-                .start()
-            val finished = process.waitFor(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
-            if (!finished) {
-                process.destroyForcibly()
-                return@runCatching false
-            }
-            val out = process.inputStream.bufferedReader().readText().trim()
-            out.lineSequence().any { it.trim() == "0" }
-        }.getOrDefault(false)
-        if (ok) return true
-    }
-    return false
-}
-
 fun createRootShell(globalMnt: Boolean = false): Shell {
     Shell.enableVerboseLogging = BuildConfig.DEBUG
-    // 2026-11-11: 这里原来靠 try/catch 判断"这个壳能不能用" —— 那是错的。
-    // libsu 的 Shell.Builder.build() 在进程根本没起来时**不抛异常**，它返回一个
-    // 没有后端进程的 Shell，之后每个 job 都返回 code = 0 + 空输出。
-    // 于是"xudc debug su 失败"这件事永远不会走到 catch，管理器拿着一个假壳
-    // 继续跑，界面上表现为：引擎目录"不存在"、命令"没有任何输出"、退出码 -1。
-    //
-    // 现在建成之后就真的跑一条 `id -u` 验：拿到 0 才算 root 壳；不是就换下一个候选。
+    // 显式 build(argv) 直接启动指定进程；启动或 shell 初始化失败会抛异常。
+    // newJob() 默认不收集输出，必须调用 to(...) 才能读取 id -u 的结果。
+    // code=0、out 为空不能证明提权失败，更不能据此推断进程没有启动。
+    // 建成后收集 id -u 的输出，验证 uid=0，再把该 shell 交给安装链路。
     // 顺序（2026-11-12 修正）：先用系统的 `su`，再用我们自己的守护进程。
     // 反过来时，内核不是我们的（例如装着别人的 KernelSU）那一步必然失败，而且
     // 每次 build 都要等好几秒，探完早已超时 —— 表现就是"明明授权了却一直未就绪"，
@@ -493,12 +463,13 @@ fun createRootShell(globalMnt: Boolean = false): Shell {
     for (argv in candidates) {
         val shell = runCatching { Shell.Builder.create().build(*argv.toTypedArray()) }.getOrNull()
             ?: continue
-        val probe = runCatching { shell.newJob().add("id -u").exec() }.getOrNull()
+        val probe = runCatching { shell.newJob().add("id -u").to(ArrayList<String>(), ArrayList<String>()).exec() }.getOrNull()
         val uid = probe?.out?.firstOrNull()?.trim()
         if (probe != null && probe.code == 0 && uid == "0") {
             return shell
         }
         Log.w(TAG, "root shell candidate failed: ${argv.first()} (code=${probe?.code}, uid=$uid)")
+        runCatching { shell.close() }
     }
     Log.e(TAG, "no usable root shell; falling back to a non-root sh")
     return runCatching { Shell.Builder.create().build("sh") }
@@ -829,7 +800,7 @@ private fun looksLikeFlashableImage(file: java.io.File): Boolean {
     }.getOrDefault(0)
     if (read < 8) return false
     val magic = String(head, Charsets.US_ASCII)
-    return magic.startsWith("ANDROID!") ||
+    return magic.startsWith("ANDROID!") || magic.startsWith("VNDRBOOT") ||
         magic.startsWith("CrAU") ||
         magic.startsWith("PK\u0003\u0004")
 }
@@ -856,14 +827,13 @@ fun installBoot(
         }
     }
 
-    // 交给 ksud 之前先自己看一眼：不是 boot 镜像就别喂过去。
-    var usableBoot = bootFile?.takeIf { looksLikeFlashableImage(it) }
+    // 用户选择的镜像无效时终止，不能把“修补文件”切换成写入设备分区。
+    val usableBoot = bootFile?.takeIf { looksLikeFlashableImage(it) }
     if (bootFile != null && usableBoot == null) {
-        onStderr(
-            "- 选中的镜像不是 Android boot 镜像（${bootFile.length()} 字节）" +
-                "，改由 ksud 直接读取分区"
-        )
+        val message = "选中的镜像不是可用的 Android boot 镜像（${bootFile.length()} 字节）"
+        onStderr(message)
         bootFile.delete()
+        return FlashResult(-1, message, false)
     }
 
     var cmd = "boot-patch"
@@ -1093,11 +1063,9 @@ private fun rebootNow(reason: String) {
 }
 
 fun rootAvailable(): Boolean {
-    // libsu 偶尔会拿到「su 起来了但没 root」的壳（见 createRootShell 的注释）。
-    // 再直接问一次 su，两种判据任一为真就算有 root —— 否则安装页的「直接安装」
-    // 会因为一次失败的 shell build 一直灰着，哪怕用户已经授权。
-    val shell = getRootShell()
-    return shell.isRoot || directRootCheck()
+    // 只认可安装链路实际持有的 root shell；主线程失败时由后台探测刷新状态。
+    // 不能在 Compose/广播线程同步轮询 su，也不能让另一进程的成功掩盖非 root 壳。
+    return getRootShell().isRoot
 }
 
 /**
