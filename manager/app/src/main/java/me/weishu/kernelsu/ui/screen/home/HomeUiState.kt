@@ -31,22 +31,10 @@ data class HomeUiState(
     val checkUpdateEnabled: Boolean,
     val latestVersionInfo: LatestVersionInfo,
     val currentManagerVersionCode: Long,
-    /**
-     * 与内核 `KERNEL_SU_VERSION` 同口径的基准码（`31000 + 提交数`）。
-     *
-     * 只用于"内置 LKM 是否落后"的比较。[currentManagerVersionCode] 是 APK 的产物号
-     * （为区分 debug/release 乘了十倍），拿它跟内核比会永远不相等。
-     */
+    /** Version from the shared version.properties, also used by the kernel. */
     val baseVersionCode: Long,
     val systemInfo: SystemInfo,
-    /**
-     * 是否已经**至少完成过一次** root 探测。
-     *
-     * 开机首帧只能先拿一条非 root 的兜底 shell（探测不能跑在主线程上），那一刻
-     * `isRootAvailable` 必然是 false —— 但这不是"获取 Root 失败"，只是"还没问到"。
-     * 没有这个闸门的话，每次冷启动都会红一条「获取 Root 失败！」，然后几百毫秒后
-     * 自己消失。所以告警只在探测落定之后才允许出现。
-     */
+    /** Suppress missing-root warnings until a background authorization attempt settles. */
     val rootProbeSettled: Boolean = true,
     /**
      * 是否正在刷新（下拉刷新/顶栏刷新共用）。

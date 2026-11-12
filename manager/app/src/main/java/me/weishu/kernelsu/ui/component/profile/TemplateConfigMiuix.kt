@@ -4,12 +4,15 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Create
+import androidx.compose.runtime.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import me.weishu.kernelsu.Natives
 import me.weishu.kernelsu.R
+import me.weishu.kernelsu.ui.util.rememberRootOperation
+import me.weishu.kernelsu.ui.util.rootIO
 import me.weishu.kernelsu.ui.util.listAppProfileTemplates
 import me.weishu.kernelsu.ui.util.setSepolicy
 import me.weishu.kernelsu.ui.viewmodel.getTemplateInfoById
@@ -30,7 +33,9 @@ fun TemplateConfigMiuix(
     onManageTemplate: () -> Unit = {},
     onProfileChange: (Natives.Profile) -> Unit
 ) {
-    val profileTemplates = listAppProfileTemplates()
+    val rootOperation = rememberRootOperation()
+    var profileTemplates by remember { mutableStateOf(emptyList<String>()) }
+    LaunchedEffect(Unit) { rootOperation { profileTemplates = rootIO { listAppProfileTemplates() } } }
     val noTemplates = profileTemplates.isEmpty()
 
     if (noTemplates) {
@@ -58,8 +63,12 @@ fun TemplateConfigMiuix(
                 onSelectedIndexChange = { index ->
                     if (index < 0 || index >= profileTemplates.size) return@OverlayDropdownPreference
                     val selected = profileTemplates[index]
-                    val templateInfo = getTemplateInfoById(selected)
-                    if (templateInfo != null && setSepolicy(selected, templateInfo.rules.joinToString("\n"))) {
+                    rootOperation {
+                        val templateInfo = rootIO {
+                            val info = checkNotNull(getTemplateInfoById(selected))
+                            check(setSepolicy(selected, info.rules.joinToString("\n")))
+                            info
+                        }
                         onProfileChange(
                             profile.copy(
                                 rootTemplate = selected,

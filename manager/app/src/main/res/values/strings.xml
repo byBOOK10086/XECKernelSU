@@ -824,22 +824,7 @@ See the log below for details.</string>
     <string name="permanent_reboot_now">Reboot now</string>
     <string name="permanent_needs_unlock">Bootloader is locked: flashing boot would break verified boot and brick the device. Use boot-time auto elevate, or unlock through the official channel above.</string>
 
-    <!-- Capability-restricted su (exec whitelist) -->
-    <string name="exec_policy_title">Restricted root</string>
-    <string name="exec_policy_summary">This app may only run whitelisted commands as root (su -c); everything else is denied</string>
-    <string name="exec_policy_paths_label">Whitelisted commands (one per line)</string>
-    <string name="exec_policy_hint">Matching is by full path or basename of the first token of the command. Interactive su and direct root grants are denied for restricted apps (fail closed).</string>
-    <string name="exec_policy_apply">Apply whitelist</string>
-    <string name="exec_policy_kernel_too_old">Kernel rejected the policy (older kernel without ioctl 110 support)</string>
 
-    <!-- Per-app uname identity -->
-    <string name="uts_spoof_title">Uname identity</string>
-    <string name="uts_spoof_summary">Override the kernel release/version this app sees via uname(2)</string>
-    <string name="uts_spoof_release_label">Release override (empty = real)</string>
-    <string name="uts_spoof_version_label">Version override (empty = real)</string>
-    <string name="uts_spoof_hint">Only the app\'s uname(2) copy is rewritten (kernel state untouched). Applies to 64-bit processes; the entry is stored in kernel RAM and re-pushed after reboot.</string>
-    <string name="uts_spoof_apply">Apply identity</string>
-    <string name="uts_spoof_kernel_too_old">Kernel rejected the override (older kernel without ioctl 115 support)</string>
 
     <!-- Zero-footprint unload -->
     <string name="settings_unload_title">Unload root (zero footprint)</string>
@@ -855,9 +840,6 @@ See the log below for details.</string>
     <string name="privilege_gen_template">No same-KMI neighbor in the library; imported the %2$s template bound to %1$s — every offset must be filled manually before it can run</string>
     <string name="privilege_gen_none">Cannot generate for %1$s: %2$s</string>
 
-    <!-- APatch-style superkey guard -->
-    <string name="superkey_settings_title">Security lock</string>
-    <string name="superkey_settings_summary">Once on, changing any app\'s Root permissions requires the lock password — malware cannot silently change them</string>
     <!-- Toolbox: terminal / security lock / stealth entrance -->
     <string name="tools_title">Toolbox</string>
     <string name="tools_summary">Terminal, security lock and stealth entrance</string>
@@ -887,21 +869,6 @@ See the log below for details.</string>
     <string name="stealth_summary">Hide the icon; open the manager by tapping the build number in Settings 10 times (the 5-tap developer options behavior is untouched)</string>
     <string name="stealth_confirm_body">The launcher icon will be hidden. To open the manager: Settings → About phone → tap the build number 10 times in a row. The native 5-tap developer options unlock keeps working. Note: after enabling, the manager closes to the desktop once — that is it hiding its own icon. Fallback at any time:
 %1$s</string>
-    <string name="superkey_auth_required">Security lock is on: verification failed, unlock the screen and try again</string>
-    <string name="superkey_status">Lock password: %1$s · Protection: %2$s</string>
-    <string name="superkey_state_set">set</string>
-    <string name="superkey_state_unset">not set</string>
-    <string name="superkey_state_armed">protected</string>
-    <string name="superkey_state_disarmed">off</string>
-    <string name="superkey_dialog_hint">The lock password never leaves this phone: stored encrypted on-device. Protection clears itself on reboot (that is also the recovery path if you forget it — just set a new one here). While protection is on, changing app permissions, restricted lists and feature switches requires the password.</string>
-    <string name="superkey_old_key_label">Current lock password (required to change/clear)</string>
-    <string name="superkey_new_key_label">New lock password</string>
-    <string name="superkey_generate">Random</string>
-    <string name="superkey_arm_guard">Turn on protection</string>
-    <string name="superkey_apply">Set password</string>
-    <string name="superkey_clear">Clear</string>
-    <string name="superkey_applied">Applied</string>
-    <string name="superkey_apply_failed">Rejected (wrong password, or the phone was rebooted since it was set)</string>
 
 
     <!-- 主题商店（schema 3）：壳/页面/组件 -->
@@ -1103,7 +1070,7 @@ See the log below for details.</string>
     <string name="home_stat_edit_hint">Long-press the data panel to customize it</string>
     <string name="home_hero_ready">ROOT READY</string>
     <string name="home_hero_idle">ROOT NOT READY</string>
-    <string name="home_hero_running">Kernel running</string>
+    <string name="home_hero_running">Running</string>
     <string name="home_hero_inactive">Kernel not running</string>
     <string name="home_hero_kernel_mode">Kernel mode</string>
     <string name="home_update_tap_hint">Tap to view the changelog</string>

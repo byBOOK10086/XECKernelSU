@@ -24,11 +24,6 @@ object Natives {
     // 32336: new set_sepolicy ioctl
     // 32377: add set_init_pgrp ioctl
     // 32513: add uapi version
-    // 31000: XECKernelPro version base (kernel/Kbuild; matches the manager
-    // versionCode base). The old 32513 predated the base migration and no
-    // kernel of this repository can ever report it.
-    const val MINIMAL_SUPPORTED_KERNEL = 31000
-
     const val KERNEL_SU_DOMAIN = "u:r:ksu:s0"
 
     const val ROOT_UID = 0
@@ -71,38 +66,6 @@ object Natives {
      */
     external fun getAppProfile(key: String?, uid: Int): Profile
     external fun setAppProfile(profile: Profile?): Boolean
-
-    /**
-     * 受限授权（XECKernelPro 扩展）：限制 uid 只能以 `su -c <白名单命令>` 拿 root。
-     * @param restricted false = 解除限制
-     * @return 内核是否接受（老内核不认识 ioctl 会返回 false）
-     */
-    external fun setExecPolicy(uid: Int, restricted: Boolean, paths: Array<String>): Boolean
-
-    /** @return 受限时返回白名单；未受限返回 null。 */
-    external fun getExecPolicy(uid: Int): Array<String>?
-
-    /**
-     * Per-app uname 身份（XECKernelPro 扩展，ioctl 115/116）：按 uid 改写
-     * uname(2) 的 release/version（内核 uts 状态不动，真 syscall 成功后才
-     * 改写用户缓冲）。空串 = 保留真实字段；enabled=false 移除该 uid 条目。
-     */
-    external fun setUtsSpoof(uid: Int, enabled: Boolean, release: String, version: String): Boolean
-
-    /** @return [release, version]；无条目或内核不支持返回 null。 */
-    external fun getUtsSpoof(uid: Int): Array<String>?
-
-    /**
-     * APatch 式超级密钥（XECKernelPro 扩展，ioctl 112/113/114）。
-     * @param clear true = 用 oldKey 清除内核密钥（newKey 忽略）
-     */
-    external fun setSuperkey(newKey: String, oldKey: String?, clear: Boolean): Boolean
-    external fun superkeyAuth(key: String): Boolean
-    /** @return [已设置, 守卫已武装]；null = 内核不认识（老内核） */
-    external fun superkeyStatus(): BooleanArray?
-
-    /** 守卫开关（feature 通道：KSU_FEATURE_SUPERKEY_GUARD）。 */
-    external fun setSuperkeyGuard(armed: Boolean): Boolean
 
     /**
      * `su` compat mode can be disabled temporarily.

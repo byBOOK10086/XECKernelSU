@@ -2,7 +2,6 @@
 // Created by weishu on 2022/12/9.
 //
 
-#include <sys/prctl.h>
 #include <cstdint>
 #include <cstring>
 #include <cstdio>
@@ -23,7 +22,7 @@
 static int fd = -1;
 
 static inline int scan_driver_fd() {
-    const char *kName = "[xecpro_driver]";
+    const char *kName = "anon_inode:[ksu_driver]";
     DIR *dir = opendir("/proc/self/fd");
     if (!dir) {
         return -1;
@@ -52,10 +51,7 @@ static inline int scan_driver_fd() {
         }
         target[n] = '\0';
 
-        const char *base = strrchr(target, '/');
-        base = base ? base + 1 : target;
-
-        if (strstr(base, kName)) {
+        if (strcmp(target, kName) == 0) {
             found = (int)fd_long;
             break;
         }
@@ -118,7 +114,7 @@ bool is_lkm_mode() {
     if (info.version > 0) {
         return (info.flags & KSU_GET_INFO_FLAG_LKM) != 0;
     }
-    return (legacy_get_info().second & KSU_GET_INFO_FLAG_LKM) != 0;
+    return false;
 }
 
 bool is_lkm_bundled() {
@@ -140,7 +136,7 @@ bool is_manager() {
     if (info.version > 0) {
         return (info.flags & KSU_GET_INFO_FLAG_MANAGER) != 0;
     }
-    return legacy_get_info().first > 0;
+    return false;
 }
 
 bool is_pr_build() {
@@ -161,7 +157,20 @@ bool uid_should_umount(int uid) {
 bool set_app_profile(const app_profile *profile) {
     struct ksu_set_app_profile_cmd cmd = {};
     cmd.profile = *profile;
-    return ksuctl(KSU_IOCTL_SET_APP_PROFILE, &cmd) == 0;
+    if (ksuctl(KSU_IOCTL_SET_APP_PROFILE, &cmd) != 0) {
+        __android_log_print(ANDROID_LOG_ERROR, "KernelSU", "SET_APP_PROFILE uid=%d failed: %s", profile->curr_uid, strerror(errno));
+        return false;
+    }
+    struct ksu_get_app_profile_cmd verify = {};
+    verify.profile.version = KSU_APP_PROFILE_VER;
+    verify.profile.curr_uid = profile->curr_uid;
+    memcpy(verify.profile.key, profile->key, sizeof(verify.profile.key));
+    if (ksuctl(KSU_IOCTL_GET_APP_PROFILE, &verify) != 0) {
+        __android_log_print(ANDROID_LOG_ERROR, "KernelSU", "GET_APP_PROFILE verification uid=%d failed: %s", profile->curr_uid, strerror(errno));
+        return false;
+    }
+    return verify.profile.allow_su == profile->allow_su &&
+           verify.profile.curr_uid == profile->curr_uid;
 }
 
 int get_app_profile(app_profile *profile) {
@@ -169,90 +178,6 @@ int get_app_profile(app_profile *profile) {
     int ret = ksuctl(KSU_IOCTL_GET_APP_PROFILE, &cmd);
     *profile = cmd.profile;
     return ret;
-}
-
-bool set_exec_policy(uid_t uid, bool restricted, const std::vector<std::string> &paths) {
-    struct ksu_exec_policy_cmd cmd = {};
-    cmd.uid = uid;
-    cmd.restricted = restricted && !paths.empty();
-    cmd.count = 0;
-    for (const auto &path : paths) {
-        if (cmd.count >= KSU_EXEC_POLICY_MAX)
-            break;
-        if (path.empty())
-            continue;
-        // 截断到 KSU_EXEC_POLICY_PATH-1，保证 NUL 终止。
-        size_t n = std::min(path.size(), (size_t)(KSU_EXEC_POLICY_PATH - 1));
-        memcpy(cmd.paths[cmd.count], path.data(), n);
-        cmd.paths[cmd.count][n] = '\0';
-        cmd.count++;
-    }
-    return ksuctl(KSU_IOCTL_SET_EXEC_POLICY, &cmd) == 0;
-}
-
-std::vector<std::string> get_exec_policy(uid_t uid, bool &restricted) {
-    std::vector<std::string> out;
-    struct ksu_exec_policy_cmd cmd = {};
-    cmd.uid = uid;
-    if (ksuctl(KSU_IOCTL_GET_EXEC_POLICY, &cmd) != 0) {
-        restricted = false;
-        return out;
-    }
-    restricted = cmd.restricted;
-    for (unsigned i = 0; i < cmd.count && i < KSU_EXEC_POLICY_MAX; i++) {
-        out.emplace_back((const char *) cmd.paths[i]);
-    }
-    return out;
-}
-
-bool set_superkey(const std::string &new_key, const std::string &old_key, bool clear) {
-    struct ksu_superkey_cmd cmd = {};
-    snprintf((char *) cmd.new_key, sizeof(cmd.new_key), "%s", new_key.c_str());
-    snprintf((char *) cmd.old_key, sizeof(cmd.old_key), "%s", old_key.c_str());
-    cmd.has_old = !old_key.empty();
-    cmd.clear = clear;
-    return ksuctl(KSU_IOCTL_SET_SUPERKEY, &cmd) == 0;
-}
-
-bool superkey_auth(const std::string &key) {
-    struct ksu_superkey_auth_cmd cmd = {};
-    snprintf((char *) cmd.key, sizeof(cmd.key), "%s", key.c_str());
-    return ksuctl(KSU_IOCTL_SUPERKEY_AUTH, &cmd) == 0;
-}
-
-bool set_superkey_guard(bool armed) {
-    struct ksu_set_feature_cmd cmd = {};
-    cmd.feature_id = KSU_FEATURE_SUPERKEY_GUARD;
-    cmd.value = armed ? 1 : 0;
-    return ksuctl(KSU_IOCTL_SET_FEATURE, &cmd) == 0;
-}
-
-superkey_status superkey_status_query() {
-    struct ksu_superkey_status_cmd cmd = {};
-    ksuctl(KSU_IOCTL_SUPERKEY_STATUS, &cmd);
-    return {cmd.set != 0, cmd.guard_armed != 0};
-}
-
-bool set_uts_spoof(uid_t uid, bool enabled, const std::string &release, const std::string &version) {
-    struct ksu_uts_spoof_cmd cmd = {};
-    cmd.uid = uid;
-    cmd.enabled = enabled;
-    snprintf((char *) cmd.release, sizeof(cmd.release), "%s", release.c_str());
-    snprintf((char *) cmd.version, sizeof(cmd.version), "%s", version.c_str());
-    return ksuctl(KSU_IOCTL_SET_UTS_SPOOF, &cmd) == 0;
-}
-
-int get_uts_spoof(uid_t uid, std::string &release, std::string &version) {
-    struct ksu_uts_spoof_cmd cmd = {};
-    cmd.uid = uid;
-    int ret = ksuctl(KSU_IOCTL_GET_UTS_SPOOF, &cmd);
-    if (ret != 0)
-        return -1;
-    if (!cmd.enabled)
-        return 0;
-    release = (const char *) cmd.release;
-    version = (const char *) cmd.version;
-    return 1;
 }
 
 bool set_su_enabled(bool enabled) {

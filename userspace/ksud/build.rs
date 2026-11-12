@@ -9,28 +9,30 @@ const BOOTSTRAP_SOURCE: &str = "src/lkm_image_bootstrap.S";
 const BOOTSTRAP_OBJECT: &str = "lkm_image_bootstrap.o";
 const PREPARED_BOOTSTRAP_OBJECT: &str = ".lkm_image_bootstrap.o";
 
-fn get_git_version() -> Result<(u32, String), std::io::Error> {
-    let output = Command::new("git")
-        .args(["rev-list", "--count", "HEAD"])
-        .output()?;
-
-    let output = output.stdout;
-    let version_code = String::from_utf8(output).expect("Failed to read git count stdout");
-    let version_code: u32 = version_code
-        .trim()
-        .parse()
-        .map_err(|_| std::io::Error::other("Failed to parse git count"))?;
-    let version_code = 30000 + version_code;
-
-    let version_name = String::from_utf8(
-        Command::new("git")
-            .args(["describe", "--tags", "--always"])
-            .output()?
-            .stdout,
-    )
-    .map_err(|_| std::io::Error::other("Failed to read git describe stdout"))?;
-    let version_name = version_name.trim_start_matches('v').to_string();
-    Ok((version_code, version_name))
+fn get_shared_version() -> Result<(u32, String), std::io::Error> {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../version.properties");
+    println!("cargo:rerun-if-changed={}", path.display());
+    let properties = fs::read_to_string(path)?;
+    let mut code = None;
+    let mut name = None;
+    for line in properties.lines() {
+        if let Some(value) = line.strip_prefix("versionCode=") {
+            if code.is_some() {
+                return Err(io::Error::other("duplicate versionCode"));
+            }
+            code = Some(value.trim().parse::<u32>().map_err(io::Error::other)?);
+        }
+        if let Some(value) = line.strip_prefix("versionName=") {
+            if name.is_some() || value.trim().is_empty() {
+                return Err(io::Error::other("invalid versionName"));
+            }
+            name = Some(value.trim().to_owned());
+        }
+    }
+    Ok((
+        code.ok_or_else(|| io::Error::other("missing versionCode"))?,
+        name.ok_or_else(|| io::Error::other("missing versionName"))?,
+    ))
 }
 
 fn configure_bindgen() {
@@ -225,14 +227,7 @@ fn assemble_bootstrap() {
 fn main() {
     assemble_bootstrap();
 
-    let (code, name) = match get_git_version() {
-        Ok((code, name)) => (code, name),
-        Err(_) => {
-            // show warning if git is not installed
-            println!("cargo:warning=Failed to get git version, using 0.0.0");
-            (0, "0.0.0".to_string())
-        }
-    };
+    let (code, name) = get_shared_version().expect("invalid shared version.properties");
     if env::var("KSU_PACKAGE_NAME").is_err() {
         println!("cargo:rustc-env=KSU_PACKAGE_NAME=www.xeckernel.pro");
     }

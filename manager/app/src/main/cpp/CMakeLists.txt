@@ -21,7 +21,9 @@ add_library(xcnative
         ksu.cc
         )
 
-target_include_directories(xcnative PRIVATE .)
+# Resolve uapi/... from the repository's canonical headers, without local copies.
+get_filename_component(KSU_REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../../../.." ABSOLUTE)
+target_include_directories(xcnative PRIVATE . "${KSU_REPO_ROOT}")
 
 find_library(log-lib log)
 

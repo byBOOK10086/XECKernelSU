@@ -198,38 +198,14 @@ endif
 
 obj-$(CONFIG_KSU) += kernelsu.o
 
-MDIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
-
-# Workaround bazel
-# https://github.com/tiann/KernelSU/pull/316#issuecomment-1479043219
-GIT := $(shell PATH="$$PATH":/usr/bin:/usr/local/bin which git)
-ifneq ($(GIT),)
-# Check if this is a git repository
-# Try to detect Git repo intelligently
-GIT_ROOT := $(shell cd $(MDIR) && $(GIT) rev-parse --show-toplevel 2>/dev/null)
-ifneq ($(GIT_ROOT),)
-KERNEL_GIT_ROOT := $(shell cd $(srctree) && $(GIT) rev-parse --show-toplevel 2>/dev/null)
-ifneq ($(GIT_ROOT),$(KERNEL_GIT_ROOT))
-# Only set version if it's a different repo from kernel
-$(shell cd $(GIT_ROOT) && [ -f .git/shallow ] && $(GIT) fetch --unshallow 2>/dev/null || true)
-KSU_GIT_VERSION := $(shell cd $(GIT_ROOT) && $(GIT) rev-list --count HEAD 2>/dev/null)
-KSU_GIT_VERSION_VALID := 1
-$(info -- KernelSU: Git repo detected at $(GIT_ROOT))
-endif
-endif
-else
-$(warning -- KernelSU: Git not detected, make sure git is installed in your PATH!)
-endif
-
-
-# Public version comes from one file only: <repo>/version.properties.
-# The manager APK reads the same file (manager/build.gradle.kts), so the kernel's
-# KERNEL_SU_VERSION and the manager's versionCode can never disagree.
-KSU_VERSION_FILE := $(if $(GIT_ROOT),$(GIT_ROOT)/version.properties,$(MDIR)/../version.properties)
-KSU_VERSION_CODE := $(shell sed -n 's/^versionCode[[:space:]]*=[[:space:]]*//p' $(KSU_VERSION_FILE) 2>/dev/null | head -n 1)
+# Resolve beside the module, including source archives copied into another kernel repository.
+KSU_VERSION_FILE := $(KSU_KERNEL_DIR)/../version.properties
+KSU_VERSION_CODE := $(shell sed -n 's/^versionCode[[:space:]]*=[[:space:]]*\([0-9][0-9]*\)[[:space:]]*$$/\1/p' "$(KSU_VERSION_FILE)" 2>/dev/null)
 ifeq ($(strip $(KSU_VERSION_CODE)),)
-$(warning -- KernelSU: version.properties not found or has no versionCode; falling back to 16)
-KSU_VERSION_CODE := 16
+$(error -- KernelSU: missing or invalid versionCode in $(KSU_VERSION_FILE))
+endif
+ifneq ($(words $(KSU_VERSION_CODE)),1)
+$(error -- KernelSU: version.properties must contain exactly one versionCode)
 endif
 $(info -- KernelSU version: $(KSU_VERSION_CODE))
 ccflags-y += -DKSU_VERSION=$(KSU_VERSION_CODE)
@@ -263,7 +239,7 @@ ccflags-y += -DKSU_IS_PR_BUILD=$(KSU_IS_PR_BUILD)
 
 ccflags-y += -DKSU_NEW_DCACHE_FLUSH=$(KSU_NEW_DCACHE_FLUSH)
 
-ccflags-y += -Wno-strict-prototypes -Wno-int-conversion -Wno-gcc-compat -Wno-missing-prototypes
+ccflags-y += -Werror=int-conversion -Wno-strict-prototypes -Wno-gcc-compat -Wno-missing-prototypes
 ccflags-y += -Wno-declaration-after-statement -Wno-unused-function
 
 # Keep a new line here!! Because someone may append config

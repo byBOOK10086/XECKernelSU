@@ -826,22 +826,7 @@ XEC 项目组
     <string name="permanent_reboot_now">立即重启</string>
     <string name="permanent_needs_unlock">Bootloader 已锁定：写 boot 会破坏验证链导致变砖。请使用开机自动提权，或走上方官方通道解锁。</string>
 
-    <!-- 受限授权（exec 白名单） -->
-    <string name="exec_policy_title">受限 Root</string>
-    <string name="exec_policy_summary">此应用只能以白名单命令取 root（su -c），其余一律拒绝</string>
-    <string name="exec_policy_paths_label">白名单命令（一行一条）</string>
-    <string name="exec_policy_hint">按完整路径或命令首 token 的 basename 匹配。受限应用的交互式 su 与直接授权会被拒绝（fail closed）。</string>
-    <string name="exec_policy_apply">应用白名单</string>
-    <string name="exec_policy_kernel_too_old">内核拒绝了策略（内核较旧，不支持 110 号 ioctl）</string>
 
-    <!-- Per-app uname 身份 -->
-    <string name="uts_spoof_title">Uname 身份</string>
-    <string name="uts_spoof_summary">改写此应用经由 uname(2) 看到的内核 release/version</string>
-    <string name="uts_spoof_release_label">Release 覆写（留空 = 真实值）</string>
-    <string name="uts_spoof_version_label">Version 覆写（留空 = 真实值）</string>
-    <string name="uts_spoof_hint">仅改写应用的 uname(2) 用户缓冲（内核 uts 状态不动）。只覆盖 64 位进程；条目存内核内存，重启后自动重推。</string>
-    <string name="uts_spoof_apply">应用身份</string>
-    <string name="uts_spoof_kernel_too_old">内核拒绝了覆写（内核较旧，不支持 115 号 ioctl）</string>
 
     <!-- 零足迹卸载 -->
     <string name="settings_unload_title">卸载 Root（零足迹）</string>
@@ -857,9 +842,6 @@ XEC 项目组
     <string name="privilege_gen_template">库里没有同 KMI 近邻；已把 %2$s 模板绑定到 %1$s 导入——所有偏移须人工填写后才能运行</string>
     <string name="privilege_gen_none">无法为 %1$s 生成：%2$s</string>
 
-    <!-- APatch 式超级密钥 -->
-    <string name="superkey_settings_title">安全锁</string>
-    <string name="superkey_settings_summary">开启后，改动任何应用的 Root 权限都要先输入锁密码，防止恶意软件偷改权限</string>
     <!-- 工具箱：终端 / 安全锁 / 隐身入口 的统一菜单 -->
     <string name="tools_title">工具箱</string>
     <string name="tools_summary">终端、安全锁与隐身入口</string>
@@ -889,21 +871,6 @@ XEC 项目组
     <string name="stealth_summary">隐藏图标；设置 → 关于手机 → 连点版本号 10 下打开管理器（连点 5 下的开发者选项行为不受影响）</string>
     <string name="stealth_confirm_body">开启后将隐藏桌面图标。打开管理器的方式：设置 → 关于手机 → 连点版本号 10 下（连点 5 下解锁开发者选项的原生行为不受影响）。注意：开启后管理器会退回桌面一次——那是它在隐藏自己的图标，属预期。随时可用的兜底命令：
 %1$s</string>
-    <string name="superkey_auth_required">安全锁已开启：验证失败，请先解锁屏幕再试</string>
-    <string name="superkey_status">锁密码：%1$s · 保护：%2$s</string>
-    <string name="superkey_state_set">已设置</string>
-    <string name="superkey_state_unset">未设置</string>
-    <string name="superkey_state_armed">保护中</string>
-    <string name="superkey_state_disarmed">未开启</string>
-    <string name="superkey_dialog_hint">锁密码只保存在这台手机里：本机加密存储，不上传；重启后保护自动解除（这也是忘记密码时的恢复办法——重启后在这里重新设置）。保护期间，修改应用权限、受限名单和功能开关都要先验证锁密码。</string>
-    <string name="superkey_old_key_label">当前锁密码（更换/清除时必填）</string>
-    <string name="superkey_new_key_label">新锁密码</string>
-    <string name="superkey_generate">随机生成</string>
-    <string name="superkey_arm_guard">开启保护</string>
-    <string name="superkey_apply">设置锁密码</string>
-    <string name="superkey_clear">清除</string>
-    <string name="superkey_applied">已生效</string>
-    <string name="superkey_apply_failed">操作被拒绝（密码不对，或手机重启过还没重新设置）</string>
 
 
     <!-- 主题商店（schema 3）：壳/页面/组件 -->
@@ -1105,7 +1072,7 @@ XEC 项目组
     <string name="home_stat_edit_hint">长按数据面板可自定义</string>
     <string name="home_hero_ready">ROOT 已就绪</string>
     <string name="home_hero_idle">ROOT 未就绪</string>
-    <string name="home_hero_running">内核正常运行</string>
+    <string name="home_hero_running">正在运行</string>
     <string name="home_hero_inactive">内核未运行</string>
     <string name="home_hero_kernel_mode">内核态</string>
     <string name="home_update_tap_hint">点按查看更新内容</string>

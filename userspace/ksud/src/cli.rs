@@ -121,8 +121,7 @@ enum Commands {
     /// Restore boot or init_boot images patched by KernelSU
     BootRestore(BootRestoreArgs),
 
-    /// Patch KernelSU into a boot image
-    ///
+    /// Experimental alternative boot-image patcher; boot-patch is the primary pipeline.
     /// Always operates on a boot image; never selects init_boot or vendor_boot.
     BootPatchV2(BootPatchV2Args),
 
@@ -131,13 +130,13 @@ enum Commands {
         #[command(subcommand)]
         command: BootInfo,
     },
-    /// For developers
     /// Bundled TEE engine and module trees
     Builtin {
         #[command(subcommand)]
         command: BuiltinCmd,
     },
 
+    /// For developers
     Debug {
         #[command(subcommand)]
         command: Debug,
@@ -331,7 +330,7 @@ enum Debug {
     /// Get kernel version
     Version,
 
-    /// For testing
+    #[cfg(debug_assertions)]
     Test,
 
     /// Extract an embedded binary to a specified path
@@ -945,6 +944,7 @@ pub fn run() -> Result<()> {
                 Ok(())
             }
             Debug::Su { global_mnt } => crate::su::grant_root(global_mnt),
+            #[cfg(debug_assertions)]
             Debug::Test => assets::ensure_binaries(false),
             Debug::ExtractBinary { name, path } => {
                 let data = assets::get_asset_data(&name)?;

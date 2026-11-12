@@ -246,6 +246,6 @@ class SettingsRepositoryImpl : SettingsRepository {
     override fun isLkmMode(): Boolean = Natives.isLkmMode
 
     override fun execKsudFeatureSave() {
-        execKsud("feature save", true)
+        check(execKsud("feature save", true)) { "Feature save failed" }
     }
 }

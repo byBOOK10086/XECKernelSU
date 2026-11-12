@@ -17,6 +17,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlinx.coroutines.launch
 import me.weishu.kernelsu.Natives
 import me.weishu.kernelsu.R
+import me.weishu.kernelsu.ui.util.rememberRootOperation
+import me.weishu.kernelsu.ui.util.rootIO
 import me.weishu.kernelsu.ui.navigation3.LocalNavigator
 import me.weishu.kernelsu.ui.navigation3.Route
 import me.weishu.kernelsu.ui.util.forceStopApp
@@ -25,8 +27,6 @@ import me.weishu.kernelsu.ui.util.launchApp
 import me.weishu.kernelsu.ui.util.restartApp
 import me.weishu.kernelsu.ui.util.setSepolicy
 import me.weishu.kernelsu.ui.viewmodel.SuperUserViewModel
-import me.weishu.kernelsu.privilege.ExecPolicyStore
-import me.weishu.kernelsu.privilege.UtsSpoofStore
 import me.weishu.kernelsu.ui.viewmodel.getTemplateInfoById
 
 @Composable
@@ -34,6 +34,7 @@ fun AppProfileScreen(uid: Int) {
     val navigator = LocalNavigator.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val rootOperation = rememberRootOperation()
     val viewModel: SuperUserViewModel = viewModel()
     val appGroupState = remember(uid) {
         derivedStateOf {
@@ -59,14 +60,20 @@ fun AppProfileScreen(uid: Int) {
     val initialProfile = remember(uid, packageName, primaryAppInfo.special) {
         Natives.getAppProfile(packageName, uid).let {
             if (primaryAppInfo.special) it.copy(allowSu = false) else it
-        }.also {
-            if (it.allowSu && !primaryAppInfo.special) {
-                it.rules = getSepolicy(packageName)
-            }
         }
     }
     var profile by rememberSaveable(uid, packageName) {
         mutableStateOf(initialProfile)
+    }
+
+    LaunchedEffect(uid, packageName) {
+        rootOperation {
+            if (profile.allowSu && !primaryAppInfo.special) {
+                val snapshot = profile
+                val rules = rootIO { getSepolicy(packageName) }
+                if (profile == snapshot) profile = snapshot.copy(rules = rules)
+            }
+        }
     }
 
     val failToUpdateAppProfile = stringResource(R.string.failed_to_update_app_profile).format(primaryAppInfo.label)
@@ -79,59 +86,31 @@ fun AppProfileScreen(uid: Int) {
         }
     }
 
-    // 受限授权：持久层是事实源（内核表重启即空），进页面时读回。
-    val initialExecPaths = remember(uid) { ExecPolicyStore.get(context, uid) }
-    var execRestricted by rememberSaveable(uid) { mutableStateOf(initialExecPaths.isNotEmpty()) }
-    var execPaths by rememberSaveable(uid) { mutableStateOf(initialExecPaths) }
-
-    // Per-app uname 身份：同样以持久层为事实源。
-    val initialUts = remember(uid) { UtsSpoofStore.get(context, uid) }
-    var utsRelease by rememberSaveable(uid) { mutableStateOf(initialUts.first) }
-    var utsVersion by rememberSaveable(uid) { mutableStateOf(initialUts.second) }
-
     val state = AppProfileUiState(
         uid = uid,
         packageName = packageName,
         profile = profile,
         appGroup = appGroup,
         sharedUserId = sharedUserId,
-        execRestricted = execRestricted,
-        execPaths = execPaths,
-        utsRelease = utsRelease,
-        utsVersion = utsVersion,
     )
 
     val actions = AppProfileActions(
         onBack = dropUnlessResumed { navigator.pop() },
-        onLaunchApp = ::launchApp,
-        onForceStopApp = ::forceStopApp,
-        onRestartApp = ::restartApp,
+        onLaunchApp = { name, user -> rootOperation { rootIO { launchApp(name, user) } } },
+        onForceStopApp = { name, user -> rootOperation { rootIO { forceStopApp(name, user) } } },
+        onRestartApp = { name, user -> rootOperation { rootIO { restartApp(name, user) } } },
         onViewTemplate = { templateId ->
-            getTemplateInfoById(templateId)?.let { info ->
-                navigator.push(Route.TemplateEditor(info, true))
+            rootOperation {
+                rootIO { getTemplateInfoById(templateId) }?.let { info ->
+                    navigator.push(Route.TemplateEditor(info, true))
+                }
             }
         },
         onManageTemplate = {
             navigator.push(Route.AppProfileTemplate)
         },
-        onExecPolicyChange = { restricted, paths ->
-            val ok = ExecPolicyStore.set(context, uid, if (restricted) paths else emptyList())
-            if (!ok && restricted) {
-                showMessage(context.getString(R.string.exec_policy_kernel_too_old))
-            }
-            execRestricted = restricted && paths.any { it.isNotBlank() }
-            execPaths = paths
-        },
-        onUtsSpoofChange = { release, version ->
-            val ok = UtsSpoofStore.set(context, uid, release, version)
-            if (!ok && (release.isNotBlank() || version.isNotBlank())) {
-                showMessage(context.getString(R.string.uts_spoof_kernel_too_old))
-            }
-            utsRelease = release.trim()
-            utsVersion = version.trim()
-        },
         onProfileChange = { updatedProfile ->
-            scope.launch {
+            rootOperation {
                 val profileToSave = if (primaryAppInfo.special) {
                     updatedProfile.copy(allowSu = false)
                 } else {
@@ -140,18 +119,18 @@ fun AppProfileScreen(uid: Int) {
                 if (profileToSave.allowSu) {
                     if (uid < 2000 && uid != 1000) {
                         showMessage(suNotAllowed)
-                        return@launch
+                        return@rootOperation
                     }
                     if (!profileToSave.rootUseDefault
                         && profileToSave.rules.isNotEmpty()
                         && !primaryAppInfo.special
-                        && !setSepolicy(profileToSave.name, profileToSave.rules)
+                        && !rootIO { setSepolicy(profileToSave.name, profileToSave.rules) }
                     ) {
                         showMessage(failToUpdateSepolicy)
-                        return@launch
+                        return@rootOperation
                     }
                 }
-                if (!Natives.setAppProfile(profileToSave)) {
+                if (!rootIO { Natives.setAppProfile(profileToSave) }) {
                     showMessage(failToUpdateAppProfile)
                 } else {
                     profile = profileToSave

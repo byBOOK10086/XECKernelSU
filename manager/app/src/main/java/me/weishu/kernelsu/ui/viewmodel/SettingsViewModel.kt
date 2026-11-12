@@ -4,6 +4,7 @@ import android.system.OsConstants
 import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,7 +20,7 @@ import me.weishu.kernelsu.ksuApp
 import me.weishu.kernelsu.ui.screen.settings.SettingsUiState
 import me.weishu.kernelsu.ui.theme.ColorMode
 import me.weishu.kernelsu.ui.util.applyTeeEngineSwitch
-import me.weishu.kernelsu.ui.util.rebootDevice
+import me.weishu.kernelsu.ui.util.reboot
 import me.weishu.kernelsu.ui.util.teeEngineEnabled
 
 class SettingsViewModel(
@@ -29,18 +30,31 @@ class SettingsViewModel(
     private val _uiState = MutableStateFlow(SettingsUiState())
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
 
-    /**
-     * 守卫武装后，SET_FEATURE 一律要 fd 级认证；没有这一步，开关只会拿到
-     * -EACCES，界面还会乐观地把开关翻过去（用户看到的「错误: -13」）。
-     */
-    private fun ensureSuperkey(): Boolean = true
+    private fun launchRootOperation(block: suspend () -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                block()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(ksuApp, "${ksuApp.getString(R.string.permanent_failed)} ${error.message ?: error.javaClass.simpleName}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
+    private fun checked(success: Boolean): Boolean {
+        check(success) { ksuApp.getString(R.string.permanent_failed) }
+        return true
+    }
 
     init {
         refresh()
     }
 
     fun refresh() {
-        viewModelScope.launch {
+        launchRootOperation {
             val checkUpdate = repo.checkUpdate
             val checkModuleUpdate = repo.checkModuleUpdate
             val themeMode = repo.themeMode
@@ -81,7 +95,7 @@ class SettingsViewModel(
             val useSoftReboot = repo.useSoftReboot
             val isLateLoadMode = Natives.isLateLoadMode
             // 走 root shell 查询，必须切到 IO；默认开着，查不到也不改变现状。
-            val isTeeEngineEnabled = withContext(Dispatchers.IO) { teeEngineEnabled() }
+            val isTeeEngineEnabled = teeEngineEnabled()
 
             _uiState.update {
                 it.copy(
@@ -218,13 +232,6 @@ class SettingsViewModel(
         _uiState.update { it.copy(enableWebDebugging = enabled) }
     }
 
-    /**
-     * 切到自定义背景（[name] 为 [WallpaperStore] 落盘后的文件名）。
-     *
-     * 传空串即"恢复内置随机池"。这里只改设置项，不动文件——文件的生命周期由
-     * [WallpaperStore] 负责（导入成功才写设置，清空时先改设置再删文件，任何一步
-     * 中断最坏结果都只是回落到内置池，不会出现"设置指向不存在的图"这种状态）。
-     */
     fun setWallpaperLight(name: String) {
         repo.wallpaperLight = name
         _uiState.update { it.copy(wallpaperLight = name) }
@@ -235,7 +242,6 @@ class SettingsViewModel(
         _uiState.update { it.copy(wallpaperDark = name) }
     }
 
-    /** 背景模糊强度（百分比 0..100）。拖动结束才落盘，拖动过程只改本地状态。 */
     fun setWallpaperBlur(percent: Int) {
         val clamped = percent.coerceIn(0, 100)
         repo.wallpaperBlur = clamped
@@ -243,18 +249,17 @@ class SettingsViewModel(
     }
 
     fun setSuCompatMode(mode: Int) {
-        if (!ensureSuperkey()) return
-        viewModelScope.launch(Dispatchers.IO) {
+        launchRootOperation {
             when (mode) {
-                0 -> if (repo.setSuEnabled(true)) {
+                0 -> if (checked(repo.setSuEnabled(true))) {
                     repo.execKsudFeatureSave()
                     repo.setSuCompatModePref(0)
                     _uiState.update { it.copy(suCompatMode = 0, isSuEnabled = true) }
                 }
 
-                1 -> if (repo.setSuEnabled(true)) {
+                1 -> if (checked(repo.setSuEnabled(true))) {
                     repo.execKsudFeatureSave()
-                    if (repo.setSuEnabled(false)) {
+                    if (checked(repo.setSuEnabled(false))) {
                         // "Disable until reboot" implies it should be enabled on next boot.
                         // We set the preference to 0 (Enabled) to match the persistent state.
                         repo.setSuCompatModePref(0)
@@ -262,7 +267,7 @@ class SettingsViewModel(
                     }
                 }
 
-                2 -> if (repo.setSuEnabled(false)) {
+                2 -> if (checked(repo.setSuEnabled(false))) {
                     repo.execKsudFeatureSave()
                     repo.setSuCompatModePref(2)
                     _uiState.update { it.copy(suCompatMode = 2, isSuEnabled = false) }
@@ -272,9 +277,8 @@ class SettingsViewModel(
     }
 
     fun setKernelUmountEnabled(enabled: Boolean) {
-        if (!ensureSuperkey()) return
-        viewModelScope.launch(Dispatchers.IO) {
-            if (repo.setKernelUmountEnabled(enabled)) {
+        launchRootOperation {
+            if (checked(repo.setKernelUmountEnabled(enabled))) {
                 repo.execKsudFeatureSave()
                 _uiState.update { it.copy(isKernelUmountEnabled = enabled) }
             }
@@ -282,8 +286,7 @@ class SettingsViewModel(
     }
 
     fun setSelinuxHideEnabled(enabled: Boolean) {
-        if (!ensureSuperkey()) return
-        viewModelScope.launch(Dispatchers.IO) {
+        launchRootOperation {
             val status = repo.setSelinuxHideEnabled(enabled)
             // 只有真的成功（或"重启后生效"）才翻 UI；-EACCES 等失败必须保持原状。
             if (status == 0 || status == -OsConstants.EAGAIN) {
@@ -319,9 +322,8 @@ class SettingsViewModel(
     }
 
     fun setSulogEnabled(enabled: Boolean) {
-        if (!ensureSuperkey()) return
-        viewModelScope.launch(Dispatchers.IO) {
-            if (repo.setSulogEnabled(enabled)) {
+        launchRootOperation {
+            if (checked(repo.setSulogEnabled(enabled))) {
                 repo.execKsudFeatureSave()
                 _uiState.update { it.copy(isSulogEnabled = enabled) }
             }
@@ -329,24 +331,16 @@ class SettingsViewModel(
     }
 
     fun setAdbRootEnabled(enabled: Boolean) {
-        if (!ensureSuperkey()) return
-        viewModelScope.launch(Dispatchers.IO) {
-            if (repo.setAdbRootEnabled(enabled)) {
+        launchRootOperation {
+            if (checked(repo.setAdbRootEnabled(enabled))) {
                 repo.execKsudFeatureSave()
                 _uiState.update { it.copy(isAdbRootEnabled = enabled) }
             }
         }
     }
 
-    /**
-     * 内置 TEE/TS 引擎总开关。
-     *
-     * 引擎只在开机路径上注入，所以改完**立即重启**：不重启用户会看到开关变了、行为没变，
-     * 反而以为功能坏了。root 不受影响（引擎是纯用户态注入，不是内核模块）。
-     */
     fun setTeeEngineEnabled(enabled: Boolean) {
-        if (!ensureSuperkey()) return
-        viewModelScope.launch(Dispatchers.IO) {
+        launchRootOperation {
             if (!applyTeeEngineSwitch(enabled)) {
                 withContext(Dispatchers.Main) {
                     Toast.makeText(
@@ -355,16 +349,16 @@ class SettingsViewModel(
                         Toast.LENGTH_LONG
                     ).show()
                 }
-                return@launch
+                return@launchRootOperation
             }
             _uiState.update { it.copy(isTeeEngineEnabled = enabled) }
-            rebootDevice()
+            reboot()
         }
     }
 
     fun setDefaultUmountModules(enabled: Boolean) {
-        viewModelScope.launch(Dispatchers.IO) {
-            if (repo.setDefaultUmountModules(enabled)) {
+        launchRootOperation {
+            if (checked(repo.setDefaultUmountModules(enabled))) {
                 _uiState.update { it.copy(isDefaultUmountModules = enabled) }
             }
         }

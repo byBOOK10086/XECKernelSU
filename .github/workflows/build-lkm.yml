@@ -1,51 +1,34 @@
-name: Build LKM for KernelSU
+name: Audit full arm64 KMI build
 on:
-  workflow_call:
-    inputs:
-      package_name:
-        description: 'package name of manager'
-        required: false
-        default: ''
-        type: string
-      expected_size:
-        description: 'expected signature size'
-        required: false
-        default: ''
-        type: string
-      expected_hash:
-        description: 'expected signature hash'
-        required: false
-        default: ''
-        type: string
-      susfs:
-        description: 'Compile SUSFS into kernelsu.ko'
-        required: false
-        default: true
-        type: boolean
   workflow_dispatch:
-    inputs:
-      susfs:
-        description: 'Compile SUSFS into kernelsu.ko'
-        required: false
-        default: true
-        type: boolean
+permissions:
+  contents: read
 jobs:
-  build-lkm:
+  lkm:
     strategy:
+      fail-fast: false
       matrix:
-        kmi:
-          - android12-5.10
-          - android13-5.10
-          - android13-5.15
-          - android14-5.15
-          - android14-6.1
-          - android15-6.6
-          - android16-6.12
-          - android17-6.18
-    uses: ./.github/workflows/ddk-lkm.yml
-    with:
-      kmi: ${{ matrix.kmi }}
-      susfs: ${{ inputs.susfs || false }}
-      package_name: ${{ inputs.package_name || '' }}
-      expected_size: ${{ inputs.expected_size || '' }}
-      expected_hash: ${{ inputs.expected_hash || '' }}
+        kmi: [android12-5.10, android13-5.10, android13-5.15, android14-5.15, android14-6.1, android15-6.6, android16-6.12, android17-6.18]
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/ylarod/ddk-min:${{ matrix.kmi }}-20260828
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build current source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/prepare_susfs_lkm.py
+          cd kernel
+          CONFIG_KSU=m CC=clang make KSU_MERGE_SUSFS_LKM=1
+          mkdir -p ../out
+          cp kernelsu.ko ../out/${{ matrix.kmi }}_kernelsu.ko
+          llvm-strip -d ../out/${{ matrix.kmi }}_kernelsu.ko
+          llvm-readelf -h ../out/${{ matrix.kmi }}_kernelsu.ko
+          sha256sum ../out/${{ matrix.kmi }}_kernelsu.ko
+      - uses: actions/upload-artifact@v4
+        with:
+          name: audit-arm64-${{ matrix.kmi }}
+          path: out/*_kernelsu.ko
+          if-no-files-found: error

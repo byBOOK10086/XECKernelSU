@@ -2,11 +2,17 @@ package me.weishu.kernelsu.ui.component.rebootlistpopup
 
 import android.content.Context
 import android.os.PowerManager
+import android.widget.Toast
 import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import me.weishu.kernelsu.Natives
 import me.weishu.kernelsu.R
 import me.weishu.kernelsu.ui.component.dialog.rememberConfirmDialog
@@ -42,14 +48,27 @@ fun getRebootListOption(): List<RebootListOption> {
 fun rememberRebootAction(): (String) -> Unit {
     val title = stringResource(R.string.reboot)
     val message = stringResource(R.string.jailbreak_reboot_warning)
-    val confirmDialog = rememberConfirmDialog(onConfirm = { reboot() })
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val performReboot: (String) -> Unit = { reason ->
+        scope.launch {
+            try {
+                withContext(Dispatchers.IO) { reboot(reason) }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Toast.makeText(context, "${context.getString(R.string.permanent_failed)} ${error.message ?: error.javaClass.simpleName}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+    val confirmDialog = rememberConfirmDialog(onConfirm = { performReboot("") })
 
-    return remember(title, message, confirmDialog) {
+    return remember(title, message, confirmDialog, performReboot) {
         { reason ->
             if (Natives.isLateLoadMode && reason.isEmpty()) {
                 confirmDialog.showConfirm(title = title, content = message)
             } else {
-                reboot(reason)
+                performReboot(reason)
             }
         }
     }

@@ -691,11 +691,13 @@ static int add_try_umount(void __user *arg)
     }
 
     case KSU_UMOUNT_ADD: {
-        long len = strncpy_from_user(buf, (const char __user *)cmd.arg, 256);
-        if (len <= 0)
-            return -EFAULT;
-
-        buf[sizeof(buf) - 1] = '\0';
+        long len = strncpy_from_user(buf, (const char __user *)cmd.arg, sizeof(buf));
+        if (len < 0)
+            return len;
+        if (!len)
+            return -EINVAL;
+        if (len >= (long)sizeof(buf))
+            return -ENAMETOOLONG;
 
         new_entry = kzalloc(sizeof(*new_entry), GFP_KERNEL);
         if (!new_entry)
@@ -709,8 +711,6 @@ static int add_try_umount(void __user *arg)
 
         down_write(&mount_list_lock);
 
-        // disallow dupes
-        // if this gets too many, we can consider moving this whole task to a kthread
         list_for_each_entry (entry, &mount_list, list) {
             if (!strcmp(entry->umountable, buf)) {
                 pr_info("cmd_add_try_umount: %s is already here!\n", buf);
@@ -728,7 +728,6 @@ static int add_try_umount(void __user *arg)
         else
             new_entry->flags = 0;
 
-        // debug
         list_add(&new_entry->list, &mount_list);
         up_write(&mount_list_lock);
         pr_info("cmd_add_try_umount: %s added!\n", buf);
@@ -736,13 +735,14 @@ static int add_try_umount(void __user *arg)
         return 0;
     }
 
-    // this is just strcmp'd wipe anyway
     case KSU_UMOUNT_DEL: {
-        long len = strncpy_from_user(buf, (const char __user *)cmd.arg, sizeof(buf) - 1);
-        if (len <= 0)
-            return -EFAULT;
-
-        buf[sizeof(buf) - 1] = '\0';
+        long len = strncpy_from_user(buf, (const char __user *)cmd.arg, sizeof(buf));
+        if (len < 0)
+            return len;
+        if (!len)
+            return -EINVAL;
+        if (len >= (long)sizeof(buf))
+            return -ENAMETOOLONG;
 
         down_write(&mount_list_lock);
         list_for_each_entry_safe (entry, tmp, &mount_list, list) {

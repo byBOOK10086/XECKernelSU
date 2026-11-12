@@ -27,9 +27,7 @@
 
 set -u
 
-# ---------------------------------------------------------------------------
 # configuration
-# ---------------------------------------------------------------------------
 
 FLAG=${BS_FLAG:-/data/adb/tricky_store/bootstate.off}
 PROCFS=${BS_PROCFS:-/proc}
@@ -63,7 +61,7 @@ fails=0
 pass() { [ "$MODE" = check ] || [ "$QUIET" = 1 ] || printf 'PASS %s\n' "$1"; }
 bad() { fails=$((fails + 1)); printf 'FAIL %s\n' "$1"; }
 
-# The property view of a locked user build.
+# Only existing boot-state properties; configured ADB properties are untouched.
 PROPS="
 ro.boot.verifiedbootstate=green
 ro.boot.flash.locked=1
@@ -77,10 +75,6 @@ partition.product.verified=1
 partition.system_ext.verified=1
 partition.odm.verified=1
 ro.oem_unlock_supported=0
-service.adb.root=0
-ro.debuggable=0
-ro.secure=1
-ro.adb.secure=1
 "
 
 # Android 16 stopped publishing this one; any value found belongs to something
@@ -115,9 +109,7 @@ enabled() {
     return 0
 }
 
-# ---------------------------------------------------------------------------
 # property half
-# ---------------------------------------------------------------------------
 
 resolve_resetprop() {
     [ -n "$RESETPROP" ] && return 0
@@ -162,14 +154,19 @@ apply_props() {
     set_total=0
     while IFS='=' read -r name value; do
         [ -n "${name:-}" ] || continue
-        set_total=$((set_total + 1))
         current=$(prop_get "$name")
+        [ -n "$current" ] || continue
+        set_total=$((set_total + 1))
         if [ "$current" = "$value" ]; then
             [ "$MODE" = check ] && pass "$name=$value"
             continue
         fi
         if [ "$MODE" = check ]; then
             bad "$name=${current:-<unset>} (want $value)"
+            continue
+        fi
+        if [ "$MODE" = dry ]; then
+            say "  set $name=$value"
             continue
         fi
         if prop_set "$name" "$value"; then
@@ -190,6 +187,8 @@ EOF
     if [ -n "$(prop_get "$DELETE_PROP")" ]; then
         if [ "$MODE" = check ]; then
             bad "$DELETE_PROP still set ($(prop_get "$DELETE_PROP"))"
+        elif [ "$MODE" = dry ]; then
+            say "  del $DELETE_PROP"
         else
             prop_del "$DELETE_PROP"
             if [ -n "$(prop_get "$DELETE_PROP")" ]; then
@@ -202,9 +201,7 @@ EOF
     say "bootstate: properties checked=$set_total changed=$set_changed"
 }
 
-# ---------------------------------------------------------------------------
 # raw boot parameters (cmdline / bootconfig)
-# ---------------------------------------------------------------------------
 # Both rewrite passes read the override table from this file so the shell only
 # has to write it once; passing a multi-line table through `awk -v` depends on
 # the awk flavour (toybox included), a file does not.
@@ -213,8 +210,7 @@ write_overrides() {
 }
 
 # /proc/cmdline is one space separated token list. Tokens are preserved in
-# order, overridden keys are replaced in place, missing keys are appended, and
-# everything else stays byte identical.
+# order; only existing keys are replaced. Missing keys are never appended.
 rewrite_cmdline() {
     write_overrides "$3"
     awk -v ofile="$3" '
@@ -222,8 +218,6 @@ rewrite_cmdline() {
             while ((getline line < ofile) > 0) {
                 if (line == "") continue
                 split(line, p, "=")
-                n++
-                keys[n] = p[1]
                 want[p[1]] = substr(line, length(p[1]) + 2)
             }
             close(ofile)
@@ -234,13 +228,9 @@ rewrite_cmdline() {
                 tok = $i
                 if (index(tok, "=") > 0) {
                     key = substr(tok, 1, index(tok, "=") - 1)
-                    if (key in want) { tok = key "=" want[key]; seen[key] = 1 }
+                    if (key in want) tok = key "=" want[key]
                 }
                 out = out (out == "" ? "" : " ") tok
-            }
-            for (i = 1; i <= n; i++) {
-                k = keys[i]
-                if (!(k in seen)) { out = out (out == "" ? "" : " ") k "=" want[k] }
             }
             print out
         }
@@ -255,23 +245,16 @@ rewrite_bootconfig() {
             while ((getline line < ofile) > 0) {
                 if (line == "") continue
                 split(line, p, "=")
-                n++
-                keys[n] = p[1]
                 want[p[1]] = substr(line, length(p[1]) + 2)
             }
             close(ofile)
         }
         {
             key = $0
+            sub(/^[ \t]*/, "", key)
             sub(/[ \t]*=.*/, "", key)
-            if (key in want) { print key " = " want[key]; seen[key] = 1 }
+            if (key in want) print key " = \"" want[key] "\""
             else print
-        }
-        END {
-            for (i = 1; i <= n; i++) {
-                k = keys[i]
-                if (!(k in seen)) print k " = " want[k]
-            }
         }
     ' "$1" > "$2"
 }
@@ -292,53 +275,73 @@ bind_over() {
     return 1
 }
 
-apply_overlay() {
-    stage || { fails=$((fails + 1)); return; }
+# A proc target belongs to us only while it is a mountpoint exposing the
+# exact staged inode. Never detach another module's mount, or stack over it.
+mounted() {
+    awk -v target="$1" '$5 == target { found=1 } END { exit !found }' "$PROCFS/self/mountinfo" 2>/dev/null
+}
+owned() { [ -f "$STAGE_DIR/$1" ] && [ "$STAGE_DIR/$1" -ef "$PROCFS/$1" ] && mounted "$PROCFS/$1"; }
+detach_owned() {
+    owned "$1" || return 0
+    "$UMOUNT" "$PROCFS/$1" 2>/dev/null
+}
 
-    if [ -r "$PROCFS/cmdline" ]; then
-        rewrite_cmdline "$PROCFS/cmdline" "$STAGE_DIR/cmdline.inc" "$STAGE_DIR/overrides"
-        # the staging file must live in RAM; /dev/.xec is a tmpfs in every
-        # Android release, and a source path under /data/adb would itself be a
-        # signal for mount inspectors.
-        mv -f "$STAGE_DIR/cmdline.inc" "$STAGE_DIR/cmdline" 2>/dev/null
-        chmod 644 "$STAGE_DIR/cmdline" 2>/dev/null
-        if [ "$MODE" = check ]; then
-            if grep -q 'androidboot.verifiedbootstate=green' "$PROCFS/cmdline" 2>/dev/null; then
-                pass "/proc/cmdline locked view"
-            else
-                bad "/proc/cmdline still shows the real boot state"
-            fi
-        elif ! grep -q 'androidboot.verifiedbootstate=green' "$PROCFS/cmdline" 2>/dev/null; then
-            bind_over "$STAGE_DIR/cmdline" "$PROCFS/cmdline" && pass "/proc/cmdline overlay"
-        else
-            pass "/proc/cmdline already locked"
-        fi
-    else
-        warn "$PROCFS/cmdline not readable"
+overlay_file() {
+    file=$1
+    target=$PROCFS/$file
+    staged=$STAGE_DIR/$file
+    [ -r "$target" ] || return 0
+    [ -r "$PROCFS/self/mountinfo" ] || { bad "mount ownership unavailable"; return; }
+    "rewrite_$file" "$target" "$staged.inc" "$STAGE_DIR/overrides" || {
+        bad "$target rewrite failed"; return;
+    }
+    if cmp -s "$target" "$staged.inc"; then
+        pass "$target already locked"
+        rm -f "$staged.inc"
+        return
     fi
-
-    if [ -r "$PROCFS/bootconfig" ]; then
-        rewrite_bootconfig "$PROCFS/bootconfig" "$STAGE_DIR/bootconfig" "$STAGE_DIR/overrides"
-        chmod 644 "$STAGE_DIR/bootconfig" 2>/dev/null
-        if [ "$MODE" = check ]; then
-            if grep -q 'verifiedbootstate[[:space:]]*=[[:space:]]*green' "$PROCFS/bootconfig" 2>/dev/null; then
-                pass "/proc/bootconfig locked view"
-            else
-                bad "/proc/bootconfig still shows the real boot state"
-            fi
-        elif ! grep -q 'verifiedbootstate[[:space:]]*=[[:space:]]*green' "$PROCFS/bootconfig" 2>/dev/null; then
-            bind_over "$STAGE_DIR/bootconfig" "$PROCFS/bootconfig" && pass "/proc/bootconfig overlay"
-        else
-            pass "/proc/bootconfig already locked"
+    if [ "$MODE" = check ]; then
+        bad "$target still shows the real boot state"
+        rm -f "$staged.inc"
+        return
+    fi
+    if mounted "$target"; then
+        if ! owned "$file"; then
+            warn "$target has a foreign mount; overlay skipped"
+            rm -f "$staged.inc"
+            return
         fi
+        if ! detach_owned "$file"; then
+            bad "$target owned overlay could not be detached"
+            rm -f "$staged.inc"
+            return
+        fi
+    fi
+    # Replace the staging inode only after detaching our old bind.
+    if mv -f "$staged.inc" "$staged" && chmod 644 "$staged"; then
+        bind_over "$staged" "$target" || bad "$target overlay failed"
     else
-        say "bootstate: $PROCFS/bootconfig not readable (normal for apps)"
+        bad "$target staging failed"
     fi
 }
 
-# ---------------------------------------------------------------------------
+apply_overlay() {
+    stage || { fails=$((fails + 1)); return; }
+    # Serialize mount inspection and replacement to prevent concurrent stacking.
+    mkdir "$STAGE_DIR/.lock" 2>/dev/null || { bad "overlay busy"; return; }
+    trap 'rmdir "$STAGE_DIR/.lock" 2>/dev/null' 0
+    if ! enabled; then
+        detach_owned cmdline
+        detach_owned bootconfig
+    else
+        overlay_file cmdline
+        overlay_file bootconfig
+    fi
+    rmdir "$STAGE_DIR/.lock" 2>/dev/null
+    trap - 0
+}
+
 # readability half
-# ---------------------------------------------------------------------------
 
 resolve_ksud() {
     [ -n "$KSUD" ] && return 0
@@ -370,24 +373,18 @@ apply_harden() {
     done
 }
 
-# ---------------------------------------------------------------------------
 # main
-# ---------------------------------------------------------------------------
 
 if ! enabled; then
     say "bootstate: disabled by $FLAG"
     if [ "$DO_OVERLAY" = 1 ] && [ "$MODE" != check ]; then
-        "$UMOUNT" "$PROCFS/cmdline" 2>/dev/null
-        "$UMOUNT" "$PROCFS/bootconfig" 2>/dev/null
+        [ "$MODE" != dry ] && apply_overlay
     fi
     exit 0
 fi
 
 if [ "$MODE" = dry ]; then
-    printf 'bootstate: would set %d properties and delete %s\n' \
-        "$(printf '%s\n' "$PROPS" | awk 'NF' | wc -l | tr -d ' ')" "$DELETE_PROP"
-    printf '%s\n' "$PROPS" | awk 'NF { printf "  set %s\n", $0 }'
-    printf '  del %s\n' "$DELETE_PROP"
+    apply_props
     if [ "$DO_OVERLAY" = 1 ]; then
         drydir=${BS_TMP:-${TMPDIR:-/data/local/tmp}}
         mkdir -p "$drydir" 2>/dev/null

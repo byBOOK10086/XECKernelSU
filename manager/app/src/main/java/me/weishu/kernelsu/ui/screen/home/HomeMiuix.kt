@@ -356,20 +356,10 @@ private fun HomeHeader(
 @Composable
 private fun HomeHero(state: HomeUiState, onInstall: () -> Unit) {
     val running = state.ksuVersion != null
-    // 审计 P1（2026-11-09）：之前只看"驱动有没有应答"，驱动在但 su 被拒时仍显示
-    // ROOT READY。就绪判据改成实际的 root 可用性。
+    // Driver identity determines running state; root alone permits installation.
     val active = state.isRootAvailable
-    // 2026-11-09 用户要求：管理器已经拿到 root、但内核模块还没装/没跑起来时，
-    // 不再说"内核未运行"，而是明确告诉用户"可以直接装"，并且这块本身就是入口。
-    // 2026-11-12 用户第二次反馈：没有 root 时不能报"已准备就绪"（点进去只会得到
-    // "环境权限不足"）。所以这一档重新要求 root 真的可用；没 root 时单独给一句
-    // "需要 root 权限 / 去超级用户里授权"，而不是含糊的内核未运行。
     val canInstall = !running && state.isRootAvailable
-    // 内核没在跑、探测已经落定、但 root 拿不到 —— 这是"缺权限"，不是"内核未运行"。
     val needRoot = !running && !state.isRootAvailable && state.rootProbeSettled
-    // 冷启动/刚重启那段，root 探测还没落定。此时 isRootAvailable 必然 false，
-    // 直接画红点会得到"内核正常运行 + ROOT 未就绪"这种自相矛盾的首帧
-    // （2026-11-09 用户真机反馈）。未落定 → 灰点 + 「正在获取 Root」。
     val probing = !state.rootProbeSettled
     val statusLabel = when {
         active -> R.string.home_hero_ready
@@ -391,7 +381,7 @@ private fun HomeHero(state: HomeUiState, onInstall: () -> Unit) {
     }
     val modeText = when {
         state.lkmMode == true -> "LKM"
-        running -> stringResource(R.string.home_hero_kernel_mode)
+        state.lkmMode == false -> "GKI"
         else -> stringResource(R.string.home_not_installed)
     }
     // 文案统一走 HomeStatItem.kt 里的 selinuxLabel()：设备表 / 安全面板 / 数据面板
@@ -401,7 +391,7 @@ private fun HomeHero(state: HomeUiState, onInstall: () -> Unit) {
     val subtitle = when {
         canInstall -> stringResource(R.string.home_hero_ready_subtitle)
         needRoot -> stringResource(R.string.home_hero_need_root_subtitle)
-        else -> "$modeText · SELinux $selinuxText"
+        else -> "SELinux $selinuxText"
     }
 
     Column(modifier = Modifier.padding(top = 10.dp)) {
@@ -487,8 +477,17 @@ private fun HomeHero(state: HomeUiState, onInstall: () -> Unit) {
             fontSize = 13.sp,
             lineHeight = 20.sp,
             color = Xc.colors.textMuted,
-            modifier = Modifier.padding(top = 9.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = 9.dp),
         )
+        if (running) {
+            Text(
+                text = modeText,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Xc.colors.textSecondary,
+                modifier = Modifier.align(Alignment.End).padding(top = 6.dp),
+            )
+        }
         Spacer(Modifier.height(20.dp))
         Box(
             modifier = Modifier

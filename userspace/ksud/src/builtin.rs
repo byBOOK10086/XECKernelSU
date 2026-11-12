@@ -39,7 +39,7 @@ const STAMP_FILE_NAME: &str = ".ksud_builtin_stamp";
 ///
 /// Bump it when the file layout or the permission rules change so an installed
 /// copy is refreshed once even if `VERSION_CODE` happens to be identical.
-const STAMP_VERSION: u32 = 1;
+const STAMP_VERSION: u32 = 2;
 
 /// One file embedded under `builtin/`, split into its module id and the path
 /// relative to the module root.
@@ -396,10 +396,8 @@ fn install_module(module_id: &str, files: &[BuiltinFile]) -> Result<bool> {
 
 /// Stamp body identifying the embedded tree of this build.
 ///
-/// `VERSION_CODE` is the git commit count baked in at build time, so it moves
-/// whenever the committed `builtin/` tree changes. The file count makes a
-/// hand-edited stamp look different too, and costs nothing because the grouped
-/// list is already in memory.
+/// Uses the shared release version; bump STAMP_VERSION for same-version payload
+/// repairs so an already-installed tree is refreshed on the next boot.
 fn builtin_stamp(file_count: usize) -> String {
     format!("v{STAMP_VERSION} {} {file_count}", defs::VERSION_CODE)
 }

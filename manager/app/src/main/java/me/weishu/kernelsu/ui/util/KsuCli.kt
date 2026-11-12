@@ -72,283 +72,94 @@ private val SU_CLIENT_PATHS = listOf(
     "/data/adb/apd/bin/su",
 )
 
+class NoRootException(message: String = "Root permission is unavailable") : IllegalStateException(message)
+
 private class RootShellSlot {
-    var shell: Shell? = null
-    var retryAtElapsedMs: Long = 0
-
-    /**
-     * 连续失败次数，用于退避。0 = 上次探测成功。
-     *
-     * 为什么需要退避：晚加载（late-load）的内核模块在开机后一段时间才就绪，
-     * 而管理器可能被开机广播先拉起来。固定 3s 重试在"模块 20s 才加载完"的机器上
-     * 会一直撞空档，表现就是"这次开机 root 掉了"，直到重启才恢复。
-     */
-    var retryCount: Int = 0
-
-    /** 一次只允许一个后台补探，避免主线程每次访问都点一把线程。 */
-    @Volatile
-    var refreshScheduled: Boolean = false
-
-    /**
-     * 同一个槽位一次只允许一个探测跑在路上。
-     *
-     * 探测（`createRootShell`）是慢操作，**绝不能在持有 shellLock 时执行** —— 主线程
-     * 每一次取 shell 都要拿这把锁，持锁探测会把 ANR 隐患原样搬回来。所以探测在锁外跑，
-     * 这个标记只用来防止多个线程同时探。
-     */
-    @Volatile
-    var probing: Boolean = false
+    @Volatile var shell: Shell? = null
+    @Volatile var retryAtElapsedMs = 0L
+    @Volatile var probing = false
+    var retryCount = 0
+    var refreshScheduled = false
 }
 
 object KsuCli {
-    private const val NON_ROOT_RETRY_MS = 3_000L
-
-    /** 退避上限：晚加载的机器最多每分钟重试两次，够用且不会打满。 */
-    private const val NON_ROOT_RETRY_MAX_MS = 30_000L
-
-    /**
-     * 首帧先把一条 `sh` 交给调用方之后，第一次补探只等这么久。
-     *
-     * 3s 是"别反复打 su"的冷却，不是首探延迟：驱动本来就加载好的机器上，
-     * 让"获取 Root 失败"在屏幕上停 3 秒纯属自找。
-     */
-    private const val FIRST_PROBE_DELAY_MS = 500L
-
-    /**
-     * 监管线程最多探多少轮（0.5→3→6→12→24→30×3 ≈ 2.6 分钟）后收工，
-     * 下一次访问会重新拉起它。留个上限是为了没装 root 的机器上不养一个常驻线程。
-     */
-    private const val SUPERVISOR_MAX_ATTEMPTS = 8
-
     private val shellLock = Any()
     private val normalSlot = RootShellSlot()
     private val globalMountSlot = RootShellSlot()
-
-    /**
-     * 后台补探拿到 root 之后要有人告诉 UI。
-     *
-     * 开机丢 root 的真正形态往往是"界面没重算"，而不是"root 真没了"：开机广播把
-     * 管理器提前拉起来，首帧拿到的是非 root 兜底 shell，那时驱动还没就绪；几秒后
-     * 后台补探成功了，可首页的状态只在 init 里算过一遍，于是用户一直看到"无 root"
-     * —— 直到手动切页或杀进程重进。这里把探测结果发布成状态流，让首页在
-     * false → true 时自己刷一次。
-     *
-     * 只在**状态翻转**时发值（StateFlow 自带去重），不会因为频繁访问 shell 而抖动。
-     */
     private val _rootReady = MutableStateFlow(false)
     val rootReady: StateFlow<Boolean> = _rootReady.asStateFlow()
-
-    /**
-     * 是否已经**至少完成过一次**探测。
-     *
-     * 开机首帧只能先发一条非 root 的兜底 shell（探测不能跑主线程），那一刻
-     * `rootAvailable()` 必然是 false —— 那是"还没问到"，不是"拿不到"。告警必须
-     * 等这个翻 true 之后再判，否则每次冷启动都会闪一条红色的「获取 Root 失败！」。
-     */
     private val _probeSettled = MutableStateFlow(false)
     val probeSettled: StateFlow<Boolean> = _probeSettled.asStateFlow()
-
-    /** 探测日志只在状态翻转时写一行，不记录每次访问。 */
-    @Volatile
-    private var lastProbeNote: String? = null
-
-    /**
-     * 一条**不需要 root** 的普通 shell，给 `boot-info` 这类纯用户态子命令用。
-     *
-     * 和 [SHELL] 完全分开：这条 shell 不碰 KSU 驱动，所以在还没装 root 的机器上
-     * 也一定起得来；正因为如此，安装页读 KMI 才不会因为"没 root"而拿到空结果。
-     */
+    private var plainShellCache: Shell? = null
     private val plainShellLock = Any()
 
-    @Volatile
-    private var plainShellCache: Shell? = null
-
     fun plainShell(): Shell = synchronized(plainShellLock) {
-        val live = plainShellCache?.takeIf { it.isAlive }
-        if (live != null) {
-            live
-        } else {
-            Shell.Builder.create().build("sh").also { plainShellCache = it }
-        }
+        plainShellCache?.takeIf { it.isAlive }
+            ?: Shell.Builder.create().build("sh").also { plainShellCache = it }
     }
 
-    /**
-     * Lazily resolved so constructing this object never probes root before the
-     * app needs it - the manager can be started by a broadcast before the root
-     * provider is ready.
-     */
-    /**
-     * 立刻重探一次 root，忽略退避冷却。
-     *
-     * 用户刚在 KSU 里点了"允许"之后，缓存里那个非 root shell 还在冷却期，首页
-     * 就会继续显示"ROOT 未就绪"。首页每次刷新前先调这里，授权一落定当帧可见。
-     */
     fun retryRootNow() {
         synchronized(shellLock) {
+            normalSlot.retryAtElapsedMs = 0
+            globalMountSlot.retryAtElapsedMs = 0
             normalSlot.retryCount = 0
-            normalSlot.retryAtElapsedMs = 0L
             globalMountSlot.retryCount = 0
-            globalMountSlot.retryAtElapsedMs = 0L
         }
-        noteProbe("retryRootNow")
+        scheduleRefresh(normalSlot, false)
     }
 
-    val SHELL: Shell
-        get() = getOrRetryShell(globalMnt = false)
-
-    val GLOBAL_MNT_SHELL: Shell
-        get() = getOrRetryShell(globalMnt = true)
-
-    /**
-     * Root providers may be unavailable during early boot. createRootShell
-     * explicitly validates candidates and returns sh when none has root;
-     * caching that fallback forever would hide a provider that becomes ready later.
-     *
-     * Reuse a live root shell; reuse a non-root one only until the cooldown
-     * expires, then probe again. A replacement is installed only once a root
-     * shell is actually obtained. Old shells are never closed here - an in-flight
-     * job may still be using one.
-     *
-     * The probe itself is slow (libsu retries `su`, and a stuck provider can push
-     * a shell build into the tens of seconds), and callers include Compose
-     * composition and the home screen's root probe. So a *retry* never runs on the
-     * main thread: hand back the live fallback and let a worker thread probe.
-     */
-    private fun getOrRetryShell(globalMnt: Boolean): Shell {
-        val slot = if (globalMnt) globalMountSlot else normalSlot
-
-        // ---- 快路径：不持锁 ----
-        val cached = slot.shell
-        if (cached != null && cached.isAlive && cached.isRoot) {
-            _probeSettled.value = true
-            return cached
-        }
-
-        val cooling = cached != null && cached.isAlive &&
-            SystemClock.elapsedRealtime() < slot.retryAtElapsedMs
-        // 有活壳但不是 root：主线程、冷却期两种情况都只把壳交出去，探测交给监管线程。
-        if (cached != null && cached.isAlive && (cooling || onMainThread())) {
-            scheduleRefresh(slot, globalMnt)
-            return cached
-        }
-
-        if (onMainThread()) {
-            // 2026-11-09：**主线程一律不跑 `su`**。旧实现在"还没有缓存 shell"时会直接
-            // 同步探测（libsu 自己还会重试），开机早期驱动没就绪时能把主线程卡上几秒。
-            // 现在只做一个**极轻**的 `sh` 兜底，然后交给监管线程补探。
-            synchronized(shellLock) {
-                val again = slot.shell
-                if (again != null && again.isAlive) return again
-                val light = runCatching { Shell.Builder.create().build("sh") }.getOrNull()
-                if (light != null) {
-                    slot.shell = light
-                    slot.retryAtElapsedMs = SystemClock.elapsedRealtime() + FIRST_PROBE_DELAY_MS
-                    scheduleRefresh(slot, globalMnt)
-                    return light
-                }
-            }
-            // 连 sh 都起不来：只能退回同步探测（真没别的选择）。
-        }
-
-        return probeOnce(slot, globalMnt)
-    }
-
-    /**
-     * 真探一次。慢操作（`createRootShell`）在**锁外**跑，绝不让主线程为它排队。
-     */
-    private fun probeOnce(slot: RootShellSlot, globalMnt: Boolean): Shell {
-        val alreadyRunning = synchronized(shellLock) {
-            if (slot.probing) {
-                true
-            } else {
-                slot.probing = true
-                false
-            }
-        }
-        if (alreadyRunning) {
-            // 已经有探测在跑：把现有壳交出去，别让调用方再等一次。
-            return slot.shell?.takeIf { it.isAlive } ?: Shell.Builder.create().build("sh")
-        }
-
-        val candidate = runCatching { createRootShell(globalMnt) }.getOrNull()
-        if (candidate == null) {
-            synchronized(shellLock) { slot.probing = false }
-            return slot.shell?.takeIf { it.isAlive } ?: Shell.Builder.create().build("sh")
-        }
-
-        return synchronized(shellLock) {
-            slot.probing = false
-            applyProbeLocked(slot, candidate)
-        }
-    }
-
-    /** Caller holds [shellLock]. 只做记账，不做任何慢操作。 */
-    private fun applyProbeLocked(slot: RootShellSlot, candidate: Shell): Shell {
-        _probeSettled.value = true
-        val cached = slot.shell
-        if (candidate.isAlive && candidate.isRoot) {
-            slot.shell = candidate
-            slot.retryAtElapsedMs = 0
-            slot.retryCount = 0
-            _rootReady.value = true
-            noteProbe("root-ok")
-            return candidate
-        }
-        // 退避：3s → 6s → 12s → 24s，封顶 30s。晚加载的机器迟早能等到；
-        // 每轮只多一次进程探测，不会打满 CPU。
-        val delay = (NON_ROOT_RETRY_MS shl slot.retryCount.coerceAtMost(4))
-            .coerceAtMost(NON_ROOT_RETRY_MAX_MS)
-        slot.retryCount = (slot.retryCount + 1).coerceAtMost(8)
-        // 冷却从**探测结束**开始算：探测本身耗掉的时间不该吃掉窗口。
-        slot.retryAtElapsedMs = SystemClock.elapsedRealtime() + delay
+    /** UI reads cached state; process creation and authorization never run on its thread. */
+    fun rootAvailable(): Boolean {
+        val cached = normalSlot.shell?.takeIf { it.isAlive && it.isRoot }
+        if (cached != null) return true
         _rootReady.value = false
-        noteProbe("probe-fail alive=${candidate.isAlive} retry=${slot.retryCount} delay=${delay}ms")
-        return if (cached == null || !cached.isAlive) {
-            slot.shell = candidate
-            candidate
-        } else {
-            // 保留现有的活兜底 shell，只丢弃这次没用上的探测结果，
-            // 免得重试把 `sh` 进程越堆越多。
-            runCatching { candidate.close() }
-            cached
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            scheduleRefresh(normalSlot, false)
+            return false
         }
+        return runCatching { requireRoot(false).isRoot }.getOrDefault(false)
     }
 
-    /**
-     * 开机丢 root 是**间歇性**故障，没有证据只能靠猜。这里把每次探测结果记一行到
-     * `filesDir/xec-root-probe.log`（只记状态翻转，最多 32 KB，超了就滚一份 .1）。
-     * 全程 runCatching：日志写失败绝不影响取 shell。
-     */
-    private fun noteProbe(note: String) {
-        if (lastProbeNote == note) return
-        lastProbeNote = note
-        runCatching {
-            val dir = ksuApp.filesDir ?: return@runCatching
-            val file = File(dir, "xec-root-probe.log")
-            if (file.length() > 32 * 1024) {
-                val old = File(dir, "xec-root-probe.log.1")
-                old.delete()
-                file.renameTo(old)
+    val SHELL: Shell get() = requireRoot(false)
+    val GLOBAL_MNT_SHELL: Shell get() = requireRoot(true)
+
+    /** A privileged caller receives uid 0 or an explicit failure, never a plain sh. */
+    private fun requireRoot(globalMnt: Boolean): Shell {
+        val slot = if (globalMnt) globalMountSlot else normalSlot
+        slot.shell?.takeIf { it.isAlive && it.isRoot }?.let { return it }
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            scheduleRefresh(slot, globalMnt)
+            throw NoRootException("Root is not ready; authorization is running in the background")
+        }
+        return probeOnce(slot, globalMnt) ?: throw NoRootException()
+    }
+
+    private fun probeOnce(slot: RootShellSlot, globalMnt: Boolean): Shell? {
+        synchronized(shellLock) {
+            slot.shell?.takeIf { it.isAlive && it.isRoot }?.let { return it }
+            if (slot.probing || SystemClock.elapsedRealtime() < slot.retryAtElapsedMs) return null
+            slot.probing = true
+        }
+        val candidate = runCatching { createRootShell(globalMnt) }
+        synchronized(shellLock) {
+            slot.probing = false
+            _probeSettled.value = true
+            val shell = candidate.getOrNull()
+            if (shell != null) {
+                slot.shell = shell
+                slot.retryCount = 0
+                slot.retryAtElapsedMs = 0
+            } else {
+                slot.retryAtElapsedMs = SystemClock.elapsedRealtime() +
+                    (3_000L shl slot.retryCount.coerceAtMost(4)).coerceAtMost(30_000L)
+                slot.retryCount = (slot.retryCount + 1).coerceAtMost(8)
+                Log.w(TAG, "Root probe failed", candidate.exceptionOrNull())
             }
-            val line = "%d %s %s%n".format(
-                System.currentTimeMillis(),
-                Thread.currentThread().name,
-                note,
-            )
-            file.appendText(line, Charsets.UTF_8)
+            _rootReady.value = normalSlot.shell?.let { it.isAlive && it.isRoot } == true
+            return shell
         }
     }
 
-    private fun onMainThread(): Boolean = Looper.myLooper() == Looper.getMainLooper()
-
-    /**
-     * 后台监管线程：**循环**探到拿到 root 为止。
-     *
-     * 这里必须循环。旧实现只是"探一次就走"，而主线程路径刚刚设过冷却：监管线程
-     * 一启动就撞进冷却窗口，什么也没做就退出，此后没有任何东西会再重试 ——
-     * 表现就是首帧一直显示「获取 Root 失败 / 守护组件缺失」，切一次页（下一次访问
-     * 才会越过冷却）才恢复正常。v31413 真机实测就是这个现象。
-     */
     private fun scheduleRefresh(slot: RootShellSlot, globalMnt: Boolean) {
         synchronized(shellLock) {
             if (slot.refreshScheduled) return
@@ -356,43 +167,24 @@ object KsuCli {
         }
         Thread({
             try {
-                var attempt = 0
-                while (attempt < SUPERVISOR_MAX_ATTEMPTS) {
-                    // 睡过冷却再探：冷却的本意是"别在锁里等"，不是"别再试"。
+                repeat(8) {
                     val wait = slot.retryAtElapsedMs - SystemClock.elapsedRealtime()
-                    if (wait > 0) Thread.sleep(wait.coerceAtMost(NON_ROOT_RETRY_MAX_MS))
-                    val shell = probeOnce(slot, globalMnt)
-                    if (shell.isAlive && shell.isRoot) return@Thread
-                    attempt++
+                    if (wait > 0) Thread.sleep(wait.coerceAtMost(30_000L))
+                    if (probeOnce(slot, globalMnt) != null) return@Thread
+                    if (slot.probing) Thread.sleep(150)
                 }
-            } catch (_: Throwable) {
-                // 探测失败不能杀进程；下一次访问会把监管重新拉起来。
+            } catch (e: InterruptedException) {
+                Thread.currentThread().interrupt()
             } finally {
-                slot.refreshScheduled = false
+                synchronized(shellLock) { slot.refreshScheduled = false }
             }
-        }, "xecpro-root-shell-probe").apply { isDaemon = true }.start()
+        }, "xec-root-probe").apply { isDaemon = true }.start()
     }
 }
 
-/**
- * Partition names are interpolated into a root shell command, and the download
- * flow derives them from a remote package's metadata -- i.e. from untrusted
- * input. Only [A-Za-z0-9_.-] is accepted; anything else aborts the flash rather
- * than being quietly dropped, so a crafted package cannot smuggle shell syntax
- * into `boot-patch --partition`.
- */
-private fun sanitizedPartition(partition: String): String? =
-    partition.takeIf { it.matches(Regex("^[A-Za-z0-9_.-]{1,32}$")) }
-
-/**
- * KMI strings reach the same root shell as partition names. Every producer
- * today is charset-constrained (our own `boot-info supported-kmis` output, or a
- * `(\d+\.\d+)...(android\d+)` regex capture), so this is defense in depth
- * rather than a live fix -- but it keeps both sinks uniform, and a future
- * unconstrained producer now fails loudly instead of silently.
- */
-private fun sanitizedKmi(kmi: String): String? =
-    kmi.takeIf { it.matches(Regex("^[A-Za-z0-9_.-]{1,32}$")) }
+/** Only tokens, never shell syntax, are accepted from partition/KMI selectors. */
+private fun safeBootToken(value: String): String? =
+    value.takeIf { it.matches(Regex("^[A-Za-z0-9_.-]{1,32}$")) }
 
 fun getRootShell(globalMnt: Boolean = false): Shell {
     return if (globalMnt) KsuCli.GLOBAL_MNT_SHELL else {
@@ -400,28 +192,17 @@ fun getRootShell(globalMnt: Boolean = false): Shell {
     }
 }
 
-/**
- * 等一条**真的 root** shell，超时再退回当前能拿到的。
- *
- * 给"本身已经是异步、但必须用 root 才能完成"的调用用 —— 典型是绑定 RootService：
- * 绑定任务要在一个 root shell 里 exec，而主线程上取到的往往是还没探到 root 时的
- * 轻量兜底 `sh`。用那条壳去 exec，服务永远连不上，`getPackages()` 也就拿不到包，
- * 表现出来就是超级用户列表一条应用都刷不出来。
- *
- * 这里不阻塞主线程：整段在 IO 上轮询，冷却一过 `getOrRetryShell` 就会在工作线程上
- * 真正探一次；[timeoutMs] 到了还没拿到 root 就把现状交出去，由调用方自己失败。
- */
+/** Wait on IO for authorization; expiry is an explicit failure. */
 suspend fun awaitRootShell(
     globalMnt: Boolean = false,
     timeoutMs: Long = 10_000L,
 ): Shell = withContext(Dispatchers.IO) {
     val deadline = SystemClock.elapsedRealtime() + timeoutMs
-    var shell = getRootShell(globalMnt)
-    while (!shell.isRoot && SystemClock.elapsedRealtime() < deadline) {
+    do {
+        runCatching { getRootShell(globalMnt) }.getOrNull()?.let { return@withContext it }
         delay(150)
-        shell = getRootShell(globalMnt)
-    }
-    shell
+    } while (SystemClock.elapsedRealtime() < deadline)
+    throw NoRootException("Timed out waiting for root authorization")
 }
 
 inline fun <T> withNewRootShell(
@@ -445,21 +226,11 @@ fun Uri.getFileName(context: Context): String? {
 
 fun createRootShell(globalMnt: Boolean = false): Shell {
     Shell.enableVerboseLogging = BuildConfig.DEBUG
-    // 显式 build(argv) 直接启动指定进程；启动或 shell 初始化失败会抛异常。
-    // newJob() 默认不收集输出，必须调用 to(...) 才能读取 id -u 的结果。
-    // code=0、out 为空不能证明提权失败，更不能据此推断进程没有启动。
-    // 建成后收集 id -u 的输出，验证 uid=0，再把该 shell 交给安装链路。
-    // 顺序（2026-11-12 修正）：先用系统的 `su`，再用我们自己的守护进程。
-    // 反过来时，内核不是我们的（例如装着别人的 KernelSU）那一步必然失败，而且
-    // 每次 build 都要等好几秒，探完早已超时 —— 表现就是"明明授权了却一直未就绪"，
-    // 安装页的「直接安装」也跟着灰掉。
-    val candidates = buildList {
-        for (path in SU_CLIENT_PATHS) {
-            add(if (globalMnt) listOf(path, "-mm") else listOf(path))
-        }
-        // 我们自己的守护进程放最后：内核不是我们的时它必然失败，且慢。
-        add(listOf(getKsuDaemonPath(), "debug", "su").let { if (globalMnt) it + "-g" else it })
-    }
+    check(Looper.myLooper() != Looper.getMainLooper()) { "Root acquisition must run on IO" }
+    val daemon = listOf(getKsuDaemonPath(), "debug", "su").let { if (globalMnt) it + "-g" else it }
+    // External su permits installation from an existing provider; it does not imply our driver is active.
+    val external = SU_CLIENT_PATHS.map { if (globalMnt) listOf(it, "-mm") else listOf(it) }
+    val candidates = listOf(daemon) + external
     for (argv in candidates) {
         val shell = runCatching { Shell.Builder.create().build(*argv.toTypedArray()) }.getOrNull()
             ?: continue
@@ -471,48 +242,32 @@ fun createRootShell(globalMnt: Boolean = false): Shell {
         Log.w(TAG, "root shell candidate failed: ${argv.first()} (code=${probe?.code}, uid=$uid)")
         runCatching { shell.close() }
     }
-    Log.e(TAG, "no usable root shell; falling back to a non-root sh")
-    return runCatching { Shell.Builder.create().build("sh") }
-        .getOrElse { Shell.Builder.create().build("sh") }
-}
-/**
- * 让一条命令真的以 root 跑。
- *
- * libsu 的 root shell 有时会退化成普通 `sh`（见 getOrRetryShell 的注释：su 起来了
- * 但那一刻没 root，builder 会把壳换掉）。这时直接 exec 守护进程，打开
- * /dev/block/by-name/boot_a 就会 EACCES —— 用户看到的是
- * "Patch Error: open /dev/block/by-name/boot_a / Permission denied"。
- *
- * 壳不是 root 时再套一层 `su -c`：应用已经被授予 root，su 会直接放行。
- */
-private fun rootSafeCommand(shell: Shell, cmd: String): String {
-    if (shell.isRoot) return cmd
-    val quoted = cmd.replace("'", "'\\''")
-    return "su -c '$quoted'"
+    throw NoRootException("No authorized root shell is available")
 }
 
 fun execKsud(args: String, newShell: Boolean = false, globalMnt: Boolean = false): Boolean {
+    require('\u0000' !in args && '\n' !in args && '\r' !in args) { "Invalid daemon arguments" }
     return if (newShell) {
         withNewRootShell(globalMnt = globalMnt) {
-            ShellUtils.fastCmdResult(this, "${getKsuDaemonPath()} $args")
+            ShellUtils.fastCmdResult(this, "${shQuote(getKsuDaemonPath())} $args")
         }
     } else {
         val shell = getRootShell(globalMnt)
-        ShellUtils.fastCmdResult(shell, rootSafeCommand(shell, "${getKsuDaemonPath()} $args"))
+        ShellUtils.fastCmdResult(shell, "${shQuote(getKsuDaemonPath())} $args")
     }
 }
 
 suspend fun getFeatureStatus(feature: String): String = withContext(Dispatchers.IO) {
     val shell = getRootShell()
     val out = shell.newJob()
-        .add("${getKsuDaemonPath()} feature check $feature").to(ArrayList<String>(), null).exec().out
+        .add("${shQuote(getKsuDaemonPath())} feature check $feature").to(ArrayList<String>(), null).exec().out
     out.firstOrNull()?.trim().orEmpty()
 }
 
 suspend fun getFeaturePersistValue(feature: String): Long? = withContext(Dispatchers.IO) {
     val shell = getRootShell()
     val out = shell.newJob()
-        .add("${getKsuDaemonPath()} feature get --config $feature").to(ArrayList<String>(), null).exec().out
+        .add("${shQuote(getKsuDaemonPath())} feature get --config $feature").to(ArrayList<String>(), null).exec().out
     val valueLine = out.firstOrNull { it.trim().startsWith("Value:") } ?: return@withContext null
     valueLine.substringAfter("Value:").trim().toLongOrNull()
 }
@@ -520,14 +275,15 @@ suspend fun getFeaturePersistValue(feature: String): Long? = withContext(Dispatc
 fun install() {
     val start = SystemClock.elapsedRealtime()
     val libadbroot = File(ksuApp.applicationInfo.nativeLibraryDir, "libadbroot.so").absolutePath
-    val result = execKsud("install --libadbroot $libadbroot --data-path ${ksuApp.applicationInfo.deviceProtectedDataDir}", true)
+    val result = execKsud("install --libadbroot ${shQuote(libadbroot)} --data-path ${shQuote(ksuApp.applicationInfo.deviceProtectedDataDir)}", true)
+    check(result) { "Daemon installation failed" }
     Log.w(TAG, "install result: $result, cost: ${SystemClock.elapsedRealtime() - start}ms")
 }
 
 fun listModules(): String {
     val out = runCatching {
         withNewRootShell {
-            newJob().add("${getKsuDaemonPath()} module list").to(ArrayList<String>(), null).exec().out
+            newJob().add("${shQuote(getKsuDaemonPath())} module list").to(ArrayList<String>(), null).exec().out
         }
     }.getOrDefault(emptyList())
     return out.joinToString("\n").ifBlank { "[]" }
@@ -539,9 +295,9 @@ fun getSuperuserCount(): Int {
 
 fun toggleModule(id: String, enable: Boolean): Boolean {
     val cmd = if (enable) {
-        "module enable $id"
+        "module enable ${shQuote(id)}"
     } else {
-        "module disable $id"
+        "module disable ${shQuote(id)}"
     }
     val result = execKsud(cmd, true)
     Log.i(TAG, "$cmd result: $result")
@@ -549,14 +305,14 @@ fun toggleModule(id: String, enable: Boolean): Boolean {
 }
 
 fun undoUninstallModule(id: String): Boolean {
-    val cmd = "module undo-uninstall $id"
+    val cmd = "module undo-uninstall ${shQuote(id)}"
     val result = execKsud(cmd, true)
     Log.i(TAG, "undo uninstall module $id result: $result")
     return result
 }
 
 fun uninstallModule(id: String): Boolean {
-    val cmd = "module uninstall $id"
+    val cmd = "module uninstall ${shQuote(id)}"
     val result = execKsud(cmd, true)
     Log.i(TAG, "uninstall module $id result: $result")
     return result
@@ -585,31 +341,28 @@ private fun flashWithIO(
     }
 }
 
-/**
- * 清掉 ksud 侧卡住的引导事务。刷写被 "a boot transaction is already pending"
- * 拒绝时，这是唯一的用户侧逃生门（等价于 `xudc boot-txn clear`）。
- */
-fun clearStuckBootTxn(): Boolean = execKsud("boot-txn clear", true)
-
 fun flashModule(
     uri: Uri,
     onStdout: (String) -> Unit,
     onStderr: (String) -> Unit
 ): FlashResult {
-    val resolver = ksuApp.contentResolver
-    with(resolver.openInputStream(uri)) {
-        val file = File(ksuApp.cacheDir, "module.zip")
-        file.outputStream().use { output ->
-            this?.copyTo(output)
-        }
-        val cmd = "${getKsuDaemonPath()} module install ${file.absolutePath}"
-        val result = flashWithIO(cmd, onStdout, onStderr)
-        Log.i("XECKernelPro", "install module $uri result: $result")
-
+    val file = File.createTempFile("module-", ".zip", ksuApp.cacheDir)
+    return try {
+        copySelectedFile(uri, file)
+        FlashResult(flashWithIO("${shQuote(getKsuDaemonPath())} module install ${shQuote(file.path)}", onStdout, onStderr))
+    } catch (e: Exception) {
+        val message = e.message ?: "Module installation failed"
+        onStderr(message)
+        FlashResult(-1, message, false)
+    } finally {
         file.delete()
-
-        return FlashResult(result)
     }
+}
+
+private fun copySelectedFile(uri: Uri, target: File) {
+    val input = ksuApp.contentResolver.openInputStream(uri)
+        ?: throw java.io.IOException("Cannot open selected file")
+    input.use { source -> target.outputStream().use { source.copyTo(it) } }
 }
 
 private const val AK3_UPDATER_ENTRY = "META-INF/com/google/android/update-binary"
@@ -689,13 +442,13 @@ fun flashAnyKernel(
             "[ -f \"\$BB\" ] || BB='/system/bin/busybox'; " +
             "[ -f \"\$BB\" ] || BB='/system/xbin/busybox'; " +
             "[ -f \"\$BB\" ] || { echo 'busybox not found, cannot install AnyKernel3 package' >&2; exit 1; }; " +
-            "W='$workDirPath'; " +
+            "W=${shQuote(workDirPath)}; " +
             "rm -rf \"\$W/tmp\"; mkdir -p \"\$W/tmp/bin\" \"\$W/bin\"; " +
             "ln -sf \"\$BB\" \"\$W/bin/unzip\"; " +
             "export POSTINSTALL=\"\$W\"; " +
             "export AKHOME=\"\$W/tmp\"; " +
             "export PATH=\"\$W/bin:/system/bin:/system/xbin:\$PATH\"; " +
-            "\"\$BB\" ash \"\$W/update-binary\" 3 1 '$zipPath'"
+            "\"\$BB\" ash \"\$W/update-binary\" 3 1 ${shQuote(zipPath)}"
         val result = flashWithIO(cmd, onStdout, onStderr)
         Log.i("XECKernelPro", "flash anykernel3 $uri result: $result")
         FlashResult(result)
@@ -720,7 +473,7 @@ fun runModuleAction(
     }
 
     val result = withNewRootShell(true) {
-        newJob().add("${getKsuDaemonPath()} module action ${shQuote(moduleId)}")
+        newJob().add("${shQuote(getKsuDaemonPath())} module action ${shQuote(moduleId)}")
             .to(stdoutCallback, stderrCallback).exec()
     }
 
@@ -732,14 +485,14 @@ fun runModuleAction(
 fun restoreBoot(
     onStdout: (String) -> Unit, onStderr: (String) -> Unit
 ): FlashResult {
-    val result = flashWithIO("${getKsuDaemonPath()} boot-restore -f", onStdout, onStderr)
+    val result = flashWithIO("${shQuote(getKsuDaemonPath())} boot-restore -f", onStdout, onStderr)
     return FlashResult(result)
 }
 
 fun uninstallPermanently(
     onStdout: (String) -> Unit, onStderr: (String) -> Unit
 ): FlashResult {
-    val result = flashWithIO("${getKsuDaemonPath()} uninstall --package-name ${BuildConfig.APPLICATION_ID}", onStdout, onStderr)
+    val result = flashWithIO("${shQuote(getKsuDaemonPath())} uninstall --package-name ${BuildConfig.APPLICATION_ID}", onStdout, onStderr)
     return FlashResult(result)
 }
 
@@ -757,41 +510,29 @@ sealed class LkmSelection : Parcelable {
 
 private fun writeLkmFile(lkm: LkmSelection): File? {
     if (lkm !is LkmSelection.LkmUri) return null
-    val file = File(ksuApp.cacheDir, "kernelsu-tmp-lkm.ko")
-    ksuApp.contentResolver.openInputStream(lkm.uri)?.use { input ->
-        file.outputStream().use { output -> input.copyTo(output) }
+    val file = File.createTempFile("lkm-", ".ko", ksuApp.cacheDir)
+    try {
+        copySelectedFile(lkm.uri, file)
+        require(file.length() > 0) { "Selected LKM is empty" }
+        return file
+    } catch (e: Exception) {
+        file.delete()
+        throw e
     }
-    return file
 }
 
 private fun bootPatchFlags(
     allowShell: Boolean,
     enableAdb: Boolean,
     forceBackup: Boolean,
-    forceFlash: Boolean = false,
 ): String = buildString {
     if (allowShell) append(" --allow-shell")
     if (enableAdb) append(" --enable-adbd")
     if (forceBackup) append(" --backup")
-    // 直接安装一律强制：上一次刷写如果 arm 了事务却没重启确认，ksud 会拒绝之后所有
-    // 刷写（"a boot transaction is already pending"）——连着刷两次、或者刷完没重启，
-    // 用户就此卡死。--force 只丢掉那条陈旧事务（备份文件留在磁盘上不删），随后按当前
-    // 状态重建一份新事务，所以这次写的镜像照样有回滚网。
-    // OTA 与"只下载不刷写"不传：前者要保留上一次刷写的回滚凭证，后者根本不写分区。
-    // 新 ksud 没有 --force（它没有 boot 事务这个概念）：传了会被 clap 直接拒掉，
-    // 日志就是 unexpected argument '--force' found，于是「直接安装」和
-    // 「修补 KMI」双双失败。这里保留参数只为调用方兼容，不再拼进命令行。
-    @Suppress("UNUSED_EXPRESSION")
-    forceFlash
+
 }
 
-/**
- * 交给 ksud 的是不是能解析的镜像。
- *
- * Android boot/init_boot/vendor_boot 都是 `ANDROID!` 开头；OTA payload 是 `CrAU`；
- * OTA zip 是 `PK`。读分区失败或读错分区时写出来的是 0 字节 / 别的内容，ksud 只会
- * 报一句 "invalid boot image"，用户根本看不出是空文件还是分区不对。
- */
+/** boot-patch accepts boot/vendor_boot images; OTA archives require extraction first. */
 private fun looksLikeFlashableImage(file: java.io.File): Boolean {
     if (!file.isFile || file.length() < 8L) return false
     val head = ByteArray(8)
@@ -800,9 +541,7 @@ private fun looksLikeFlashableImage(file: java.io.File): Boolean {
     }.getOrDefault(0)
     if (read < 8) return false
     val magic = String(head, Charsets.US_ASCII)
-    return magic.startsWith("ANDROID!") || magic.startsWith("VNDRBOOT") ||
-        magic.startsWith("CrAU") ||
-        magic.startsWith("PK\u0003\u0004")
+    return magic == "ANDROID!" || magic == "VNDRBOOT"
 }
 
 fun installBoot(
@@ -816,75 +555,47 @@ fun installBoot(
     onStdout: (String) -> Unit,
     onStderr: (String) -> Unit,
 ): FlashResult {
-    val resolver = ksuApp.contentResolver
-
-    // 每次用唯一文件名：固定名 cache/boot.img 会让上一次失败的空文件污染这一次。
-    val bootFile = bootUri?.let { uri ->
-        with(resolver.openInputStream(uri)) {
-            val target = File.createTempFile("xec-boot-", ".img", ksuApp.cacheDir)
-            target.outputStream().use { output -> this?.copyTo(output) }
-            target
+    var bootFile: File? = null
+    var lkmFile: File? = null
+    return try {
+        val image = bootUri?.let { uri ->
+            File.createTempFile("boot-", ".img", ksuApp.cacheDir).also {
+                bootFile = it
+                copySelectedFile(uri, it)
+                require(looksLikeFlashableImage(it)) {
+                    "Selected file is not a boot/vendor_boot image (${it.length()} bytes); extract OTA archives first"
+                }
+            }
         }
-    }
-
-    // 用户选择的镜像无效时终止，不能把“修补文件”切换成写入设备分区。
-    val usableBoot = bootFile?.takeIf { looksLikeFlashableImage(it) }
-    if (bootFile != null && usableBoot == null) {
-        val message = "选中的镜像不是可用的 Android boot 镜像（${bootFile.length()} 字节）"
+        // A file-patch request must never acquire --flash, including invalid-input paths.
+        var cmd = if (bootUri == null) "boot-patch -f" else "boot-patch -b ${shQuote(requireNotNull(image).path)}"
+        cmd += bootPatchFlags(allowShell, enableAdb, forceBackup)
+        if (ota) cmd += " -u"
+        lkmFile = writeLkmFile(lkm)
+        lkmFile?.let { cmd += " -m ${shQuote(it.path)}" }
+        if (lkm is LkmSelection.KmiString) {
+            val kmi = requireNotNull(safeBootToken(lkm.value)) { "Invalid KMI name" }
+            cmd += " --kmi $kmi"
+        }
+        if (bootUri != null) {
+            val output = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            cmd += " -o ${shQuote(output.path)}"
+        }
+        partition?.let {
+            cmd += " --partition ${requireNotNull(safeBootToken(it)) { "Invalid partition name" }}"
+        }
+        val result = flashWithIO("${shQuote(getKsuDaemonPath())} $cmd", onStdout, onStderr)
+        val showReboot = bootUri == null && result.isSuccess
+        if (showReboot) install()
+        FlashResult(result, showReboot)
+    } catch (e: Exception) {
+        val message = e.message ?: "Boot patch failed"
         onStderr(message)
-        bootFile.delete()
-        return FlashResult(-1, message, false)
+        FlashResult(-1, message, false)
+    } finally {
+        bootFile?.delete()
+        lkmFile?.delete()
     }
-
-    var cmd = "boot-patch"
-
-    cmd += if (usableBoot == null) {
-        // no usable boot.img, let ksud read the partition itself
-        " -f"
-    } else {
-        " -b ${usableBoot.absolutePath}"
-    }
-    // 直接安装（写当前槽）强制；OTA 换槽刷写保留 fail-closed，理由见 bootPatchFlags。
-    cmd += bootPatchFlags(allowShell, enableAdb, forceBackup, forceFlash = !ota)
-
-    if (ota) {
-        cmd += " -u"
-    }
-
-    val lkmFile = writeLkmFile(lkm)
-    if (lkmFile != null) {
-        cmd += " -m ${lkmFile.absolutePath}"
-    } else if (lkm is LkmSelection.KmiString) {
-        val safeKmi = sanitizedKmi(lkm.value)
-            ?: return FlashResult(-1, "refusing unsafe KMI name: ${lkm.value}", false)
-        cmd += " --kmi $safeKmi"
-    }
-
-    if (bootFile != null) {
-        val downloadsDir =
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-        cmd += " -o $downloadsDir"
-    }
-
-    partition?.let { part ->
-        val safe = sanitizedPartition(part)
-            ?: return FlashResult(-1, "refusing unsafe partition name: $part", false)
-        cmd += " --partition $safe"
-    }
-
-    val result = flashWithIO("${getKsuDaemonPath()} $cmd", onStdout, onStderr)
-    Log.i("XECKernelPro", "install boot result: ${result.isSuccess}")
-
-    bootFile?.delete()
-    lkmFile?.delete()
-    usableBoot?.delete()
-
-    // if boot uri is empty, it is direct install, when success, we should show reboot button
-    val showReboot = bootUri == null && result.isSuccess // we create a temporary val here, to avoid calc showReboot double
-    if (showReboot) { // because we decide do not update ksud when startActivity
-        install() // install ksud here
-    }
-    return FlashResult(result, showReboot)
 }
 
 fun downloadBoot(
@@ -897,11 +608,13 @@ fun downloadBoot(
     onStdout: (String) -> Unit,
     onStderr: (String) -> Unit,
 ): FlashResult {
-    val bootFile = File(ksuApp.cacheDir, "download-boot.img")
+    val bootFile = File.createTempFile("download-boot-", ".img", ksuApp.cacheDir)
+    var lkmFile: File? = null
+    try {
     var probedKmi: String? = null
     try {
         onStdout("- Downloading and extracting boot image")
-        val channel = DataSourceChannel(newDownloadClient(), url)
+        DataSourceChannel(newDownloadClient(), url).use { channel ->
         val magic = readMagic(channel)
         val image = ExtractImage(bootFile, onStdout)
         // Extract the KMI here while the payload is open. ZipFile closes the
@@ -928,6 +641,7 @@ fun downloadBoot(
             image.consumePayload(channel, partition)
         } else {
             image.consume(channel, partition)
+        }
         }
     } catch (e: Exception) {
         bootFile.delete()
@@ -961,57 +675,45 @@ fun downloadBoot(
         )
     }
 
-    var cmd = "${getKsuDaemonPath()} boot-patch -b ${bootFile.absolutePath}"
+    var cmd = "${shQuote(getKsuDaemonPath())} boot-patch -b ${shQuote(bootFile.path)}"
     cmd += bootPatchFlags(allowShell, enableAdb, forceBackup)
 
-    val lkmFile = writeLkmFile(lkm)
+    lkmFile = writeLkmFile(lkm)
     if (lkmFile != null) {
-        cmd += " -m ${lkmFile.absolutePath}"
+        cmd += " -m ${shQuote(lkmFile.path)}"
     } else if (lkm is LkmSelection.KmiString) {
-        val safeKmi = sanitizedKmi(lkm.value)
+        val safeKmi = safeBootToken(lkm.value)
             ?: return FlashResult(-1, "refusing unsafe KMI name: ${lkm.value}", false)
         cmd += " --kmi $safeKmi"
     }
     if (autoKmi != null) {
-        val safeAutoKmi = sanitizedKmi(autoKmi)
+        val safeAutoKmi = safeBootToken(autoKmi)
             ?: return FlashResult(-1, "refusing unsafe KMI name: $autoKmi", false)
         cmd += " --kmi $safeAutoKmi"
     }
-    val safePartition = sanitizedPartition(partition)
+    val safePartition = safeBootToken(partition)
         ?: return FlashResult(-1, "refusing unsafe partition name: $partition", false)
     cmd += " --partition $safePartition"
     // ksud defaults to cwd, which is read-only in the su session; use Downloads.
     val downloadsDir =
         Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-    cmd += " -o $downloadsDir"
+    cmd += " -o ${shQuote(downloadsDir.path)}"
 
-    val stdoutCallback: CallbackList<String?> = object : CallbackList<String?>() {
-        override fun onAddElement(s: String?) {
-            onStdout(s ?: "")
-        }
-    }
-    val stderrCallback: CallbackList<String?> = object : CallbackList<String?>() {
-        override fun onAddElement(s: String?) {
-            onStderr(s ?: "")
-        }
-    }
-
-    // 2026-11-11 审计 P0：这里原来是 `Shell.getShell()` —— 那是 libsu 的**默认主壳**，
-    // 而全仓没有 `Shell.setDefaultBuilder`，所以它是一条普通 `sh`（非 root）。
-    // 用非 root shell 跑 `xudc boot-patch ... --partition` 必然 EACCES，而失败点
-    // 看起来像"写分区失败"，排查时会被引到错的方向。刷写必须走 root 壳。
-    val result = withNewRootShell {
-        val safe = rootSafeCommand(this, cmd)
-        newJob().add(safe).to(stdoutCallback, stderrCallback).exec()
-    }
-    lkmFile?.delete()
-    bootFile.delete()
+    val result = flashWithIO(cmd, onStdout, onStderr)
     return FlashResult(result, false)
+    } catch (e: Exception) {
+        val message = e.message ?: "Download/patch failed"
+        onStderr(message)
+        return FlashResult(-1, message, false)
+    } finally {
+        lkmFile?.delete()
+        bootFile.delete()
+    }
 }
 
 suspend fun probeRemoteBootPartitions(url: String): ProbeResult = withContext(Dispatchers.IO) {
     Log.d(TAG, "probe start: $url")
-    val channel = DataSourceChannel(newDownloadClient(), url)
+    DataSourceChannel(newDownloadClient(), url).use { channel ->
     Log.d(TAG, "probe connected, size=${channel.size()}")
     val magic = readMagic(channel)
     Log.d(TAG, "probe magic: $magic")
@@ -1024,6 +726,7 @@ suspend fun probeRemoteBootPartitions(url: String): ProbeResult = withContext(Di
     }
     Log.d(TAG, "probe partitions: ${result.partitions}")
     result
+    }
 }
 
 private fun newDownloadClient(): OkHttpClient {
@@ -1046,7 +749,7 @@ fun reboot(reason: String = "") {
         // 软重启走 ksud 的 UAPI；驱动不在应答时它一定失败并返回非 0，所以这里把结果
         // 记进日志而不是"叫了就算成功"（勾了"用软重启代替重启"却什么都没发生最糟）。
         val ok = execKsud("soft-reboot", true, true)
-        Log.i(TAG, "ksud soft-reboot result: $ok")
+        check(ok) { "Soft reboot failed" }
         return
     }
     rebootNow(reason)
@@ -1059,31 +762,19 @@ private fun rebootNow(reason: String) {
         // KEYCODE_POWER = 26, hide incorrect "Factory data reset" message
         ShellUtils.fastCmd(shell, "/system/bin/input keyevent 26")
     }
-    ShellUtils.fastCmd(shell, "/system/bin/svc power reboot $reason || /system/bin/reboot $reason")
+    check(ShellUtils.fastCmdResult(shell, "/system/bin/svc power reboot ${shQuote(reason)} || /system/bin/reboot ${shQuote(reason)}")) {
+        "Reboot request failed"
+    }
 }
 
-fun rootAvailable(): Boolean {
-    // 只认可安装链路实际持有的 root shell；主线程失败时由后台探测刷新状态。
-    // 不能在 Compose/广播线程同步轮询 su，也不能让另一进程的成功掩盖非 root 壳。
-    return getRootShell().isRoot
-}
+fun rootAvailable(): Boolean = KsuCli.rootAvailable()
 
-/**
- * 不需要 root 的 ksud 子命令。
- *
- * `boot-info current-kmi` 只是解析本机 uname（失败再退到 /proc/modules），
- * `boot-info supported-kmis` 列出的是编进 ksud 自己的 .ko 资产 —— 两条都是纯用户态
- * 计算，一个字都不碰 KSU 驱动。可是旧实现一律走 `getRootShell()`，而安装页最常是在
- * **还没有 root** 的时候打开的：于是 KMI 列表为空、设备 KMI 显示 Unknown、「确认」
- * 永久禁用 —— 用户被卡在一个"必须先有 root 才能回答"的问题上。
- *
- * 这里直接用本进程能执行的 `libxeccli.so`（应用自己的 nativeLibraryDir，libsu 建
- * root shell 用的也是这条路径），再退一步才用内核串自己拼。
- */
+
+/** Run metadata-only commands without coupling installation choices to root authorization. */
 private fun runKsudNoRoot(args: String): List<String> = runCatching {
     val shell = KsuCli.plainShell()
     shell.newJob()
-        .add("${getKsuDaemonPath()} $args")
+        .add("${shQuote(getKsuDaemonPath())} $args")
         .to(ArrayList(), null)
         .exec()
         .out
@@ -1102,36 +793,20 @@ suspend fun getSupportedKmis(): List<String> = withContext(Dispatchers.IO) {
 }
 
 suspend fun isAbDevice(): Boolean = withContext(Dispatchers.IO) {
-    val shell = getRootShell()
-    val cmd = "boot-info is-ab-device"
-    ShellUtils.fastCmd(shell, "${getKsuDaemonPath()} $cmd").trim().toBoolean()
+    runKsudNoRoot("boot-info is-ab-device").firstOrNull()?.toBooleanStrictOrNull() ?: false
 }
 
 suspend fun getDefaultPartition(): String = withContext(Dispatchers.IO) {
-    val shell = getRootShell()
-    if (shell.isRoot) {
-        val cmd = "boot-info default-partition"
-        ShellUtils.fastCmd(shell, "${getKsuDaemonPath()} $cmd").trim()
-    } else {
-        if (!Os.uname().release.contains("android12-")) "init_boot" else "boot"
-    }
+    runKsudNoRoot("boot-info default-partition").firstOrNull()
+        ?.takeIf { it in setOf("boot", "init_boot", "vendor_boot") } ?: "boot"
 }
 
 suspend fun getSlotSuffix(ota: Boolean): String = withContext(Dispatchers.IO) {
-    val shell = getRootShell()
-    val cmd = if (ota) {
-        "boot-info slot-suffix --ota"
-    } else {
-        "boot-info slot-suffix"
-    }
-    ShellUtils.fastCmd(shell, "${getKsuDaemonPath()} $cmd").trim()
+    runKsudNoRoot("boot-info slot-suffix" + if (ota) " --ota" else "").firstOrNull().orEmpty()
 }
 
 suspend fun getAvailablePartitions(): List<String> = withContext(Dispatchers.IO) {
-    val shell = getRootShell()
-    val cmd = "boot-info available-partitions"
-    val out = shell.newJob().add("${getKsuDaemonPath()} $cmd").to(ArrayList(), null).exec().out
-    out.filter { it.isNotBlank() }.map { it.trim() }
+    runKsudNoRoot("boot-info available-partitions").filter { it.isNotBlank() }.map { it.trim() }
 }
 
 fun isSepolicyValid(rules: String?): Boolean {
@@ -1140,7 +815,7 @@ fun isSepolicyValid(rules: String?): Boolean {
     }
     val shell = getRootShell()
     val result =
-        shell.newJob().add("${getKsuDaemonPath()} sepolicy check ${shQuote(rules)}").to(ArrayList(), null)
+        shell.newJob().add("${shQuote(getKsuDaemonPath())} sepolicy check ${shQuote(rules)}").to(ArrayList(), null)
             .exec()
     return result.isSuccess
 }
@@ -1148,7 +823,7 @@ fun isSepolicyValid(rules: String?): Boolean {
 fun getSepolicy(pkg: String): String {
     val shell = getRootShell()
     val result =
-        shell.newJob().add("${getKsuDaemonPath()} profile get-sepolicy ${shQuote(pkg)}").to(ArrayList(), null)
+        shell.newJob().add("${shQuote(getKsuDaemonPath())} profile get-sepolicy ${shQuote(pkg)}").to(ArrayList(), null)
             .exec()
     Log.i(TAG, "code: ${result.code}, out: ${result.out}, err: ${result.err}")
     return result.out.joinToString("\n")
@@ -1166,7 +841,7 @@ fun shQuote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
 fun setSepolicy(pkg: String, rules: String): Boolean {
     val shell = getRootShell()
     val result = shell.newJob()
-        .add("${getKsuDaemonPath()} profile set-sepolicy ${shQuote(pkg)} ${shQuote(rules)}")
+        .add("${shQuote(getKsuDaemonPath())} profile set-sepolicy ${shQuote(pkg)} ${shQuote(rules)}")
         .to(ArrayList(), null).exec()
     Log.i(TAG, "set sepolicy result: ${result.code}")
     return result.isSuccess
@@ -1174,26 +849,28 @@ fun setSepolicy(pkg: String, rules: String): Boolean {
 
 fun listAppProfileTemplates(): List<String> {
     val shell = getRootShell()
-    return shell.newJob().add("${getKsuDaemonPath()} profile list-templates").to(ArrayList(), null)
+    return shell.newJob().add("${shQuote(getKsuDaemonPath())} profile list-templates").to(ArrayList(), null)
         .exec().out
 }
 
 fun getAppProfileTemplate(id: String): String {
     val shell = getRootShell()
-    return shell.newJob().add("${getKsuDaemonPath()} profile get-template ${shQuote(id)}")
-        .to(ArrayList(), null).exec().out.joinToString("\n")
+    val result = shell.newJob().add("${shQuote(getKsuDaemonPath())} profile get-template ${shQuote(id)}")
+        .to(ArrayList(), null).exec()
+    check(result.isSuccess) { "Failed to read profile template $id" }
+    return result.out.joinToString("\n")
 }
 
 fun setAppProfileTemplate(id: String, template: String): Boolean {
     val shell = getRootShell()
-    val cmd = "${getKsuDaemonPath()} profile set-template ${shQuote(id)} ${shQuote(template)}"
+    val cmd = "${shQuote(getKsuDaemonPath())} profile set-template ${shQuote(id)} ${shQuote(template)}"
     return shell.newJob().add(cmd)
         .to(ArrayList(), null).exec().isSuccess
 }
 
 fun deleteAppProfileTemplate(id: String): Boolean {
     val shell = getRootShell()
-    return shell.newJob().add("${getKsuDaemonPath()} profile delete-template ${shQuote(id)}")
+    return shell.newJob().add("${shQuote(getKsuDaemonPath())} profile delete-template ${shQuote(id)}")
         .to(ArrayList(), null).exec().isSuccess
 }
 
@@ -1201,6 +878,7 @@ fun forceStopApp(packageName: String, userId: Int? = null) {
     val shell = getRootShell()
     val userArg = userId?.let { " --user $it" } ?: ""
     val result = shell.newJob().add("am force-stop$userArg ${shQuote(packageName)}").exec()
+    check(result.isSuccess) { "Failed to stop $packageName" }
     Log.i(TAG, "force stop $packageName result: $result")
 }
 
@@ -1211,6 +889,7 @@ fun launchApp(packageName: String, userId: Int? = null) {
         shell.newJob()
             .add("cmd package resolve-activity --brief$userArg ${shQuote(packageName)} | tail -n 1 | xargs cmd activity start-activity$userArg -n")
             .exec()
+    check(result.isSuccess) { "Failed to launch $packageName" }
     Log.i(TAG, "launch $packageName result: $result")
 }
 
@@ -1230,7 +909,7 @@ fun restartApp(packageName: String, userId: Int? = null) {
  */
 fun teeEngineEnabled(): Boolean {
     val result = runCatching {
-        getRootShell().newJob().add("${getKsuDaemonPath()} builtin tee")
+        getRootShell().newJob().add("${shQuote(getKsuDaemonPath())} builtin tee")
             .to(ArrayList(), null).exec()
     }.getOrNull() ?: return true
     return result.out.joinToString(" ").trim() != "off"
@@ -1238,11 +917,8 @@ fun teeEngineEnabled(): Boolean {
 
 fun applyTeeEngineSwitch(enabled: Boolean): Boolean = runCatching {
     getRootShell().newJob()
-        .add("${getKsuDaemonPath()} builtin tee ${if (enabled) "on" else "off"}")
+        .add("${shQuote(getKsuDaemonPath())} builtin tee ${if (enabled) "on" else "off"}")
         .to(ArrayList(), null).exec().isSuccess
 }.getOrDefault(false)
 
 /** 开关只在开机路径上读，改完必须重启才生效。 */
-fun rebootDevice() {
-    runCatching { getRootShell().newJob().add("reboot").exec() }
-}

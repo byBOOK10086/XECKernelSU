@@ -134,19 +134,13 @@ struct GenFsCon<'a> {
 
 #[derive(Debug)]
 enum PolicyStatement<'a> {
-    // "allow *source_type *target_type *class *perm_set"
-    // "deny *source_type *target_type *class *perm_set"
-    // "auditallow *source_type *target_type *class *perm_set"
-    // "dontaudit *source_type *target_type *class *perm_set"
+    // allow/deny/auditallow/dontaudit source target class permissions.
     NormalPerm(NormalPerm<'a>),
 
-    // "allowxperm *source_type *target_type *class operation xperm_set"
-    // "auditallowxperm *source_type *target_type *class operation xperm_set"
-    // "dontauditxperm *source_type *target_type *class operation xperm_set"
+    // allowxperm/auditallowxperm/dontauditxperm source target class operation xperms.
     XPerm(XPerm<'a>),
 
-    // "permissive ^type"
-    // "enforce ^type"
+    // permissive/enforce type.
     TypeState(TypeState<'a>),
 
     // "type type_name ^(attribute)"
@@ -379,9 +373,10 @@ enum PolicyObject {
     None,
 }
 
-impl TryFrom<&str> for PolicyObject {
-    type Error = anyhow::Error;
-    fn try_from(s: &str) -> Result<Self> {
+impl std::str::FromStr for PolicyObject {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self> {
         anyhow::ensure!(!s.as_bytes().contains(&0), "policy object contains NUL");
         if s == "*" {
             return Ok(Self::All);
@@ -390,10 +385,15 @@ impl TryFrom<&str> for PolicyObject {
     }
 }
 
-/// atomic statement, such as: allow domain1 domain2:file1 read;
-/// normal statement would be expand to atomic statement, for example:
-/// allow domain1 domain2:file1 { read write }; would be expand to two atomic statement
-/// allow domain1 domain2:file1 read;allow domain1 domain2:file1 write;
+impl TryFrom<&str> for PolicyObject {
+    type Error = anyhow::Error;
+
+    fn try_from(s: &str) -> Result<Self> {
+        s.parse()
+    }
+}
+
+/// One expanded policy command with its object arguments.
 #[allow(clippy::too_many_arguments)]
 #[derive(Debug, new)]
 struct AtomicStatement {

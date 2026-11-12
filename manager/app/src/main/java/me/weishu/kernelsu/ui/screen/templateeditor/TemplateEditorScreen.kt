@@ -1,6 +1,7 @@
 package me.weishu.kernelsu.ui.screen.templateeditor
 
 import android.widget.Toast
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -10,6 +11,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.dropUnlessResumed
+import me.weishu.kernelsu.ui.util.rememberRootOperation
+import me.weishu.kernelsu.ui.util.rootIO
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import me.weishu.kernelsu.R
 import me.weishu.kernelsu.toOrdinalList
 import me.weishu.kernelsu.toRootProfileFlags
@@ -21,6 +26,8 @@ import me.weishu.kernelsu.ui.viewmodel.TemplateViewModel
 fun TemplateEditorScreen(template: TemplateViewModel.TemplateInfo, readOnly: Boolean) {
     val navigator = LocalNavigator.current
     val context = LocalContext.current
+    val rootOperation = rememberRootOperation()
+    val writes = remember { Mutex() }
     val isCreation = template.id.isBlank()
     val autoSave = !isCreation
 
@@ -36,20 +43,30 @@ fun TemplateEditorScreen(template: TemplateViewModel.TemplateInfo, readOnly: Boo
     }
 
     fun finishEditing() {
-        if (!readOnly) {
-            navigator.setResult("template_edit", true)
-        } else {
-            navigator.pop()
+        rootOperation {
+            writes.withLock {
+                if (!readOnly) navigator.setResult("template_edit", true) else navigator.pop()
+            }
         }
     }
 
     fun updateTemplate(updatedTemplate: TemplateViewModel.TemplateInfo) {
-        if (autoSave) {
-            if (!saveTemplate(updatedTemplate)) {
-                return
+        currentTemplate = updatedTemplate
+        if (autoSave) rootOperation {
+            writes.withLock { check(rootIO { saveTemplate(updatedTemplate) }) { saveTemplateFailed } }
+        }
+    }
+
+    LaunchedEffect(currentTemplate.id) {
+        val id = currentTemplate.id
+        if (isCreation) rootOperation {
+            val exists = rootIO { isTemplateExist(id) }
+            if (currentTemplate.id == id) idErrorHint = when {
+                exists -> idConflictError
+                !isValidTemplateId(id) -> idInvalidError
+                else -> ""
             }
         }
-        currentTemplate = updatedTemplate
     }
 
     val uiState = TemplateEditorUiState(
@@ -61,29 +78,26 @@ fun TemplateEditorScreen(template: TemplateViewModel.TemplateInfo, readOnly: Boo
     )
 
     fun saveCurrentTemplate() {
-        when (idCheck(currentTemplate.id)) {
-            1 -> {
-                showToast(idConflictError)
-                return
+        val snapshot = currentTemplate
+        rootOperation {
+            when (rootIO { idCheck(snapshot.id) }) {
+                1 -> showToast(idConflictError)
+                2 -> showToast(idInvalidError)
+                else -> {
+                    check(rootIO { saveTemplate(snapshot, isCreation) }) { saveTemplateFailed }
+                    navigator.setResult("template_edit", true)
+                }
             }
-
-            2 -> {
-                showToast(idInvalidError)
-                return
-            }
-        }
-
-        if (saveTemplate(currentTemplate, isCreation)) {
-            navigator.setResult("template_edit", true)
-        } else {
-            showToast(saveTemplateFailed)
         }
     }
 
     val actions = TemplateEditorActions(
         onBack = dropUnlessResumed { finishEditing() },
         onDelete = {
-            if (deleteAppProfileTemplate(currentTemplate.id)) {
+            rootOperation {
+                writes.withLock {
+                    check(rootIO { deleteAppProfileTemplate(currentTemplate.id) }) { saveTemplateFailed }
+                }
                 navigator.setResult("template_edit", true)
             }
         },
@@ -92,13 +106,6 @@ fun TemplateEditorScreen(template: TemplateViewModel.TemplateInfo, readOnly: Boo
             updateTemplate(currentTemplate.copy(name = value))
         },
         onIdChange = { value ->
-            idErrorHint = if (isTemplateExist(value)) {
-                idConflictError
-            } else if (!isValidTemplateId(value)) {
-                idInvalidError
-            } else {
-                ""
-            }
             currentTemplate = currentTemplate.copy(id = value)
         },
         onAuthorChange = { value ->

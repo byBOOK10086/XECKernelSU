@@ -24,13 +24,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
 
       - name: python
         run: python3 --version
 
       - name: quality gates
+        env:
+          QUALITY_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before || 'HEAD^' }}
         run: python3 scripts/check_quality.py
+
+      - name: installer pure regression tests
+        run: |
+          rustc --edition 2024 --test userspace/ksud/tests/audit_pure.rs -o "$RUNNER_TEMP/audit-pure"
+          "$RUNNER_TEMP/audit-pure"
 
       - name: shell syntax of the feature scripts
         # Two interpreters on purpose: the on-device scripts are `#!/system/bin/sh`

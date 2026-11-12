@@ -116,6 +116,7 @@ android {
         }
         jniLibs {
             useLegacyPackaging = true
+            keepDebugSymbols += "**/libxeccli.so"
             excludes += "lib/*/libandroidx.graphics.path.so"
         }
     }

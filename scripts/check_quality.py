@@ -7,7 +7,7 @@ because every round added code and nothing ever failed when a boundary was
 crossed. These checks make the boundaries mechanical: a violation fails CI
 instead of being noticed six months later.
 
-Four checks, each with a documented escape hatch:
+Core checks (with audit contracts and baseline monotonicity enforced below):
 
   1. file size      - a file may not exceed its recorded budget. Budgets live in
                       scripts/quality-baseline.json: an oversized file is allowed
@@ -25,9 +25,13 @@ Run locally:  python scripts/check_quality.py
 Exit code 0 = all gates pass.
 """
 import json
+import os
 import pathlib
 import re
+import subprocess
 import sys
+
+from check_audit_contracts import check_contracts
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 BASELINE = ROOT / "scripts" / "quality-baseline.json"
@@ -66,14 +70,50 @@ def count_lines(p):
         return 0
 
 
+def budgets(document):
+    """Accept historical bare integers and current reason-bearing entries."""
+    result = {}
+    for key, value in document.get("oversized", {}).items():
+        lines = value["lines"] if isinstance(value, dict) else value
+        if not isinstance(lines, int) or isinstance(lines, bool) or lines < 1:
+            raise ValueError("invalid line budget for " + key)
+        result[key] = lines
+    return result
+
+
+def check_budget_monotonicity():
+    """Compare with history, not a re-pinnable copy of the working baseline."""
+    ref = os.environ.get("QUALITY_BASE_REF", "HEAD")
+    # GitHub sends an all-zero 'before' SHA on a new branch. It is not a Git
+    # object; use the parent, and fail closed when that history is unavailable.
+    if ref and re.fullmatch(r"0+", ref):
+        ref = "HEAD^"
+    try:
+        if not ref.strip():
+            raise ValueError("QUALITY_BASE_REF must name a comparison revision")
+        previous = subprocess.run(
+            ["git", "show", ref + ":scripts/quality-baseline.json"], cwd=ROOT,
+            text=True, encoding="utf-8", capture_output=True, check=True)
+        old = budgets(json.loads(previous.stdout))
+        current = json.loads(BASELINE.read_text(encoding="utf-8"))
+        new = budgets(current)
+        if current.get("max_lines_for_new_files", MAX_LINES) != MAX_LINES:
+            problems.append("quality baseline: new-file ceiling must remain %d" % MAX_LINES)
+        for key, budget in new.items():
+            if key not in old:
+                problems.append("%s: new oversized budget %d is forbidden; split the file"
+                                % (key, budget))
+            elif budget > old[key]:
+                problems.append("%s: oversized budget increased from %d to %d; re-pinning is forbidden"
+                                % (key, old[key], budget))
+    except (OSError, ValueError, KeyError, TypeError, subprocess.CalledProcessError) as exc:
+        detail = exc.stderr.strip() if isinstance(exc, subprocess.CalledProcessError) else str(exc)
+        problems.append("cannot verify quality baseline against %r: %s; fetch the comparison history"
+                        % (ref, detail))
+
+
 def check_file_sizes():
-    baseline = {}
-    if BASELINE.exists():
-        raw = json.loads(BASELINE.read_text(encoding="utf-8")).get("oversized", {})
-        # entries are {"lines": n, "reason": "..."}; accept a bare int too so an
-        # older baseline keeps working
-        for key, value in raw.items():
-            baseline[key] = value["lines"] if isinstance(value, dict) else int(value)
+    baseline = budgets(json.loads(BASELINE.read_text(encoding="utf-8"))) if BASELINE.exists() else {}
     for p in source_files():
         n = count_lines(p)
         key = rel(p)
@@ -81,8 +121,8 @@ def check_file_sizes():
         if budget is None:
             if n > MAX_LINES:
                 problems.append(
-                    "%s: %d lines (limit %d). Split it, or record a budget in "
-                    "scripts/quality-baseline.json with a reason." % (key, n, MAX_LINES))
+                    "%s: %d lines (limit %d). Split it; new oversized budgets are forbidden."
+                    % (key, n, MAX_LINES))
         elif n > budget:
             problems.append(
                 "%s: %d lines, budget %d - a budgeted file may shrink, not grow."
@@ -262,7 +302,9 @@ def check_package_identity():
 
 
 def main():
+    check_budget_monotonicity()
     check_file_sizes()
+    problems.extend(check_contracts(ROOT))
     check_locales()
     check_workflows()
     check_swallowed_errors()

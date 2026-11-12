@@ -56,6 +56,7 @@ class HomeViewModel(
 
     /** 当前在跑的那一轮刷新；用于重入合并（见 [refresh]）。 */
     private var refreshJob: Job? = null
+    private var refreshPending = false
 
     init {
         // 首帧只是"占位"，真正的状态靠这一轮拿到（在 IO 线程上）。
@@ -78,10 +79,11 @@ class HomeViewModel(
     }
 
     fun refresh() {
-        // 2026-11-09：首页、工具箱、下拉刷新、顶栏刷新会同时打进来；以前每次调用都
-        // 新开一个协程，几条探测（root shell / 更新检查）并发跑会互相覆盖状态流。
-        // 这里做**重入合并**：已经有一轮在跑就忽略新请求 —— 一轮跑完状态一定比旧的新。
-        if (refreshJob?.isActive == true) return
+        // Coalesce refreshes, then replay once if authorization changes during an active pass.
+        if (refreshJob?.isActive == true) {
+            refreshPending = true
+            return
+        }
         refreshJob = viewModelScope.launch {
             _uiState.update { it.copy(isRefreshing = true) }
             try {
@@ -107,6 +109,11 @@ class HomeViewModel(
 
                 // 失败也要收指示器：宁可让用户看到"没刷出来"，也不要一直转圈。
                 _uiState.update { it.copy(isRefreshing = false) }
+                refreshJob = null
+                if (refreshPending) {
+                    refreshPending = false
+                    refresh()
+                }
             }
         }
     }
@@ -164,7 +171,7 @@ class HomeViewModel(
         val ksuVersion = if (isManager) Natives.version else null
         val kernelUAPIVersion = if (isManager) Natives.kernelUAPIVersion else null
         val managerUAPIVersion = Natives.managerUAPIVersion
-        val lkmMode = ksuVersion?.let { if (kernelVersion.isGKI()) Natives.isLkmMode else null }
+        val lkmMode = ksuVersion?.let { Natives.isLkmMode }
         val isRootAvailable = deep && rootAvailable()
         // 守护组件只对 root 可见（/data/adb 目录权限），app 进程直接 stat 永远是
         // false，必须走 root shell；未激活时跳过探测避免无谓的 shell 调用。

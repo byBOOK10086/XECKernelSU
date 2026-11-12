@@ -10,7 +10,6 @@ anyhow.workspace = true
 clap = { version = "4", features = ["derive"] }
 const_format = "0.2"
 log.workspace = true
-env_logger = { version = "0.11", default-features = false }
 rust-embed = { version = "8", features = [
     "debug-embed",
     "compression", # must clean build after updating binaries
@@ -56,6 +55,9 @@ getopts = "0.2"
 ksuinit = { path = "../ksuinit" }
 adb_client = { git = "https://github.com/KernelSU2/adb_client" }
 prop-rs-android = { git = "https://github.com/KernelSU2/ksu_props", rev = "ddb6ee7294467f7f25bad2118e9e24eee104144b" }
+
+[target.'cfg(not(target_os = "android"))'.dependencies]
+env_logger = { version = "0.11", default-features = false }
 
 [build-dependencies]
 bindgen = "0.73"

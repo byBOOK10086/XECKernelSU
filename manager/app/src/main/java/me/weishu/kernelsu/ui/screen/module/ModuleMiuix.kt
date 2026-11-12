@@ -109,6 +109,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import me.weishu.kernelsu.R
+import me.weishu.kernelsu.ui.util.rememberRootOperation
+import me.weishu.kernelsu.ui.util.rootIO
 import me.weishu.kernelsu.data.model.Module
 import me.weishu.kernelsu.data.model.ModuleUpdateInfo
 import me.weishu.kernelsu.data.repository.isSoftRebootPreferred
@@ -233,6 +235,7 @@ fun ModulePagerMiuix(
     }
 
     val scope = rememberCoroutineScope()
+    val rootOperation = rememberRootOperation()
     val snackbarJob = remember { mutableStateOf<Job?>(null) }
     ObserveAsEvents(moduleEvent) { event ->
         when (event) {
@@ -241,10 +244,8 @@ fun ModulePagerMiuix(
             }
 
             is ModuleEffect.SnackBar -> {
-                // Cancel the previous reboot snackbar so a new one replaces it instead of queueing
                 snackbarJob.value?.cancel()
                 snackbarHostState.newestSnackbarData()?.dismiss()
-                // Soft reboot keeps the jailbreak and still applies module changes
                 val softReboot = isSoftRebootPreferred()
                 snackbarJob.value = scope.launch {
                     val result = snackbarHostState.showSnackbar(
@@ -253,7 +254,7 @@ fun ModulePagerMiuix(
                         duration = SnackbarDuration.Long,
                     )
                     if (result == SnackbarResult.ActionPerformed) {
-                        reboot(if (softReboot) "soft_reboot" else "")
+                        rootOperation { rootIO { reboot(if (softReboot) "soft_reboot" else "") } }
                     }
                 }
             }
@@ -275,8 +276,6 @@ fun ModulePagerMiuix(
 
     val loadingDialog = rememberLoadingDialog()
 
-    // 长按 → 全局面板状态（面板由 MainActivity 根层渲染）。动作闭包在这里
-    // 捕获 ModuleActions/ViewModel，面板展示期间保持有效。
     fun showModuleSheet(module: Module) {
         ModuleSheetState.show(
             module = module,
@@ -299,9 +298,6 @@ fun ModulePagerMiuix(
         )
     }
 
-    // 长按操作面板改为全局状态 + 根层渲染（MainActivity）：页面级渲染会被
-    // pager 翻页几何带走/错位（长按后不出现、切到相邻页才冒出来、按钮点不中）。
-    // 这里只负责把 Module 和当时的动作闭包存进 ModuleSheetState。
     val navigator = LocalNavigator.current
 
     val mainPagerState = LocalMainPagerState.current
@@ -316,7 +312,6 @@ fun ModulePagerMiuix(
     Scaffold(
         containerColor = Color.Transparent,
         topBar = {
-            // 灵动岛：顶栏本身就是岛的展开态（无玻璃底）；上滑收缩成岛。
             IslandTopBar(
                 islandTitle = stringResource(R.string.module),
                 islandLive = stringResource(
@@ -394,9 +389,6 @@ fun ModulePagerMiuix(
                                 modifier = Modifier
                                     .alpha(if (searchStatus.isCollapsed()) 1f else 0f)
                                     .onGloballyPositioned { coordinates ->
-                                        // Freeze the collapsed anchor while expanding/collapsing.
-                                        // Using the live scroll position during exit makes the result
-                                        // layer chase the list and visibly jump outside the frame.
                                         if (searchStatus.isCollapsed()) {
                                             with(density) {
                                                 val newOffsetY = coordinates.positionInWindow().y.toDp()
@@ -530,7 +522,6 @@ fun ModulePagerMiuix(
                 modifier = if (uiState.installButtonVisible) {
                     Modifier
                 } else {
-                    // No FAB slot to stack above: keep the snackbar clear of the main bottom bar.
                     Modifier.padding(bottom = bottomInnerPadding + 20.dp)
                 },
             )
@@ -564,8 +555,6 @@ fun ModulePagerMiuix(
                 contentPadding = contentPadding,
             ) {
                 if (modules.isEmpty()) {
-                    // 空态必须是可滚动容器：PullToRefresh 靠子容器的 nested scroll
-                    // 分发下拉手势，普通 Box 会把手势吞成死区（下拉永远没反应）。
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -578,8 +567,6 @@ fun ModulePagerMiuix(
                             ),
                         contentAlignment = Alignment.Center
                     ) {
-                        // The refresh indicator doubles as the first-load hint;
-                        // only announce emptiness once loading has finished.
                         if (uiState.hasLoaded) {
                             Text(
                                 stringResource(R.string.module_empty),
@@ -853,8 +840,6 @@ fun ModuleItem(
     val hasUpdate = updateUrl.isNotEmpty()
     val hapticFeedback = LocalHapticFeedback.current
 
-    // 平台标准点击/长按手势（见卡片上的 combinedClickable）：按压进度条按
-    // longPressTimeout（默认 400ms）走满，长按触发即满格。
     val cardInteraction = remember { MutableInteractionSource() }
     val isPressed by cardInteraction.collectIsPressedAsState()
     val progress = remember { Animatable(0f) }
@@ -882,14 +867,11 @@ fun ModuleItem(
         label = "cardGlow",
     )
 
-    // DIY 背景（长按面板「背景」按钮设置）：按模块 id 取，组合内可订阅，设置后即时生效。
     val backgroundUri = ModuleBackgrounds.backgroundOf(LocalContext.current, module.id)
 
     Box(
         modifier = Modifier
             .padding(horizontal = 16.dp)
-            // 卡间距 20 → 8dp：列表从「一张张各自为政的卡」变成一条连续滚动的卡带，
-            // 一屏多看到一张卡；首卡上方那 6dp 在 LazyColumn 的 contentPadding.top 里，不动。
             .padding(bottom = 8.dp)
             .scale(scale)
             .dropShadow(
@@ -907,9 +889,6 @@ fun ModuleItem(
                     color = glowColor,
                 ),
             )
-            // 真液态玻璃卡体：neon.cardBg 作为玻璃介质色（深色 60% 夜蓝、浅色 92% 白，
-            // 经 clearGlass 着色器的 media 模型混合，任何透明度都不会糊死折射）。
-            // rim 关掉——neon 自带一圈动效描边，再叠玻璃亮边就成双层。
             .xGlassBody(
                 backdrop = null,
                 shape = Xc.shapes.sm,
@@ -918,10 +897,6 @@ fun ModuleItem(
             )
             .border(width = 1.dp, color = borderColor, shape = Xc.shapes.sm)
             .combinedClickable(
-                // 平台标准语义：纹丝不动按住 longPressTimeout（默认 400ms）弹操作面板；
-                // 指头漂出 touchSlop 则长按取消、父级 HorizontalPager 正常翻页。
-                // 点击仍是打开 WebUI。此前自造 1000ms 计时器与父级同阈竞速，
-                // 微动必输、页面翻走，长按面板弹不出来。
                 interactionSource = cardInteraction,
                 indication = null,
                 onClick = { if (module.hasWebUi) onOpenWebUi() },
@@ -931,10 +906,6 @@ fun ModuleItem(
                 },
             )
     ) {
-        // DIY 背景层：图铺满整张卡（圆角由 ModuleCardBackdrop 按 shape 裁），画在玻璃
-        // 卡体之上、内容之下；scrim 见 ModuleBackgrounds.cardImageScrim —— 中段全透让
-        // 图当主角，只在标题行与底部压介质色保字（用户硬性要求「不能掩盖字体」）。
-        // 有背景时 modifier 上那圈描边会被图片盖住，这里再补一圈同色动效描边浮在最上面。
         if (backgroundUri != null) {
             ModuleCardBackdrop(
                 uri = backgroundUri,
@@ -952,8 +923,6 @@ fun ModuleItem(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                // 卡内竖向 18 → 14dp：配合 8dp 卡间距，单卡高度再省 8dp；
-                // 横向 16dp 不动（文字左缘与入口卡对齐），整卡仍是点击区（≥44dp）。
                 .padding(horizontal = 16.dp, vertical = 14.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -987,12 +956,6 @@ fun ModuleItem(
                     onCheckedChange = {
                         if (it != module.enabled) onCheckChanged(it)
                     },
-                    // 四种状态色全部显式给：此前只覆盖了两个 thumb，轨道沿用 Miuix 默认的
-                    // primary / secondary，在深色霓虹卡片（半透明藏青）上几乎与卡片同色，
-                    // 用户报「深色模式看不清开关」就是这个原因。
-                    // 取色规则：轨道比卡片亮/暗一档（深档 34% 白，浅档 34% 的 #5B6478）；
-                    // 滑块与轨道反相（深档近白 #E0E7FF、浅档近黑 #1E1B4B）；开启态用青色轨道
-                    // + 纯白滑块。这样开/关两态在两种主题下都一眼可辨。
                     colors = SwitchDefaults.switchColors(
                         checkedThumbColor = Color.White,
                         checkedTrackColor = neon.accentCyan,

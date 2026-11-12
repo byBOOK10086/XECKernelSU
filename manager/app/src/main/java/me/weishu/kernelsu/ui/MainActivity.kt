@@ -57,6 +57,8 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
@@ -144,11 +146,6 @@ import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
-/**
- * 壁纸池：亮色原版与深色适配版各四张（`bg_light_1..4` / `bg_dark_1..4`，暗版由
- * 亮版自适应压暗到同一亮度带生成）。每次冷启动随机抽一张，深浅模式只决定取
- * 哪一档调色，不改变抽中的那张。
- */
 private const val WALLPAPER_COUNT = 4
 
 
@@ -179,19 +176,29 @@ open class MainActivity : ComponentActivity() {
         val splashScreen = installSplashScreen()
         splashStartedAt = SystemClock.uptimeMillis()
         super.onCreate(savedInstanceState)
-        // 隐身入口自愈：第一版曾误停基础 MainActivity 组件（图标点击弹回桌面、
-        // 内部重启流程全断），这里无条件拉回 ENABLED。XecMainActivity 继承本类，
-        // 从图标打开也会走到这里。
         me.weishu.kernelsu.privilege.StealthEntrance.repair(this)
-        // 自定义背景的解码只用到应用上下文：拿 Activity 会让 produceState 的闭包
-        // 跨重组持有 Activity 引用，转屏时白留一份窗口。
         val appContext = applicationContext
         splashScreen.setKeepOnScreenCondition {
             !contentReady || SystemClock.uptimeMillis() - splashStartedAt < splashAnimationDurationMs
         }
 
         val isManager = Natives.isManager
-        if (isManager && Natives.kernelUAPIVersion == Natives.managerUAPIVersion) install()
+        if (isManager && Natives.kernelUAPIVersion == Natives.managerUAPIVersion) {
+            lifecycleScope.launch(Dispatchers.IO) {
+                try {
+                    install()
+                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                    throw cancelled
+                } catch (error: Exception) {
+                    android.util.Log.e("KernelSU", "Manager install failed", error)
+                    withContext(Dispatchers.Main) {
+                        android.widget.Toast.makeText(applicationContext,
+                            "${getString(me.weishu.kernelsu.R.string.permanent_failed)} ${error.message ?: error.javaClass.simpleName}",
+                            android.widget.Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        }
 
         if (savedInstanceState == null) intent?.let { intentChannel.trySend(it) }
 
@@ -234,47 +241,23 @@ open class MainActivity : ComponentActivity() {
                 LocalNavigator provides navigator,
                 LocalDensity provides density,
                 LocalColorMode provides appSettings.colorMode.value,
-                // MIUI 8 全盘替换：界面语言从"流体玻璃"改成"白色分组面板 + 1px 分隔线"，
-                // 模糊不再参与渲染。设置里的开关仍然保留（写进状态、读得出来），只是这一层
-                // 不再把它下发给任何玻璃表面 —— 否则用户随手一开，整个界面又回到旧的形态。
                 LocalEnableBlur provides false,
                 LocalEnableFloatingBottomBar provides uiState.enableFloatingBottomBar,
                 LocalEnableFloatingBottomBarBlur provides uiState.enableFloatingBottomBarBlur,
                 LocalEnableNavigationBadge provides uiState.enableNavigationBadge,
             ) {
-                // XcTheme 必须包在 KernelSUTheme 外面：miuix 主题内部会重新下发
-                // 一次 LocalIndication，圆角高光只有在它之内才覆盖得住。
                 XcTheme(
                     isDark = isInDarkTheme(),
                     isAmoled = appSettings.colorMode.isAmoled,
                     theme = uiState.theme,
-                    // 设置里的「组件透明」：0f = 全透明（只留 1px 描边与文字），
-                    // 1f = 不透明。它乘在主题 `XcGlass.surfaceAlpha` 上面，
-                    // 所以主题自带的不透明度不会被这个开关抹掉。
                     componentAlpha = if (uiState.componentTransparent) 0f else 1f,
                 ) {
-                    // 窗口底色跟"应用解析后的主题"走，不能交给 values / values-night：
-                    // 资源里的那套只认系统深浅，而本应用的主题是用户在设置里单独选的。
-                    // 系统深色 + 应用浅色时，窗口底会停在 values-night 的近黑
-                    // (#0B0B0E)，页面转场、首帧、任何一层没被 Compose 盖住的边角
-                    // 露出来就是一圈黑边——这是淡入淡出转场看起来"黑框"的根源。
-                    // 这里每次重组都把窗口底刷成当前档的纸色，资源值只当兜底。
                     val windowBackdrop = Xc.colors.backdrop
                     SideEffect {
                         window.setBackgroundDrawable(ColorDrawable(windowBackdrop.toArgb()))
                     }
                     KernelSUTheme(appSettings = appSettings) {
-                        // 对话框的玻璃要采"整个窗口"的图层，所以 backdrop 只能建在根层：
-                        // 各页自己的 rememberBlurBackdrop 只覆盖那一页，而对话框宿主是
-                        // 5 个 nav entry（Main / Home / SuperUser / Module / Settings）
-                        // 共用的，拿不到任何单独一页的采样源。
-                        // MIUI 8 换装后玻璃消费方已全部置 null（`LocalXDialogBackdrop` / `LocalWallpaperBackdrop`），
-                        // 再按用户开关建 backdrop 只会白录一层帧。这里直接关掉，省掉每次重绘的录制开销。
                         val dialogBackdrop = rememberBlurBackdrop(false)
-                        // 壁纸：每次冷启动随机抽一张（rememberSaveable 保证转屏/重建
-                        // Activity 不重抽）；深浅模式只决定取这张的亮色原版还是深色
-                        // 适配版——"此次进入用哪张"与"该不该调色"是两个独立决定，
-                        // 会话中途切换模式时壁纸保持同一张、只换调色档。
                         val wallpaperIndex = rememberSaveable {
                             mutableIntStateOf(Random.nextInt(WALLPAPER_COUNT))
                         }
@@ -286,27 +269,15 @@ open class MainActivity : ComponentActivity() {
                                 BG_LIGHT_DRAWABLES[wallpaperIndex.intValue]
                             }
                         }
-                        // 自定义背景：按当前深浅档取对应槽位，空串表示该档仍然走内置随机池。
-                        // 抽签结果 wallpaperIndex 与"用不用自定义图"是两个独立决定——切深浅模式
-                        // 只换调色档，内置池抽中的那张不变，这一点对自定义图同样成立（两档各一张）。
                         val customWallpaperName = if (wallpaperDark) {
                             uiState.wallpaperDark
                         } else {
                             uiState.wallpaperLight
                         }
-                        // 纯色档（纯白 / 纯黑）：不落盘也不解码，直接铺一层纯色。选了纯色就是
-                        // "这一档固定住"——内置池的抽签结果仍然存在，但不再参与绘制，也就是
-                        // 用户要的"不再在背景池里轮换"。
                         val solidWallpaper = remember(customWallpaperName) {
                             WallpaperStore.solidArgb(customWallpaperName)?.let { Color(it) }
                         }
-                        // 背景模糊：百分比 → 解码最长边（见 WallpaperStore.displayEdgeFor）。
-                        // 刻意不用 Modifier.blur：根层壁纸是全应用玻璃的采样源，RenderEffect
-                        // 会让每次采样都重跑全屏模糊，滚动直接掉帧；降采样只在换图/松手时算一次。
                         val wallpaperEdge = WallpaperStore.displayEdgeFor(uiState.wallpaperBlur)
-                        // 解码放在 IO 线程：produceState 的初始值是 null，也就是先显示内置壁纸，
-                        // 解码完成后换成自定义图。冷启动时这一跳被 splash 盖住；页面内换图
-                        // 也只是瞬间切换，不会卡住主线程。
                         val customWallpaper by produceState<ImageBitmap?>(
                             initialValue = null,
                             key1 = customWallpaperName,
@@ -323,8 +294,6 @@ open class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
-                        // 内置池那张同样按模糊强度降采样解码；不模糊时保持 null，继续走
-                        // painterResource（省掉一张全尺寸位图，行为与改动前一致）。
                         val builtinWallpaper by produceState<ImageBitmap?>(
                             initialValue = null,
                             key1 = wallpaperRes,
@@ -342,21 +311,11 @@ open class MainActivity : ComponentActivity() {
                                 }
                             }
                         }
-                        // 壁纸采样源：挂在下面壁纸 Image 上的独立 backdrop。卡体、按钮、面板
-                        // 都通过 [LocalWallpaperBackdrop] 采它——壁纸的录制子树里只有壁纸，
-                        // 谁采都不会自采样成环（页面级 backdrop 录的是滚动内容，卡体在里面，
-                        // 采它会成环）。跟随同一个 enableBlur 开关，关模糊即全应用退实色档。
-                        // MIUI 8 换装后玻璃消费方已全部置 null（`LocalXDialogBackdrop` / `LocalWallpaperBackdrop`），
-                        // 再按用户开关建 backdrop 只会白录一层帧。这里直接关掉，省掉每次重绘的录制开销。
                         val wallpaperBackdrop = rememberBlurBackdrop(false)
                         val dialogHostState = remember { XDialogHostState() }
 
                         CompositionLocalProvider(
                             LocalXDialogHost provides dialogHostState,
-                            // MIUI 8：不再下发任何"玻璃采样源"。两个 backdrop 置空之后，
-                            // XGlassSurface 的 active 分支（glassEnabled && backdrop != null）
-                            // 自动落到 `background(solidTint) + 1px rim` 那一支 —— 88 处
-                            // 玻璃卡体一次性变成白底分组面板，不用逐个改调用点。
                             LocalXDialogBackdrop provides null,
                             LocalWallpaperBackdrop provides null,
                         ) {
@@ -370,39 +329,12 @@ open class MainActivity : ComponentActivity() {
                                 }
 
                                 val navDisplay = @Composable {
-                                    // 转场只能在这里先算好：transitionSpec 的 lambda 不是
-                                    // @Composable，里面调不了 xcPageEnter()（它要读 density
-                                    // 才能把 8dp 换算成像素）。外层捕获是唯一干净的接法。
                                     val pageEnter = xcPageEnter()
                                     val pageExit = xcPageExit()
                                     NavDisplay(
                                         backStack = navigator.backStack,
-                                        // 2026-11-11 第三轮：显式接管转场。
-                                        // 不传的话走 miuix-navigation3-ui 的默认值 ——
-                                        // 500ms 横向滑动 + 背景压暗 0.5 + 圆角裁切，
-                                        // 三个数都不是我们的设计稿。设计要求是
-                                        // 220–300ms + 6–10dp 的**纵向**位移。
                                         transitionSpec = { pageEnter togetherWith pageExit },
                                         popTransitionSpec = { pageEnter togetherWith pageExit },
-                                        // 2026-11-11：必须显式关掉库默认的转场特效。
-                                        //
-                                        // `NavDisplayTransitionEffects.Default` 的四个默认值
-                                        // （字节码实证，见 NavDisplayTransitionEffects 的
-                                        // 掩码构造器）是：
-                                        //   enableCornerClip = true
-                                        //   dimAmount = 0.5f   ← 一层 50% 的黑纱
-                                        //   blockInputDuringTransition = true
-                                        //   popDirectionFollowsSwipeEdge = false
-                                        // 这层黑纱的边界 = NavDisplay 的场景容器 = 页面内容区，
-                                        // 生命周期 = 转场时长。用户报的「每次切页都出现、
-                                        // 黑色区域跟随内容区、不到 1 秒自己消失」就是它。
-                                        //
-                                        // 之前库默认还是 500ms 横滑，黑纱被"内容在横向移动"
-                                        // 掩盖成景深；换成 260ms 淡入淡出之后没有任何位移线索，
-                                        // 它就显形为一块静止的黑矩形 + 旧页残影。
-                                        //
-                                        // 只关黑纱与圆角裁切，**保留** blockInputDuringTransition：
-                                        // 转场期间挡输入是正确行为，去掉会让快速连点穿透到新页面。
                                         transitionEffects = NavDisplayTransitionEffects(
                                             enableCornerClip = false,
                                             dimAmount = 0f,
@@ -455,9 +387,6 @@ open class MainActivity : ComponentActivity() {
                                 Box(
                                     modifier = Modifier
                                         .fillMaxSize()
-                                        // 根层 backdrop 的采样源 = 壁纸 + 全部导航内容。
-                                        // 对话框**不**放进这个 Box，免得把自己也采进采样源、
-                                        // 出现自采样把背景糊成一团。
                                         .then(
                                             if (dialogBackdrop != null) {
                                                 Modifier.layerBackdrop(dialogBackdrop)
@@ -466,13 +395,6 @@ open class MainActivity : ComponentActivity() {
                                             }
                                         ),
                                 ) {
-                                    // 壁纸这一张就是全应用液态玻璃的折射源（下面挂的
-                                    // wallpaperBackdrop 由 LocalWallpaperBackdrop 下发）。
-                                    // 自定义图与内置图只换"画哪张"，采样源、缩放方式、
-                                    // 底的 0.80 半透明叠加全部沿用，玻璃观感不会两套逻辑。
-                                    // 壁纸这一层就是全应用玻璃的采样源；模糊已经在解码阶段做完
-                                    // （解小 + 放大绘制），所以这里不再挂任何 RenderEffect——
-                                    // 采样端每帧拿到的就是"看起来糊掉"的那张图。
                                     val wallpaperModifier = Modifier
                                         .fillMaxSize()
                                         .then(
@@ -486,12 +408,10 @@ open class MainActivity : ComponentActivity() {
                                     val customWallpaperBitmap = customWallpaper
                                     val builtinWallpaperBitmap = builtinWallpaper
                                     when {
-                                        // 纯色档优先：它就是"这一档的最终答案"，内置池不再参与。
                                         currentSolid != null -> Box(
                                             modifier = wallpaperModifier.background(currentSolid)
                                         )
 
-                                        // 自定义图（用户在壁纸页选过的那张）。
                                         customWallpaperBitmap != null -> Image(
                                             bitmap = customWallpaperBitmap,
                                             contentDescription = null,
@@ -499,10 +419,6 @@ open class MainActivity : ComponentActivity() {
                                             contentScale = ContentScale.Crop,
                                         )
 
-                                        // 内置壁纸池：**空名字就是"内置"**（壁纸页的缩略图也写着
-                                        // 「内置」），所以槽位没设过、或用户点过"清除"都落到这里。
-                                        // 2026-11-08 曾在这里插过一支平色底把内置池整个顶掉，
-                                        // 结果是壁纸页选"内置"点了没反应 —— 已回退，不再拦。
                                         builtinWallpaperBitmap != null -> Image(
                                             bitmap = builtinWallpaperBitmap,
                                             contentDescription = null,
@@ -510,8 +426,6 @@ open class MainActivity : ComponentActivity() {
                                             contentScale = ContentScale.Crop,
                                         )
 
-                                        // 内置图还没解码完的那一两帧：直接画资源原图，
-                                        // 不留白底闪一下（也兜住解码失败的情况）。
                                         else -> Image(
                                             painter = painterResource(wallpaperRes),
                                             contentDescription = null,
@@ -519,35 +433,19 @@ open class MainActivity : ComponentActivity() {
                                             contentScale = ContentScale.Crop,
                                         )
                                     }
-                                    // 扁平方案 A：整页实色底，壁纸层不再参与视觉。
-                                    // 画在壁纸之后 = 盖住它；壁纸的解码链路保留（设置里
-                                    // 那套入口还在），下一批连同设置项一起清理。
                                     Box(
                                         modifier = Modifier
                                             .fillMaxSize()
                                             .background(Xc.colors.backdrop),
                                     )
-                                    // 2026-11-10：导航宿主自己也铺一层实色底。页面过渡是
-                                    // 交叉淡入淡出，两条 entry 同时半透明时，露出来的必须是
-                                    // 纸色 —— 以前露的是 windowBackground(#0B0F10)，看起来
-                                    // 就是每次转场都闪一圈黑框。
                                     Scaffold(containerColor = Xc.colors.backdrop) {
                                         navDisplay()
                                     }
                                 }
 
-                                // 同窗口浮层靠绘制顺序盖住内容，所以必须排在 Box 之后；
-                                // 排在这里才有意义——此时根层 backdrop 里已经录好了
-                                // "对话框背后的那一帧"。
-                                //
-                                // 模块长按操作面板也挂在根层（视口固定）：它此前渲染在
-                                // pager 第 2 页的子树里，会被翻页几何带走/错位——表现为
-                                // "长按后不出现、切到相邻页才冒出来、按钮点不中"。
-                                // 根层渲染保证面板永远盖在"当前可见的模块页"上。
                                 ModuleActionSheet(
                                     module = ModuleSheetState.module,
                                     updateUrl = ModuleSheetState.updateUrl,
-                                    // MIUI 8：面板改成实色 + 1px 描边，不再采玻璃
                                     backdrop = null,
                                     bottomInnerPadding = bottomBarClearPadding(),
                                     onDismissRequest = { ModuleSheetState.hide() },
@@ -577,7 +475,6 @@ open class MainActivity : ComponentActivity() {
                                 )
                                 XDialogHost(
                                     state = dialogHostState,
-                                    // MIUI 8：对话框实色，不采背景
                                     backdrop = null,
                                 )
                                 XecBootSplash(visible = showBootSplash)
@@ -610,7 +507,6 @@ fun MainScreen(
     val enableFloatingBottomBar = LocalEnableFloatingBottomBar.current
     val enableFloatingBottomBarBlur = LocalEnableFloatingBottomBarBlur.current
     val useNavigationRail = useNavigationRail(enableFloatingBottomBar)
-    // 旧版本存过的 selected_main_page 可能越界（7 页时代存了 5/6），读出侧夹回。
     val pagerState = rememberPagerState(
         initialPage = initialPage.coerceIn(0, MainPagerConfig.LAST_PAGE_INDEX),
         pageCount = { MainPagerConfig.PAGE_COUNT },
@@ -640,12 +536,6 @@ fun MainScreen(
             return@LaunchedEffect
         }
 
-        // 受限授权（exec 白名单）与 per-app uname 身份开机重放：内核表重启
-        // 即空，从持久层推回。幂等；失败（老内核不认识 ioctl）不阻塞启动流程。
-        // ksuApp：此处上下文不是 Activity 接收者，applicationContext 解析不到。
-        runCatching { me.weishu.kernelsu.privilege.ExecPolicyStore.pushAll(me.weishu.kernelsu.ksuApp) }
-        runCatching { me.weishu.kernelsu.privilege.UtsSpoofStore.pushAll(me.weishu.kernelsu.ksuApp) }
-
         moduleViewModel.initializePreferences()
         val moduleState = moduleViewModel.uiState.value
         if (!moduleState.hasLoaded) {
@@ -667,7 +557,6 @@ fun MainScreen(
         startupPreloadStarted = true
     }
 
-    // Loading the app list just for a badge is too expensive; read the kernel allowlist instead.
     var superuserCount by remember { mutableIntStateOf(0) }
     LaunchedEffect(badgeEnabled, grantedUidCount) {
         superuserCount = if (badgeEnabled) withContext(Dispatchers.IO) { getSuperuserCount() } else 0
@@ -700,16 +589,11 @@ fun MainScreen(
         mainPagerState.syncPage()
     }
 
-    // 底栏实测高度（px）。见下方 pagerContent 处的说明：内容区底部余量要用它兜底。
     var dockHeightPx by remember { mutableIntStateOf(0) }
 
 
     MainScreenBackHandler(mainPagerState, navController)
 
-    // 工具箱这类 NavDisplay 独立 entry 通过事件通道请求切主分页（见 MainPagerBus）：
-    // 它们读不到 LocalMainPagerState，所以只能发请求、由这里真正执行。
-    // 2026-11-10：通道改成"粘滞待办"——工具箱压在上面时本页已退出组合，旧 SharedFlow
-    // 会把请求丢掉，回到主分页后仍停在原页（真机故障：XEC SCORE 卡点了没反应）。
     LaunchedEffect(mainPagerState) {
         MainPagerBus.pending.collect { page ->
             if (page != null) {
@@ -767,8 +651,6 @@ fun MainScreen(
                 Box(
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    // 2026-11-08：五格等宽 tab → 两席 + 控制台（见 Xc8Dock）。
-                    // 页面索引不动，所以超级用户 / 检测 / 设置仍然可达，只是入口收进控制台。
                     Xc8Dock(
                         selectedPage = mainPagerState.selectedPage,
                         onSelectPage = { page -> mainPagerState.animateToPage(page) },
@@ -786,14 +668,6 @@ fun MainScreen(
                 bottomBar = bottomBar,
                 containerColor = Color.Transparent,
             ) { innerPadding ->
-                // 2026-11-11 第三轮：内容区底部安全余量取「Scaffold 给的值」与
-                // 「底栏实测高度」的**较大者**。
-                //
-                // 悬浮底栏是自绘的：理论上 Scaffold 的 bottomBar 槽已经把它算进
-                // innerPadding，但这条链只要有一环不成立（Scaffold 实现差异、
-                // bottomBar 里套了 align/offset 之类的装饰），最后一行就会被压在
-                // 托盘下面 —— 而且**从代码上看不出来是哪儿算错了**。真机反馈的
-                // 「安全状态列表被挡」就是这一类。直接把高度量一次，依赖就断了。
                 val measured = with(LocalDensity.current) { dockHeightPx.toDp() }
                 pagerContent(maxOf(innerPadding.calculateBottomPadding(), measured))
             }
@@ -801,12 +675,8 @@ fun MainScreen(
     }
 }
 
-
-/** 模块操作面板贴底时为底栏让位：导航栏 inset + 底栏高度（含悬浮 margin）的安全余量。 */
 @Composable
 private fun bottomBarClearPadding(): Dp =
-    // 2026-11-11：96dp 在悬浮底栏下会让最后一行被压在导航条上（安全状态列表被挡）。
-    // 悬浮栏本体 56–64dp + 上下留白，112dp 才能保证滚到底时最后一项完整可见。
     WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 112.dp
 
 @Composable

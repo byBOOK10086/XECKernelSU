@@ -2,19 +2,17 @@
 
 use std::fs::File;
 use std::io::{Cursor, Seek, SeekFrom};
-use std::path::Path;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use android_bootimg::cpio::{Cpio, CpioEntry};
 use android_bootimg::parser::{BootImage, BootImageVersion, RamdiskImage};
 use android_bootimg::patcher::BootImagePatchOption;
-use anyhow::Context;
-use anyhow::Result;
-use anyhow::anyhow;
-use anyhow::bail;
-use anyhow::ensure;
+use anyhow::{Context, Result, anyhow, bail, ensure};
 use memmap2::{Mmap, MmapOptions};
 use regex_lite::Regex;
+
+#[cfg(any(target_os = "android", test))]
+mod version;
 
 use crate::assets;
 use crate::feature_id::{FeatureId, parse_feature_id};
@@ -39,32 +37,34 @@ mod android {
 
     pub(super) fn ensure_gki_kernel() -> Result<()> {
         let version = get_kernel_version()?;
-        let is_gki = version.0 == 5 && version.1 >= 10 || version.2 > 5;
-        ensure!(is_gki, "only support GKI kernel");
+        ensure!(
+            super::version::is_gki_version(version),
+            "only support GKI kernel"
+        );
         Ok(())
     }
 
-    pub fn get_kernel_version() -> Result<(i32, i32, i32)> {
-        let uname = rustix::system::uname();
-        let version = uname.release().to_string_lossy();
-        let re = Regex::new(r"(\d+)\.(\d+)\.(\d+)")?;
-        if let Some(captures) = re.captures(&version) {
-            let major = captures
-                .get(1)
-                .and_then(|m| m.as_str().parse::<i32>().ok())
-                .ok_or_else(|| anyhow!("Major version parse error"))?;
-            let minor = captures
-                .get(2)
-                .and_then(|m| m.as_str().parse::<i32>().ok())
-                .ok_or_else(|| anyhow!("Minor version parse error"))?;
-            let patch = captures
-                .get(3)
-                .and_then(|m| m.as_str().parse::<i32>().ok())
-                .ok_or_else(|| anyhow!("Patch version parse error"))?;
-            Ok((major, minor, patch))
-        } else {
-            Err(anyhow!("Invalid kernel version string"))
-        }
+    fn current_kernel_release() -> Result<String> {
+        // uname may expose a compatibility/spoofed release. proc reports the
+        // running kernel used to select a compatible module and GKI policy.
+        std::fs::read_to_string("/proc/sys/kernel/osrelease")
+            .or_else(|_| {
+                std::fs::read_to_string("/proc/version").map(|version| {
+                    version
+                        .strip_prefix("Linux version ")
+                        .unwrap_or(&version)
+                        .split_whitespace()
+                        .next()
+                        .unwrap_or_default()
+                        .to_owned()
+                })
+            })
+            .context("read running kernel release from proc")
+    }
+
+    pub fn get_kernel_version() -> Result<(u32, u32, u32)> {
+        super::version::parse_kernel_version(current_kernel_release()?.trim())
+            .ok_or_else(|| anyhow!("Invalid kernel version string"))
     }
 
     fn parse_kmi(version: &str) -> Result<String> {
@@ -77,10 +77,8 @@ mod android {
         Ok(format!("{android_version}-{kernel_version}"))
     }
 
-    fn parse_kmi_from_uname() -> Result<String> {
-        let uname = rustix::system::uname();
-        let version = uname.release().to_string_lossy();
-        parse_kmi(&version)
+    fn parse_kmi_from_proc() -> Result<String> {
+        parse_kmi(current_kernel_release()?.trim())
     }
 
     fn parse_kmi_from_modules() -> Result<String> {
@@ -101,7 +99,7 @@ mod android {
     }
 
     pub fn get_current_kmi() -> Result<String> {
-        parse_kmi_from_uname().or_else(|_| parse_kmi_from_modules())
+        parse_kmi_from_proc().or_else(|_| parse_kmi_from_modules())
     }
 
     fn calculate_sha1(file_path: impl AsRef<Path>) -> Result<String> {
@@ -288,15 +286,21 @@ mod android {
 
         let current_slot = Command::new(BOOTCTL_PATH)
             .arg("get-current-slot")
-            .output()?
-            .stdout;
-        let current_slot = String::from_utf8(current_slot)?;
-        let current_slot = current_slot.trim();
-        let target_slot = i32::from(current_slot == "0");
-
-        Command::new(BOOTCTL_PATH)
-            .arg(format!("set-active-boot-slot {target_slot}"))
+            .output()?;
+        ensure!(
+            current_slot.status.success(),
+            "bootctl get-current-slot failed"
+        );
+        let current_slot = String::from_utf8(current_slot.stdout)?;
+        let target_slot = match current_slot.trim() {
+            "0" => "1",
+            "1" => "0",
+            slot => bail!("invalid current boot slot: {slot}"),
+        };
+        let status = Command::new(BOOTCTL_PATH)
+            .args(["set-active-boot-slot", target_slot])
             .status()?;
+        ensure!(status.success(), "bootctl set-active-boot-slot failed");
 
         let post_fs_data = Path::new(ADB_DIR).join("post-fs-data.d");
         utils::ensure_dir_exists(&post_fs_data)?;
@@ -698,6 +702,17 @@ pub fn patch(args: BootPatchArgs) -> Result<()> {
                 if kmod.is_some() || (no_install && image.is_some()) {
                     return Ok(String::new());
                 }
+                // Supplied sources describe the target; never use the running device
+                // to select their LKM. A replacement kernel takes precedence.
+                if let Some(kernel_path) = &kernel {
+                    return parse_kmi_from_kernel(kernel_path);
+                }
+                if ramdisk {
+                    bail!("please specify kmi manually");
+                }
+                if let Some(image_path) = &image {
+                    return parse_kmi_from_boot(image_path);
+                }
                 #[cfg(target_os = "android")]
                 if ota {
                     let slot_suffix = get_slot_suffix(true);
@@ -715,23 +730,7 @@ pub fn patch(args: BootPatchArgs) -> Result<()> {
                         println!("- {e}");
                     }
                 }
-                Ok(if ramdisk {
-                    bail!("please specify kmi manually")
-                } else if let Some(image_path) = &image {
-                    println!(
-                        "- Trying to auto detect KMI version for {}",
-                        image_path.display()
-                    );
-                    parse_kmi_from_boot(image_path)?
-                } else if let Some(kernel_path) = &kernel {
-                    println!(
-                        "- Trying to auto detect KMI version for {}",
-                        kernel_path.display()
-                    );
-                    parse_kmi_from_kernel(kernel_path)?
-                } else {
-                    String::new()
-                })
+                Ok(String::new())
             },
             Ok,
         )?;
@@ -851,8 +850,9 @@ pub fn patch(args: BootPatchArgs) -> Result<()> {
             .entry_by_name("ksu_config")
             .and_then(CpioEntry::data)
             .and_then(|v| str::from_utf8(v).ok())
-            .map(|v| v.split(' ').map(std::borrow::ToOwned::to_owned).collect())
-            .unwrap_or_default();
+            .map_or_else(Vec::new, |v| {
+                v.split(' ').map(std::borrow::ToOwned::to_owned).collect()
+            });
 
         config.validate()?;
         config.apply(&mut ksu_config);

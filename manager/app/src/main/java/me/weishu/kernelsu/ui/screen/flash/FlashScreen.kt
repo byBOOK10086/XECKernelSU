@@ -15,9 +15,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.weishu.kernelsu.Natives
 import me.weishu.kernelsu.R
+import me.weishu.kernelsu.ui.util.rememberRootOperation
+import me.weishu.kernelsu.ui.util.rootIO
 import me.weishu.kernelsu.data.repository.isSoftRebootPreferred
 import me.weishu.kernelsu.ui.navigation3.LocalNavigator
-import me.weishu.kernelsu.ui.util.clearStuckBootTxn
 import me.weishu.kernelsu.ui.util.reboot
 
 @Composable
@@ -25,12 +26,10 @@ fun FlashScreen(flashIt: FlashIt) {
     val navigator = LocalNavigator.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val rootOperation = rememberRootOperation()
     var text by rememberSaveable { mutableStateOf("") }
     val logContent = remember { StringBuilder() }
     var showRebootAction by rememberSaveable { mutableStateOf(false) }
-    // ksud 在存在未确认的引导事务时拒绝一切刷写，且没有 UI 手段解除；
-    // 这里把那条错误变成一个可点的清除动作，避免用户只能等重启或手动删文件。
-    var showStuckBootTxn by rememberSaveable { mutableStateOf(false) }
     var flashingStatus by rememberSaveable { mutableStateOf(FlashingStatus.FLASHING) }
     val needJailbreakWarning = flashIt is FlashIt.FlashBoot && Natives.isLateLoadMode
     // Soft reboot keeps the jailbreak and still applies modules
@@ -46,12 +45,7 @@ fun FlashScreen(flashIt: FlashIt) {
         flashIt = flashIt,
         text = text,
         logContent = logContent,
-        onTextUpdate = { updated ->
-            text = updated
-            if (!showStuckBootTxn && updated.contains("boot transaction is already pending")) {
-                showStuckBootTxn = true
-            }
-        },
+        onTextUpdate = { text = it },
         onShowRebootChange = { showRebootAction = it },
         onFlashingStatusChange = { flashingStatus = it },
         enabled = flashingEnabled,
@@ -62,31 +56,15 @@ fun FlashScreen(flashIt: FlashIt) {
         showRebootAction = showRebootAction,
         flashingStatus = flashingStatus,
         showJailbreakWarning = needJailbreakWarning && !flashingEnabled,
-        showStuckBootTxn = showStuckBootTxn,
         rebootLabelRes = if (softReboot) R.string.reboot_soft else R.string.reboot,
     )
     val actions = FlashScreenActions(
         onBack = dropUnlessResumed { navigator.pop() },
         onSaveLog = saveLog(logContent, scope) { showMessage(it) },
         onReboot = {
-            scope.launch {
-                withContext(Dispatchers.IO) {
-                    reboot(if (softReboot) "soft_reboot" else "")
-                }
-            }
+            rootOperation { rootIO { reboot(if (softReboot) "soft_reboot" else "") } }
         },
         onConfirmJailbreakWarning = { flashingEnabled = true },
-        onClearStuckBootTxn = {
-            scope.launch {
-                val cleared = withContext(Dispatchers.IO) { clearStuckBootTxn() }
-                showStuckBootTxn = false
-                showMessage(
-                    context.getString(
-                        if (cleared) R.string.flash_boot_txn_cleared else R.string.flash_boot_txn_clear_failed
-                    )
-                )
-            }
-        },
         onDismissJailbreakWarning = dropUnlessResumed { navigator.pop() },
     )
 

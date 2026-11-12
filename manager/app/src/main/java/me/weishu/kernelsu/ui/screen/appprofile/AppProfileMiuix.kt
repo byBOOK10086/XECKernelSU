@@ -30,6 +30,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.Security
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -49,6 +50,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.weishu.kernelsu.Natives
 import me.weishu.kernelsu.R
+import me.weishu.kernelsu.ui.util.rememberRootOperation
+import me.weishu.kernelsu.ui.util.rootIO
 import me.weishu.kernelsu.ui.component.AppIconImage
 import me.weishu.kernelsu.ui.component.ListPopupDefaults
 import me.weishu.kernelsu.ui.component.miuix.DropdownItem
@@ -88,17 +91,11 @@ import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.MoreCircle
 import top.yukonga.miuix.kmp.overlay.OverlayListPopup
 import top.yukonga.miuix.kmp.preference.OverlayDropdownPreference
-import top.yukonga.miuix.kmp.basic.TextField
-import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 import me.weishu.kernelsu.ui.design.token.XcRadius
 
-/**
- * @author weishu
- * @date 2023/5/16.
- */
 @Composable
 fun AppProfileScreenMiuix(
     state: AppProfileUiState,
@@ -165,12 +162,6 @@ fun AppProfileScreenMiuix(
                         onViewTemplate = actions.onViewTemplate,
                         onManageTemplate = actions.onManageTemplate,
                         onProfileChange = actions.onProfileChange,
-                        execRestricted = state.execRestricted,
-                        execPaths = state.execPaths,
-                        onExecPolicyChange = actions.onExecPolicyChange,
-                        utsRelease = state.utsRelease,
-                        utsVersion = state.utsVersion,
-                        onUtsSpoofChange = actions.onUtsSpoofChange,
                     )
                     Spacer(
                         Modifier.height(
@@ -202,18 +193,13 @@ private fun AppProfileInner(
     onViewTemplate: (id: String) -> Unit = {},
     onManageTemplate: () -> Unit = {},
     onProfileChange: (Natives.Profile) -> Unit,
-    // 受限授权与 per-app uname 身份：值与回调由外层 state/actions 穿进来。
-    execRestricted: Boolean = false,
-    execPaths: List<String> = emptyList(),
-    onExecPolicyChange: (Boolean, List<String>) -> Unit = { _, _ -> },
-    utsRelease: String = "",
-    utsVersion: String = "",
-    onUtsSpoofChange: (String, String) -> Unit = { _, _ -> },
 ) {
     val isRootGranted = !isSpecialApp && profile.allowSu
     val userId = appUid / 100000
     val appId = appUid % 100000
-    val templates = remember { listAppProfileTemplates() }
+    val rootOperation = rememberRootOperation()
+    var templates by remember { mutableStateOf(emptyList<String>()) }
+    LaunchedEffect(Unit) { rootOperation { templates = rootIO { listAppProfileTemplates() } } }
 
     Column(
         modifier = modifier
@@ -329,7 +315,6 @@ private fun AppProfileInner(
         }
 
         if (!isSpecialApp) {
-            // root 授权是整页最重要的一行，独占一块面板；开关与整行都走同一个 profile 写回。
             Xc8Panel(
                 modifier = Modifier
                     .padding(horizontal = 12.dp)
@@ -348,23 +333,6 @@ private fun AppProfileInner(
                 )
             }
         }
-
-        // 受限授权（XECKernelPro 扩展）：白名单内的 `su -c` 才授予 root。
-        AnimatedVisibility(visible = isRootGranted) {
-            ExecPolicyCard(
-                restricted = execRestricted,
-                paths = execPaths,
-                onChange = onExecPolicyChange,
-            )
-        }
-
-        // Per-app uname 身份（XECKernelPro 扩展）：按 uid 改写 uname 的
-        // release/version，无需授 root 也生效（应用侦测内核指纹用）。
-        UtsSpoofCard(
-            release = utsRelease,
-            version = utsVersion,
-            onChange = onUtsSpoofChange,
-        )
 
         val initialRootMode = if (profile.rootUseDefault) {
             Mode.Default
@@ -394,29 +362,18 @@ private fun AppProfileInner(
                     Mode.Template -> {
                         if (templates.isNotEmpty()) {
                             val selected = profile.rootTemplate ?: templates[0]
-                            val info = me.weishu.kernelsu.ui.viewmodel.getTemplateInfoById(selected)
-                            if (info != null && setSepolicy(selected, info.rules.joinToString("\n"))) {
-                                onProfileChange(
-                                    profile.copy(
-                                        rootUseDefault = false,
-                                        rootTemplate = selected,
-                                        uid = info.uid,
-                                        gid = info.gid,
-                                        groups = info.groups,
-                                        capabilities = info.capabilities,
-                                        context = info.context,
-                                        namespace = info.namespace,
-                                    )
-                                )
-                            } else if (profile.rootTemplate != selected || profile.rootUseDefault) {
-                                onProfileChange(
-                                    profile.copy(
-                                        rootUseDefault = false,
-                                        rootTemplate = selected
-                                    )
-                                )
+                            rootOperation {
+                                val info = rootIO {
+                                    val info = checkNotNull(me.weishu.kernelsu.ui.viewmodel.getTemplateInfoById(selected))
+                                    check(setSepolicy(selected, info.rules.joinToString("\n")))
+                                    info
+                                }
+                                onProfileChange(profile.copy(rootUseDefault = false,
+                                    rootTemplate = selected, uid = info.uid, gid = info.gid,
+                                    groups = info.groups, capabilities = info.capabilities,
+                                    context = info.context, namespace = info.namespace))
+                                rootMode = Mode.Template
                             }
-                            rootMode = Mode.Template
                         }
                     }
                 }
@@ -664,143 +621,6 @@ private fun ProfileBox(
             selectedIndex = if (selectedIndex == -1) 0 else selectedIndex,
         ) {
             onModeChange(modesAndTitles[it].first)
-        }
-    }
-}
-
-/**
- * Per-app uname 身份卡：release/version 两个覆写位 + 应用。
- * 语义（与内核 feature/uts_spoof.c 对齐）：真 uname 成功后按 uid 改写用户
- * 缓冲，内核 uts 状态不动；空串 = 保留真实字段；两串都空 = 移除条目。
- */
-@Composable
-private fun UtsSpoofCard(
-    release: String,
-    version: String,
-    onChange: (String, String) -> Unit,
-) {
-    Card(cornerRadius = XcRadius.md, 
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp)
-            .padding(bottom = 12.dp),
-        colors = CardDefaults.defaultColors(color = Color.Transparent),
-    ) {
-        Column(Modifier.padding(vertical = 8.dp)) {
-            Text(
-                text = stringResource(id = R.string.uts_spoof_title),
-                modifier = Modifier.padding(horizontal = 16.dp),
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = colorScheme.onBackground,
-            )
-            Text(
-                text = stringResource(id = R.string.uts_spoof_summary),
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                fontSize = 13.sp,
-                lineHeight = 17.sp,
-                color = colorScheme.onSurfaceVariantSummary,
-            )
-            var rel by rememberSaveable(release) { mutableStateOf(release) }
-            var ver by rememberSaveable(version) { mutableStateOf(version) }
-            TextField(
-                value = rel,
-                onValueChange = { rel = it },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                label = stringResource(id = R.string.uts_spoof_release_label),
-                singleLine = true,
-            )
-            Spacer(Modifier.height(8.dp))
-            TextField(
-                value = ver,
-                onValueChange = { ver = it },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                label = stringResource(id = R.string.uts_spoof_version_label),
-                singleLine = true,
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = stringResource(id = R.string.uts_spoof_hint),
-                modifier = Modifier.padding(horizontal = 16.dp),
-                fontSize = 13.sp,
-                lineHeight = 17.sp,
-                color = colorScheme.onSurfaceVariantSummary,
-            )
-            TextButton(
-                text = stringResource(id = R.string.uts_spoof_apply),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                onClick = { onChange(rel, ver) },
-            )
-        }
-    }
-}
-
-/**
- * 受限授权卡：开关 + 白名单编辑（一行一条命令；basename 匹配）。
- * 语义（与内核 exec_policy.c 对齐）：受限后 GRANT_ROOT 与交互式 su 一律拒绝，
- * 仅 `su -c <白名单命令>` 授予 root —— fail closed。
- */
-@Composable
-private fun ExecPolicyCard(
-    restricted: Boolean,
-    paths: List<String>,
-    onChange: (Boolean, List<String>) -> Unit,
-) {
-    Card(cornerRadius = XcRadius.md, 
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp),
-        colors = CardDefaults.defaultColors(color = Color.Transparent),
-    ) {
-        Column(Modifier.padding(vertical = 8.dp)) {
-            // 只换开关这一行：同一张卡里还有白名单编辑区与按钮，Card 和编辑区保持原样，
-            // 避免把"开关 + 表单"这种混合卡片拆成两块。
-            Xc8Row(
-                title = stringResource(id = R.string.exec_policy_title),
-                subtitle = stringResource(id = R.string.exec_policy_summary),
-                onClick = { onChange(!restricted, paths) },
-                trailing = {
-                    Xc8Switch(
-                        checked = restricted,
-                        onCheckedChange = { onChange(it, paths) },
-                    )
-                },
-            )
-            AnimatedVisibility(visible = restricted) {
-                Column(Modifier.padding(horizontal = 16.dp)) {
-                    var text by rememberSaveable(paths) {
-                        mutableStateOf(paths.joinToString("\n"))
-                    }
-                    TextField(
-                        value = text,
-                        onValueChange = { text = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = stringResource(id = R.string.exec_policy_paths_label),
-                        maxLines = 8,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = stringResource(id = R.string.exec_policy_hint),
-                        fontSize = 13.sp,
-                        lineHeight = 17.sp,
-                        color = colorScheme.onSurfaceVariantSummary,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    TextButton(
-                        text = stringResource(id = R.string.exec_policy_apply),
-                        modifier = Modifier.fillMaxWidth(),
-                        onClick = {
-                            onChange(true, text.split('\n').map { it.trim() }.filter { it.isNotEmpty() })
-                        },
-                    )
-                }
-            }
         }
     }
 }
