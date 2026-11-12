@@ -445,7 +445,7 @@ static long ksu_handle_execve_sucompat_common(const char __user **filename_user,
     regs->__PT_PARM5_REG = AT_EMPTY_PATH;
     regs->__PT_SYSCALL_PARM4_REG = envp;
     regs->__PT_PARM3_REG = (unsigned long)argv_user;
-    regs->__PT_PARM2_REG = empty_user_path();
+    regs->__PT_PARM2_REG = (unsigned long)empty_user_path();
     PT_REGS_SYSCALL_PARM1(regs) = tmp_fd;
 
     ret = escape_with_root_profile();
