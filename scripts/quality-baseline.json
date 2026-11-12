@@ -187,8 +187,8 @@
       "reason": "ported file: split candidate, no reason recorded yet"
     },
     "manager/app/src/main/java/me/weishu/kernelsu/ui/util/KsuCli.kt": {
-      "lines": 1193,
-      "reason": "dropped the obsolete --force flag (2026-11-12); may only shrink from here"
+      "lines": 1211,
+      "reason": "rootSafeCommand wrapper for daemon invocations (2026-11-12); may only shrink from here"
     },
     "manager/app/src/main/java/me/weishu/kernelsu/ui/util/module/Shortcut.kt": {
       "lines": 418,

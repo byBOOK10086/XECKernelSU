@@ -476,13 +476,30 @@ fun createRootShell(globalMnt: Boolean = false): Shell {
     return runCatching { Shell.Builder.create().build("sh") }
         .getOrElse { Shell.Builder.create().build("sh") }
 }
+/**
+ * 让一条命令真的以 root 跑。
+ *
+ * libsu 的 root shell 有时会退化成普通 `sh`（见 getOrRetryShell 的注释：su 起来了
+ * 但那一刻没 root，builder 会把壳换掉）。这时直接 exec 守护进程，打开
+ * /dev/block/by-name/boot_a 就会 EACCES —— 用户看到的是
+ * "Patch Error: open /dev/block/by-name/boot_a / Permission denied"。
+ *
+ * 壳不是 root 时再套一层 `su -c`：应用已经被授予 root，su 会直接放行。
+ */
+private fun rootSafeCommand(shell: Shell, cmd: String): String {
+    if (shell.isRoot) return cmd
+    val quoted = cmd.replace("'", "'\\''")
+    return "su -c '$quoted'"
+}
+
 fun execKsud(args: String, newShell: Boolean = false, globalMnt: Boolean = false): Boolean {
     return if (newShell) {
         withNewRootShell(globalMnt = globalMnt) {
             ShellUtils.fastCmdResult(this, "${getKsuDaemonPath()} $args")
         }
     } else {
-        ShellUtils.fastCmdResult(getRootShell(globalMnt), "${getKsuDaemonPath()} $args")
+        val shell = getRootShell(globalMnt)
+        ShellUtils.fastCmdResult(shell, rootSafeCommand(shell, "${getKsuDaemonPath()} $args"))
     }
 }
 
@@ -945,7 +962,8 @@ fun downloadBoot(
     // 用非 root shell 跑 `xudc boot-patch ... --partition` 必然 EACCES，而失败点
     // 看起来像"写分区失败"，排查时会被引到错的方向。刷写必须走 root 壳。
     val result = withNewRootShell {
-        newJob().add(cmd).to(stdoutCallback, stderrCallback).exec()
+        val safe = rootSafeCommand(this, cmd)
+        newJob().add(safe).to(stdoutCallback, stderrCallback).exec()
     }
     lkmFile?.delete()
     bootFile.delete()
