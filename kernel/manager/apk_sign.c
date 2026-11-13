@@ -5,6 +5,7 @@
 #include <linux/kernel.h>
 #include <linux/limits.h>
 #include <linux/slab.h>
+#include <linux/sizes.h>
 #include <linux/version.h>
 #ifdef CONFIG_KSU_DEBUG
 #include <linux/moduleparam.h>
@@ -115,21 +116,24 @@ static bool check_block(struct file *fp, loff_t *pos, loff_t block_end, unsigned
     if (certificate_size > INT_MAX || certificate_size > (u64)(certificates_end - *pos))
         return false;
 
-#define CERT_MAX_LENGTH 1024
-    if (certificate_size != expected_size)
+    // Bound APK-controlled allocations; release certificates can exceed 1024 bytes.
+    // Allocate on the heap to avoid growing the kernel stack frame.
+    if (!certificate_size || certificate_size != expected_size || certificate_size > SZ_16K)
         return false;
 
-    if (certificate_size > CERT_MAX_LENGTH) {
-        pr_info("cert length overlimit\n");
+    unsigned char *cert = kmalloc(certificate_size, GFP_KERNEL);
+    if (!cert)
+        return false;
+
+    if (!read_exact(fp, cert, certificate_size, pos, certificates_end)) {
+        kfree(cert);
         return false;
     }
 
-    char cert[CERT_MAX_LENGTH];
-    if (!read_exact(fp, cert, certificate_size, pos, certificates_end))
-        return false;
-
     unsigned char digest[SHA256_DIGEST_SIZE];
-    if (ksu_sha256(cert, certificate_size, digest)) {
+    int hash_error = ksu_sha256(cert, certificate_size, digest);
+    kfree(cert);
+    if (hash_error) {
         pr_info("sha256 error\n");
         return false;
     }
