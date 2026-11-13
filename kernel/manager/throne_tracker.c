@@ -23,8 +23,6 @@ uid_t ksu_manager_appid = KSU_INVALID_APPID;
 
 #define DATA_PATH_LEN 384 // 384 is enough for /data/app/<package>/base.apk
 
-static char cached_manager_apk_path[DATA_PATH_LEN];
-
 #define SYSTEM_PACKAGES_LIST_PATH "/data/system/packages.list"
 
 struct uid_data {
@@ -127,7 +125,6 @@ static FILLDIR_RETURN_TYPE my_actor(struct dir_context *ctx, const char *name, i
     if (d_type == DT_REG && namelen == 8 && !memcmp(name, "base.apk", 8)) {
         if (maybe_manager_apk_dir(my_ctx->parent_dir)) {
             snprintf(candidate_path, DATA_PATH_LEN, "%s/%.*s", my_ctx->parent_dir, namelen, name);
-            strcpy(cached_manager_apk_path, candidate_path);
         }
         // As soon as we met the base.apk, we can stop
         return FILLDIR_ACTOR_STOP;
@@ -307,7 +304,6 @@ void track_throne(bool prune_only)
     }
 
     if (manager_package_uid == KSU_INVALID_APPID) {
-        cached_manager_apk_path[0] = 0;
         if (ksu_is_manager_appid_valid()) {
             pr_info("manager is uninstalled, invalidate it!\n");
             ksu_invalidate_manager_uid();
@@ -319,7 +315,6 @@ void track_throne(bool prune_only)
         } else if (unlikely(np->uid != ksu_get_manager_appid())) {
             // this should not happen in normal android system
             pr_info("manager uid changed, invalidate it!\n");
-            cached_manager_apk_path[0] = 0;
             ksu_invalidate_manager_uid();
             need_rescan = true;
         } else {
@@ -329,19 +324,9 @@ void track_throne(bool prune_only)
     }
 
     if (need_rescan) {
-        // If the apk path still exists, the verification result won't be changed
-        if (cached_manager_apk_path[0]) {
-            struct path p;
-            int ret = kern_path(cached_manager_apk_path, 0, &p);
-            if (ret == 0) {
-                // skip search
-                pr_info("manager apk path unchanged, skip search!\n");
-                path_put(&p);
-                goto prune;
-            } else if (ret != -ENOENT) {
-                pr_err("stat cached manager path failed: %d (path=%s)\n", ret, cached_manager_apk_path);
-            }
-        }
+        // An existing path does not prove a previous verification succeeded.
+        // Retry failures (including transient reads) while no manager is crowned.
+        // The GET_INFO recovery caller rate-limits these scans.
         pr_info("Searching manager " KSU_PACKAGE_NAME "...\n");
         search_manager("/data/app", 2, &uid_list);
         pr_info("Search manager finished\n");
@@ -363,17 +348,20 @@ out_revert_cred:
 
 void ksu_recrown_manager_if_needed(void)
 {
+    static DEFINE_MUTEX(recrown_mutex);
     static unsigned long last_track;
     unsigned long now;
 
-    if (ksu_is_manager_appid_valid())
+    if (ksu_is_manager_appid_valid() || !mutex_trylock(&recrown_mutex))
         return;
 
     now = jiffies;
-    if (last_track && !time_after(now, last_track + 5 * HZ))
-        return;
+    if (ksu_is_manager_appid_valid() || (last_track && !time_after(now, last_track + 5 * HZ)))
+        goto out;
     last_track = now;
     track_throne(false);
+out:
+    mutex_unlock(&recrown_mutex);
 }
 
 void __init ksu_throne_tracker_init()
